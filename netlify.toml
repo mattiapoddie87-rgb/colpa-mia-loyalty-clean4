@@ -1,0 +1,14 @@
+[build]
+publish = "public"
+command = ""
+
+[functions]
+directory = "netlify/functions"
+node_bundler = "esbuild"
+external_node_modules = ["stripe"]
+
+# Se usi SPA, tieni questo redirect; per siti multipagina puoi rimuoverlo
+[[redirects]]
+from = "/*"
+to = "/index.html"
+status = 200
