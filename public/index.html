@@ -1,56 +1,85 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Colpa Mia Loyalty</title>
-  <link rel="stylesheet" href="styles.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Colpa Mia — Scuse & Minuti di Vita</title>
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <header>
-    <h1>☕ Colpa Mia Loyalty</h1>
-    <p>Ricarica i tuoi minuti di vita con un click.</p>
+  <header class="site-header">
+    <div class="wrap">
+      <h1>Colpa Mia Loyalty</h1>
+      <p class="lead">Scegli la scusa perfetta e ricarica i tuoi “Minuti di Vita”.</p>
+    </div>
   </header>
 
-  <main>
-    <section class="pricing">
-      <h2>Ricarica Minuti</h2>
-      <button onclick="checkout(1, 10, 'Ricarica 10 minuti')">1€ → 10 minuti</button>
-      <button onclick="checkout(5, 60, 'Ricarica 60 minuti')">5€ → 60 minuti</button>
-      <button onclick="checkout(10, 140, 'Ricarica 140 minuti')">10€ → 140 minuti</button>
-    </section>
+  <main class="wrap">
+    <section>
+      <h2>Pacchetti “Minuti di Vita”</h2>
+      <div class="grid">
+        <!--
+          Sostituisci data-price con i tuoi price_… reali (test o live).
+          Puoi anche metterli in ALLOWED_PRICE_IDS per sicurezza.
+        -->
 
-    <section class="about">
-      <h2>Come funziona?</h2>
-      <p>Paghi con Stripe, torni qui, i minuti sono accreditati. Fine.</p>
-    </section>
+        <article class="card">
+          <h3>Bronzo · 10 minuti</h3>
+          <p class="muted">Scusa soft, poco sospetto.</p>
+          <div class="price">€ 1,00</div>
+          <button class="buy" data-price="price_XXX_Bronzo">Acquista</button>
+        </article>
 
-    <section class="contact">
-      <h2>Contattaci</h2>
-      <form name="contact" method="POST" data-netlify="true">
-        <input type="text" name="name" placeholder="Nome" required />
-        <input type="email" name="email" placeholder="Email" required />
-        <textarea name="message" placeholder="Messaggio" required></textarea>
-        <button type="submit">Invia</button>
-      </form>
+        <article class="card">
+          <h3>Argento · 30 minuti</h3>
+          <p class="muted">Scusa credibile, effetto garantito.</p>
+          <div class="price">€ 3,00</div>
+          <button class="buy" data-price="price_XXX_Argento">Acquista</button>
+        </article>
+
+        <article class="card">
+          <h3>Oro · 60 minuti</h3>
+          <p class="muted">Scusa top, alibi inossidabile.</p>
+          <div class="price">€ 6,00</div>
+          <button class="buy" data-price="price_XXX_Oro">Acquista</button>
+        </article>
+
+        <article class="card">
+          <h3>“Riunione infinita”</h3>
+          <p class="muted">Perfetta in orario d’ufficio.</p>
+          <div class="price">€ 2,00</div>
+          <button class="buy" data-price="price_XXX_Riunione">Acquista</button>
+        </article>
+
+        <article class="card">
+          <h3>“Traffico assurdo”</h3>
+          <p class="muted">Sempreverde, funziona ovunque.</p>
+          <div class="price">€ 2,00</div>
+          <button class="buy" data-price="price_XXX_Traffico">Acquista</button>
+        </article>
+
+        <article class="card">
+          <h3>“Connessione KO”</h3>
+          <p class="muted">Smartworking edition.</p>
+          <div class="price">€ 2,00</div>
+          <button class="buy" data-price="price_XXX_Conn">Acquista</button>
+        </article>
+      </div>
+
+      <div id="msg" class="msg" hidden></div>
     </section>
   </main>
 
-  <footer>
-    <p>© 2025 Colpa Mia</p>
+  <footer class="site-footer">
+    <div class="wrap">
+      <small>© <span id="year"></span> Colpa Mia — deploy con Netlify + GitHub + Stripe</small>
+    </div>
   </footer>
 
+  <script src="/shop.js" type="module"></script>
   <script>
-    async function checkout(price, minutes, label) {
-      const res = await fetch("/.netlify/functions/create-checkout-session", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ price_eur: price, redeem_minutes: minutes, service: label })
-      });
-      const data = await res.json();
-      if (data && data.url) window.location.href = data.url;
-      else alert("Errore: impossibile creare la sessione di pagamento");
-    }
+    document.getElementById('year').textContent = new Date().getFullYear();
   </script>
 </body>
 </html>
+
