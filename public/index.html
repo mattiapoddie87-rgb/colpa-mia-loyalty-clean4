@@ -1,65 +1,56 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Colpa Mia Loyalty</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;line-height:1.5;margin:0;background:#0b0c10;color:#e8e8e8}
-    header{padding:40px 24px;text-align:center;background:#14161c;border-bottom:1px solid #222}
-    h1{margin:0 0 8px;font-size:36px}
-    main{max-width:880px;margin:0 auto;padding:32px 24px}
-    .card{background:#121318;border:1px solid #222;border-radius:14px;padding:20px;margin:16px 0}
-    button{background:#6c5ce7;border:0;color:#fff;padding:10px 14px;border-radius:10px;cursor:pointer}
-    code{background:#1b1d26;padding:2px 6px;border-radius:6px}
-    a{color:#84c5ff}
-    footer{opacity:.7;text-align:center;padding:40px 0}
-  </style>
+  <link rel="stylesheet" href="styles.css"/>
 </head>
 <body>
   <header>
-    <h1>Colpa Mia Loyalty</h1>
-    <p>Sito deployato con <strong>Netlify</strong> + <strong>GitHub</strong>.</p>
+    <h1>☕ Colpa Mia Loyalty</h1>
+    <p>Ricarica i tuoi minuti di vita con un click.</p>
   </header>
+
   <main>
-    <section class="card">
-      <h2>Funzioni serverless</h2>
-      <p>Prova che le funzioni siano online:</p>
-      <p>
-        <button onclick="ping()">Chiama <code>/health</code></button>
-        <span id="ping-out"></span>
-      </p>
-      <script>
-        async function ping(){
-          const r = await fetch('/.netlify/functions/health');
-          document.getElementById('ping-out').textContent = ' → ' + (await r.text());
-        }
-      </script>
+    <section class="pricing">
+      <h2>Ricarica Minuti</h2>
+      <button onclick="checkout(1, 10, 'Ricarica 10 minuti')">1€ → 10 minuti</button>
+      <button onclick="checkout(5, 60, 'Ricarica 60 minuti')">5€ → 60 minuti</button>
+      <button onclick="checkout(10, 140, 'Ricarica 140 minuti')">10€ → 140 minuti</button>
     </section>
 
-    <section class="card">
-      <h2>Stripe (facoltativo)</h2>
-      <p>Questa demo prepara gli hook necessari. Imposta le variabili ambiente su Netlify:</p>
-      <ul>
-        <li><code>STRIPE_SECRET_KEY</code> (sk_test_... / sk_live_...)</li>
-        <li><code>STRIPE_WEBHOOK_SECRET</code> (whsec_...)</li>
-        <li><code>SITE_URL</code> (es. https://colpamia.com)</li>
-        <li><code>ADMIN_EMAILS</code> (es. tua@email)</li>
-      </ul>
-      <p>
-        <button onclick="checkout()">Crea Checkout di test</button>
-        <span id="co-out"></span>
-      </p>
-      <script>
-        async function checkout(){
-          const res = await fetch('/.netlify/functions/create-checkout-session', { method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({price_eur: 1}) });
-          const data = await res.json().catch(()=>({}));
-          document.getElementById('co-out').textContent = data.url ? ' → Redirect a Stripe...' : ' → ' + (data.error || 'Errore');
-          if(data.url) location.href = data.url;
-        }
-      </script>
+    <section class="about">
+      <h2>Come funziona?</h2>
+      <p>Paghi con Stripe, torni qui, i minuti sono accreditati. Fine.</p>
+    </section>
+
+    <section class="contact">
+      <h2>Contattaci</h2>
+      <form name="contact" method="POST" data-netlify="true">
+        <input type="text" name="name" placeholder="Nome" required />
+        <input type="email" name="email" placeholder="Email" required />
+        <textarea name="message" placeholder="Messaggio" required></textarea>
+        <button type="submit">Invia</button>
+      </form>
     </section>
   </main>
-  <footer>© 2025 Colpa Mia</footer>
+
+  <footer>
+    <p>© 2025 Colpa Mia</p>
+  </footer>
+
+  <script>
+    async function checkout(price, minutes, label) {
+      const res = await fetch("/.netlify/functions/create-checkout-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ price_eur: price, redeem_minutes: minutes, service: label })
+      });
+      const data = await res.json();
+      if (data && data.url) window.location.href = data.url;
+      else alert("Errore: impossibile creare la sessione di pagamento");
+    }
+  </script>
 </body>
 </html>
