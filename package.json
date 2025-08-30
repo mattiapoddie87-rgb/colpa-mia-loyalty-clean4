@@ -1,9 +1,10 @@
 {
-  "name": "colpa-mia-loyalty",
+  "name": "colpa-mia",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
+  "license": "UNLICENSED",
+  "description": "Colpa Mia static site with Netlify Functions and Stripe",
   "dependencies": {
-    "stripe": "^14.0.0"
+    "stripe": "^14.19.0"
   }
 }
