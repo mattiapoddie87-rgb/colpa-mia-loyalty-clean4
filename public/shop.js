@@ -12,8 +12,12 @@ const grid = document.getElementById('grid');
 const msgEl = document.getElementById('msg');
 
 const showMsg = (t, err=false)=>{
-  msgEl.hidden=false; msgEl.textContent=t; msgEl.classList.toggle('error',err);
+  if(!msgEl) return;
+  msgEl.hidden = false;
+  msgEl.textContent = t;
+  msgEl.classList.toggle('error', err);
 };
+
 
 for (const it of CATALOG) {
   const el = document.createElement('article');
@@ -23,12 +27,18 @@ for (const it of CATALOG) {
     <p>${it.desc}</p>
     <div class="price">€ ${(it.eur/100).toFixed(2)}</div>
     <div class="row">
-      <span class="tag">${it.minutes} min</span>
+      <span class="tag" title="Minuti di credito utilizzabili">Credito: ${it.minutes} min</span>
       <button class="btn">Acquista</button>
     </div>`;
-  el.querySelector('button').addEventListener('click',()=>checkout(it.sku));
+  const btn = el.querySelector('button');
+  btn.addEventListener('click', async ()=>{
+    btn.disabled = true;
+    await checkout(it.sku).catch(()=>{});
+    btn.disabled = false;
+  });
   grid.appendChild(el);
 }
+
 
 async function checkout(sku){
   try{
