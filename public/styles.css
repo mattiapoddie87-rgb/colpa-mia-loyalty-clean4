@@ -13,25 +13,6 @@
 *{box-sizing:border-box}
 html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
 .wrap{width:min(1120px,92%);margin-inline:auto}
-
-#bg{position:fixed;inset:0;z-index:-3;background:#05070c}
-.stripes{position:fixed;inset:0;pointer-events:none;z-index:-2;opacity:.25}
-.stripes--h{background:
-  repeating-linear-gradient(0deg, rgba(0,229,255,.06) 0 1px, transparent 1px 12px),
-  linear-gradient(180deg,transparent,rgba(90,163,255,.06));
-  animation: slideH 20s linear infinite;
-}
-.stripes--v{background:
-  repeating-linear-gradient(90deg, rgba(0,229,255,.05) 0 1px, transparent 1px 14px);
-  animation: slideV 30s linear infinite reverse;
-}
-@keyframes slideH {0%{background-position:0 0,0 0}100%{background-position:0 200px,0 0}}
-@keyframes slideV {0%{background-position:0 0}100%{background-position:200px 0}}
-
-.glow{position:fixed;inset:-20% -10% auto -10%;height:60vh;z-index:-1;
-  background:radial-gradient(800px 300px at 50% -10%, rgba(90,163,255,.22), transparent 60%),
-             radial-gradient(700px 240px at 20% 110%, rgba(138,107,255,.18), transparent 60%)}
-
 .topbar{position:sticky;top:0;z-index:10;background:rgba(6,8,15,.55);backdrop-filter:blur(10px);
   border-bottom:1px solid var(--border)}
 .topbar__inner{display:flex;align-items:center;justify-content:space-between;padding:.9rem 0}
@@ -75,3 +56,59 @@ html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font:16px/1.6
 
 .form{display:grid;gap:.7rem;max-width:460px}
 .form input{padding:.7rem .9rem;border-radius:10px;border:1px solid var(--border);background:#0a0e1b;color:var(--txt)}
+/* --- Background globale: canvas + righe + glow --- */
+
+/* 1) Canvas particellare pieno schermo, dietro a tutto */
+#bg{
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  pointer-events: none; /* non blocca i click */
+  background: #05070c;
+}
+
+/* 2) Strisce su tutta pagina (matcha le classi dell'HTML: stripes stripes-h / stripes stripes-v) */
+.stripes{
+  position: fixed;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: .25;
+  z-index: 1; /* sopra al canvas, sotto ai contenuti */
+}
+.stripes.stripes-h{
+  background:
+    repeating-linear-gradient(0deg, rgba(0,229,255,.06) 0 1px, transparent 1px 12px),
+    linear-gradient(180deg,transparent,rgba(90,163,255,.06));
+  animation: slideH 20s linear infinite;
+}
+.stripes.stripes-v{
+  background:
+    repeating-linear-gradient(90deg, rgba(0,229,255,.05) 0 1px, transparent 1px 14px);
+  animation: slideV 30s linear infinite reverse;
+}
+@keyframes slideH { 0%{ background-position:0 0,0 0 } 100%{ background-position:0 200px,0 0 } }
+@keyframes slideV { 0%{ background-position:0 0 } 100%{ background-position:200px 0 } }
+
+/* 3) Glow morbido, fisso dietro */
+.glow{
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(800px 300px at 50% -10%, rgba(90,163,255,.22), transparent 60%),
+    radial-gradient(700px 240px at 20% 110%, rgba(138,107,255,.18), transparent 60%);
+}
+
+/* 4) Metti i contenuti sopra (header/main/footer) */
+header, main, footer {
+  position: relative;
+  z-index: 2;
+}
+/* 5) Scrolling morbido e compensazione sticky header per l’ancora */
+html { scroll-behavior: smooth; }
+#catalogo { scroll-margin-top: 72px; } /* altezza approx della topbar sticky */
