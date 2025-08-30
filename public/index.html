@@ -8,9 +8,8 @@
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <!-- Animated background -->
+  <!-- Background -->
   <canvas id="bg"></canvas>
-  <!-- FIX: classi corrette per matchare il CSS -->
   <div class="stripes stripes-h"></div>
   <div class="stripes stripes-v"></div>
   <div class="glow"></div>
@@ -20,6 +19,7 @@
       <div class="brand">COLPA MIA</div>
       <nav class="nav">
         <a href="#catalogo">Catalogo</a>
+        <a href="#premium">Premium</a>
         <a href="/wallet.html">Wallet</a>
         <a href="#faq">FAQ</a>
       </nav>
@@ -31,15 +31,25 @@
       <div class="wrap">
         <h1 class="hero__title">Trova sempre la scusa perfetta</h1>
         <p class="hero__sub">Ricarica “Minuti di Vita” in 10 secondi. Checkout sicuro con Stripe. Zero complicazioni.</p>
-        <a class="btn btn--xl btn--primary" href="#catalogo">🔎 Scopri i pacchetti</a>
-      </div> <!-- FIX: chiusura wrap mancante -->
+        <a class="btn btn--xl btn--primary" href="#premium">🔒 Scopri i pacchetti premium</a>
+      </div>
     </section>
 
+    <!-- Catalogo (PACCHETTI A PAGAMENTO IN EURO) -->
     <section class="wrap" id="catalogo" aria-label="Pacchetti">
       <div id="grid" class="grid"></div>
       <div id="msg" class="msg" hidden></div>
     </section>
 
+    <!-- Premium (SOLO PUNTI) -->
+    <section class="wrap section" id="premium" aria-label="Prodotti Premium">
+      <h2>Prodotti Premium (solo con punti)</h2>
+      <p class="hero__sub">Sblocca contenuti speciali usando i tuoi minuti accumulati (punti).</p>
+      <div id="premium-grid" class="grid"></div>
+      <div id="premium-msg" class="msg" hidden></div>
+    </section>
+
+    <!-- FAQ -->
     <section id="faq" class="wrap section">
       <h2>FAQ</h2>
       <details>
@@ -69,7 +79,9 @@
 
   <script src="/bg.js" defer></script>
   <script src="/shop.js" defer></script>
+  <script src="/premium.js" defer></script>
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
+
 
