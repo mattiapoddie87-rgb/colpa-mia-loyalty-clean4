@@ -32,7 +32,7 @@ exports.handler = async (event) => {
     const siteUrl = process.env.SITE_URL || `https://${event.headers.host}`;
     const item = CATALOG[sku];
 
-    // Trova o crea Product
+    // 1) Trova o crea Product per SKU
     const prodSearch = await stripe.products.search({ query: `metadata['sku']:'${sku}'` });
     const product = prodSearch.data[0] || await stripe.products.create({
       name: item.title,
@@ -40,17 +40,25 @@ exports.handler = async (event) => {
       metadata: { sku, minutes: String(item.minutes) }
     });
 
-    // Trova o crea Price
-    const priceSearch = await stripe.prices.search({
-      query: `active:'true' AND product:'${product.id}' AND unit_amount:${item.eur} AND currency:'eur'`
-    });
-    const price = priceSearch.data[0] || await stripe.prices.create({
-      currency: 'eur',
-      unit_amount: item.eur,
+    // 2) Trova Price attivo per lo stesso product con currency EUR e unit_amount esatto (filtra via list)
+    const priceList = await stripe.prices.list({
       product: product.id,
-      metadata: { sku, minutes: String(item.minutes) }
+      active: true,
+      limit: 100
     });
+    let price = priceList.data.find(p => p.currency === 'eur' && p.unit_amount === item.eur);
 
+    // Se non esiste, crealo
+    if (!price) {
+      price = await stripe.prices.create({
+        currency: 'eur',
+        unit_amount: item.eur,          // valori in centesimi: 100 = €1.00
+        product: product.id,
+        metadata: { sku, minutes: String(item.minutes) }
+      });
+    }
+
+    // 3) Crea la Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: price.id, quantity: 1 }],
