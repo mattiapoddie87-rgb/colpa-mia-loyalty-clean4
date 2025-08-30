@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Wallet Minuti — Colpa Mia</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <canvas id="bg"></canvas><div class="stripes stripes--h"></div><div class="stripes stripes--v"></div><div class="glow"></div>
+  <header class="topbar">
+    <div class="wrap topbar__inner">
+      <div class="brand">COLPA MIA</div>
+      <nav class="nav"><a href="/">Catalogo</a><a href="/wallet.html">Wallet</a></nav>
+    </div>
+  </header>
+
+  <main class="wrap section">
+    <h1>Wallet Minuti</h1>
+    <p class="hero__sub">Inserisci l’email usata al checkout per vedere minuti e punti accumulati.</p>
+    <form class="form" id="wform" onsubmit="return false;">
+      <input id="email" type="email" placeholder="email@esempio.com" required>
+      <button class="btn" id="go">Vedi saldo</button>
+    </form>
+    <div id="out" class="section"></div>
+  </main>
+
+  <script src="/bg.js"></script>
+  <script>
+    const email = document.getElementById('email');
+    const out = document.getElementById('out');
+    document.getElementById('go').addEventListener('click', async () => {
+      out.innerHTML = '<div class="msg">Caricamento…</div>';
+      try{
+        const r = await fetch('/.netlify/functions/wallet?email='+encodeURIComponent(email.value));
+        const data = await r.json();
+        if(data.error){ out.innerHTML = '<div class="msg error">'+data.error+'</div>'; return; }
+        const pts = data.total_minutes; // 1 punto = 1 minuto
+        const tier = data.tier;
+        out.innerHTML = `
+          <div class="card">
+            <h3>Saldo</h3>
+            <p class="price">Minuti: ${data.total_minutes} • Punti: ${pts}</p>
+            <p class="tag">Tier: ${tier}</p>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <h3>Storico acquisti</h3>
+            <pre style="white-space:pre-wrap;margin:0">${JSON.stringify(data.history, null, 2)}</pre>
+          </div>`;
+      }catch(e){
+        out.innerHTML = '<div class="msg error">Errore di rete</div>';
+        console.error(e);
+      }
+    });
+  </script>
+</body>
+</html>

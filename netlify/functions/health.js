@@ -1,3 +1,6 @@
-export async function handler() {
-  return { statusCode: 200, body: "ok ✅" };
-}
+// netlify/functions/health.js
+exports.handler = async () => ({
+  statusCode: 200,
+  headers: { 'content-type': 'application/json' },
+  body: JSON.stringify({ ok: true })
+});

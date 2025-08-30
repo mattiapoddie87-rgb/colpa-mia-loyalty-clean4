@@ -1,85 +1,73 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Colpa Mia — Scuse & Minuti di Vita</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Colpa Mia — Scuse On‑Demand</title>
+  <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe.">
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <header class="site-header">
-    <div class="wrap">
-      <h1>Colpa Mia Loyalty</h1>
-      <p class="lead">Scegli la scusa perfetta e ricarica i tuoi “Minuti di Vita”.</p>
+  <!-- Animated background -->
+  <canvas id="bg"></canvas>
+  <div class="stripes stripes--h"></div>
+  <div class="stripes stripes--v"></div>
+  <div class="glow"></div>
+
+  <header class="topbar">
+    <div class="wrap topbar__inner">
+      <div class="brand">COLPA MIA</div>
+      <nav class="nav">
+        <a href="#catalogo">Catalogo</a>
+        <a href="/wallet.html">Wallet</a>
+        <a href="#faq">FAQ</a>
+      </nav>
     </div>
   </header>
 
-  <main class="wrap">
-    <section>
-      <h2>Pacchetti “Minuti di Vita”</h2>
-      <div class="grid">
-        <!--
-          Sostituisci data-price con i tuoi price_… reali (test o live).
-          Puoi anche metterli in ALLOWED_PRICE_IDS per sicurezza.
-        -->
-
-        <article class="card">
-          <h3>Bronzo · 10 minuti</h3>
-          <p class="muted">Scusa soft, poco sospetto.</p>
-          <div class="price">€ 1,00</div>
-          <button class="buy" data-price="price_XXX_Bronzo">Acquista</button>
-        </article>
-
-        <article class="card">
-          <h3>Argento · 30 minuti</h3>
-          <p class="muted">Scusa credibile, effetto garantito.</p>
-          <div class="price">€ 3,00</div>
-          <button class="buy" data-price="price_XXX_Argento">Acquista</button>
-        </article>
-
-        <article class="card">
-          <h3>Oro · 60 minuti</h3>
-          <p class="muted">Scusa top, alibi inossidabile.</p>
-          <div class="price">€ 6,00</div>
-          <button class="buy" data-price="price_XXX_Oro">Acquista</button>
-        </article>
-
-        <article class="card">
-          <h3>“Riunione infinita”</h3>
-          <p class="muted">Perfetta in orario d’ufficio.</p>
-          <div class="price">€ 2,00</div>
-          <button class="buy" data-price="price_XXX_Riunione">Acquista</button>
-        </article>
-
-        <article class="card">
-          <h3>“Traffico assurdo”</h3>
-          <p class="muted">Sempreverde, funziona ovunque.</p>
-          <div class="price">€ 2,00</div>
-          <button class="buy" data-price="price_XXX_Traffico">Acquista</button>
-        </article>
-
-        <article class="card">
-          <h3>“Connessione KO”</h3>
-          <p class="muted">Smartworking edition.</p>
-          <div class="price">€ 2,00</div>
-          <button class="buy" data-price="price_XXX_Conn">Acquista</button>
-        </article>
+  <main>
+    <section class="hero">
+      <div class="wrap">
+        <h1 class="hero__title">Trova sempre la scusa perfetta</h1>
+        <p class="hero__sub">Ricarica “Minuti di Vita” in 10 secondi. Checkout sicuro con Stripe. Zero complicazioni.</p>
+        <a class="btn btn--xl btn--primary" href="#catalogo">🔥 Scopri i pacchetti</a>
       </div>
+    </section>
 
+    <section class="wrap" id="catalogo" aria-label="Pacchetti">
+      <div id="grid" class="grid"></div>
       <div id="msg" class="msg" hidden></div>
+    </section>
+
+    <section id="faq" class="wrap section">
+      <h2>FAQ</h2>
+      <details>
+        <summary>Come funziona il pagamento?</summary>
+        <p>Usiamo Stripe Checkout. Selezioni il pacchetto, inserisci carta, confermi: fatto. Torni qui alla pagina di conferma.</p>
+      </details>
+      <details>
+        <summary>Quando vedo i minuti e i punti?</summary>
+        <p>Subito dopo il pagamento. Vai su <a href="/wallet.html">Wallet</a>, inserisci la tua email e trovi totale minuti acquistati e punti.</p>
+      </details>
+      <details>
+        <summary>Posso usare coupon o codici promo?</summary>
+        <p>Sì, se attivi codici in Stripe, il checkout li accetta. (Impostazione lato Stripe.)</p>
+      </details>
     </section>
   </main>
 
-  <footer class="site-footer">
-    <div class="wrap">
-      <small>© <span id="year"></span> Colpa Mia — deploy con Netlify + GitHub + Stripe</small>
+  <footer class="footer">
+    <div class="wrap footer__inner">
+      <small>© <span id="year"></span> Colpa Mia — Netlify + GitHub + Stripe</small>
+      <div class="links">
+        <a href="#">Privacy</a>
+        <a href="#">Termini</a>
+      </div>
     </div>
   </footer>
 
-  <script src="/shop.js" type="module"></script>
-  <script>
-    document.getElementById('year').textContent = new Date().getFullYear();
-  </script>
+  <script src="/bg.js" defer></script>
+  <script src="/shop.js" defer></script>
+  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
-

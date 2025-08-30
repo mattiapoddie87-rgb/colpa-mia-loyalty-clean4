@@ -1,17 +1,20 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Pagamento annullato — Colpa Mia</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <link rel="stylesheet" href="/styles.css"/>
 </head>
 <body>
-  <main class="wrap" style="padding:48px 0">
-    <h1>🛑 Pagamento annullato</h1>
-    <p>Niente paura: puoi riprovare quando vuoi.</p>
-    <p><a class="buy" href="/">Torna alla home</a></p>
+  <canvas id="bg"></canvas><div class="stripes stripes--h"></div><div class="stripes stripes--v"></div><div class="glow"></div>
+  <main class="wrap section" style="min-height:60vh;display:grid;place-items:center">
+    <div style="text-align:center;max-width:720px">
+      <h1>🛑 Pagamento annullato</h1>
+      <p class="msg">Nessun addebito effettuato. Puoi riprovare quando vuoi.</p>
+      <p><a class="btn" href="/">Torna al catalogo</a></p>
+    </div>
   </main>
+  <script src="/bg.js"></script>
 </body>
 </html>
-
