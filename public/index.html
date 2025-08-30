@@ -3,15 +3,16 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Colpa Mia — Scuse On‑Demand</title>
+  <title>Colpa Mia — Scuse On-Demand</title>
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe.">
   <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
   <!-- Animated background -->
   <canvas id="bg"></canvas>
-  <div class="stripes stripes--h"></div>
-  <div class="stripes stripes--v"></div>
+  <!-- FIX: classi corrette per matchare il CSS -->
+  <div class="stripes stripes-h"></div>
+  <div class="stripes stripes-v"></div>
   <div class="glow"></div>
 
   <header class="topbar">
@@ -30,8 +31,8 @@
       <div class="wrap">
         <h1 class="hero__title">Trova sempre la scusa perfetta</h1>
         <p class="hero__sub">Ricarica “Minuti di Vita” in 10 secondi. Checkout sicuro con Stripe. Zero complicazioni.</p>
-        <a class="btn btn--xl btn--primary" href="#catalogo">🔥 Scopri i pacchetti</a>
-      </div>
+        <a class="btn btn--xl btn--primary" href="#catalogo">🔎 Scopri i pacchetti</a>
+      </div> <!-- FIX: chiusura wrap mancante -->
     </section>
 
     <section class="wrap" id="catalogo" aria-label="Pacchetti">
@@ -71,3 +72,4 @@
   <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
 </body>
 </html>
+
