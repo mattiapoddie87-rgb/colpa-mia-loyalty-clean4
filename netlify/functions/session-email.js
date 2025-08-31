@@ -1,20 +1,18 @@
 // netlify/functions/session-email.js
-import Stripe from 'stripe';
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2023-10-16' });
+// GET ?session_id=cs_xxx  →  { email: "..." }
+const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-export async function handler(event) {
+exports.handler = async (event) => {
   try {
-    const sid = event.queryStringParameters?.sid;
-    if (!sid) return { statusCode: 400, body: 'sid mancante' };
-    const s = await stripe.checkout.sessions.retrieve(sid);
-    const email = s.customer_details?.email || s.customer_email || null;
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' },
-      body: JSON.stringify({ email }),
-    };
+    const { session_id } = event.queryStringParameters || {};
+    if (!session_id) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'missing session_id' }) };
+    }
+    const session = await stripe.checkout.sessions.retrieve(session_id);
+    const email = session.customer_details?.email || session.customer_email || null;
+    return { statusCode: 200, body: JSON.stringify({ email }) };
   } catch (e) {
     console.error(e);
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
-}
+};
