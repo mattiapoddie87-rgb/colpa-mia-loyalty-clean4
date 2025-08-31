@@ -1,36 +1,48 @@
 // netlify/functions/redeem.js
-import { createClient } from '@netlify/blobs';
+const { getStore } = require('@netlify/blobs');
 
-const blobs = createClient();
+async function getBalance(email) {
+  const store = getStore('balances');
+  const raw = await store.get(email);
+  if (!raw) return { minutes: 0, history: [] };
+  try { return JSON.parse(raw); } catch { return { minutes: 0, history: [] }; }
+}
+async function setBalance(email, data) {
+  const store = getStore('balances');
+  await store.set(email, JSON.stringify(data));
+}
 
-export async function handler(event) {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+exports.handler = async (event) => {
   try {
-    const { email, premiumId, cost } = JSON.parse(event.body || '{}');
-    if (!email || !premiumId || !Number.isFinite(cost)) {
-      return { statusCode: 400, body: 'Parametri invalidi' };
+    if (event.httpMethod !== 'POST') {
+      return { statusCode: 405, body: 'Method Not Allowed' };
     }
-    const key = `u/${encodeURIComponent(email.trim().toLowerCase())}.json`;
-    const raw = await blobs.get(key);
-    const data = raw ? JSON.parse(await raw.text()) : { minutes: 0, history: [] };
+    const { email, itemId, cost, title } = JSON.parse(event.body || '{}');
+    if (!email || !itemId || !cost) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'missing email/itemId/cost' }) };
+    }
 
-    if ((data.minutes || 0) < cost) {
+    const bal = await getBalance(email);
+    if ((bal.minutes || 0) < cost) {
       return { statusCode: 400, body: JSON.stringify({ error: 'Saldo insufficiente' }) };
     }
 
-    data.minutes = (data.minutes || 0) - cost;
-    data.history = data.history || [];
-    data.history.push({ type: 'redeem', premiumId, cost, ts: Date.now() });
+    bal.minutes -= cost;
+    bal.history = bal.history || [];
+    bal.history.push({
+      ts: Date.now(),
+      type: 'redeem',
+      delta: -cost,
+      reason: `Premium: ${title || itemId}`,
+      itemId
+    });
+    await setBalance(email, bal);
 
-    await blobs.set(key, JSON.stringify(data), { contentType: 'application/json' });
+    // TODO: qui potresti generare/richiamare contenuto (link, file, AI ecc.)
+    return { statusCode: 200, body: JSON.stringify({ ok:true, minutes: bal.minutes }) };
 
-    return {
-      statusCode: 200,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, minutes: data.minutes }),
-    };
   } catch (e) {
     console.error(e);
     return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
-}
+};
