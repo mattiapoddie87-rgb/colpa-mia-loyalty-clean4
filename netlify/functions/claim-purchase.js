@@ -1,5 +1,5 @@
 // netlify/functions/claim-purchase.js
-// Collega una Checkout Session pagata, genera eventuali Scuse e accredita minuti (idempotente).
+// Collega una Checkout Session pagata, genera Scuse, accredita minuti e INVIA EMAIL (idempotente).
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -22,6 +22,24 @@ function needFromSession(s){
   const cf = Array.isArray(s.custom_fields) ? s.custom_fields : [];
   const f = cf.find(x => x?.key === 'need') || null;
   return (f && f.text && f.text.value) ? String(f.text.value).trim() : '';
+}
+
+function renderEmail({ firstName, excuses, minutes }) {
+  const e = Array.isArray(excuses) ? excuses : [];
+  const scuseHtml = e.length
+    ? `<h2 style="margin:0 0 8px 0;">La tua scusa</h2><p style="font-size:16px;line-height:1.5">${e.join('<br><br>')}</p>`
+    : '';
+  const accredito = minutes > 0
+    ? `<p style="margin-top:12px">Accreditati <b>${minutes} minuti</b> sul tuo wallet.</p>`
+    : '';
+  return `
+    <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111">
+      <p>Ciao ${firstName || 'Ciao'},</p>
+      ${scuseHtml}
+      ${accredito}
+      <p style="margin-top:20px;font-size:12px;color:#666">Se non sei stato tu, contatta subito il supporto.</p>
+    </div>
+  `;
 }
 
 exports.handler = async (event) => {
@@ -48,11 +66,11 @@ exports.handler = async (event) => {
 
     const piId = String(s.payment_intent || '');
     if (!piId) return err(400, 'Payment Intent assente');
-
     const pi = await stripe.paymentIntents.retrieve(piId);
-    if (pi.metadata && pi.metadata.colpamiaCredited === 'true') {
-      return ok({ ok: true, credited: false, reason: 'già accreditato' });
-    }
+
+    // doppio invio? esci
+    const alreadyCredited = pi.metadata && pi.metadata.colpamiaCredited === 'true';
+    const alreadyMailed   = pi.metadata && pi.metadata.colpamiaEmailSent === 'true';
 
     const emailSession = (s.customer_details && s.customer_details.email) || s.customer_email || null;
     const email = normalizeEmail(emailSession || (isEmail(email_fallback) ? email_fallback : ''));
@@ -60,8 +78,9 @@ exports.handler = async (event) => {
 
     const items = await stripe.checkout.sessions.listLineItems(session_id, { limit: 100, expand: ['data.price.product'] });
 
-    const { processLineItems } = safeRequire('./fulfillment') || {};
+    // Calcolo minuti + scuse
     let minutes = 0, excuses = [];
+    const { processLineItems } = safeRequire('./fulfillment') || {};
     if (typeof processLineItems === 'function') {
       const need = needFromSession(s);
       const firstName = (s.customer_details?.name || email.split('@')[0] || 'Ciao').split(' ')[0];
@@ -69,7 +88,6 @@ exports.handler = async (event) => {
       minutes = Number(out.minutes || 0);
       excuses = Array.isArray(out.excuses) ? out.excuses : [];
     } else {
-      // Fallback: solo minuti da PRICE_MINUTES_JSON o metadata.minutes
       const MAP = j(process.env.PRICE_MINUTES_JSON) || {};
       for (const li of items.data) {
         const price = li.price || {};
@@ -81,7 +99,8 @@ exports.handler = async (event) => {
       }
     }
 
-    if (minutes > 0) {
+    // Accredito (se non già fatto)
+    if (!alreadyCredited && minutes > 0) {
       try {
         const wallet = safeRequire('./wallet');
         if (wallet && typeof wallet.creditMinutes === 'function') {
@@ -90,11 +109,33 @@ exports.handler = async (event) => {
       } catch {}
     }
 
+    // Email (se non già inviata)
+    let emailSent = alreadyMailed;
+    if (!alreadyMailed) {
+      try {
+        const sender = safeRequire('./send-utils');
+        if (sender && typeof sender.sendEmail === 'function') {
+          const firstName = (s.customer_details?.name || email.split('@')[0] || 'Ciao').split(' ')[0];
+          const html = renderEmail({ firstName, excuses, minutes });
+          const subject = excuses.length ? 'La tua scusa è pronta' : 'Accredito minuti confermato';
+          const res = await sender.sendEmail(email, subject, html);
+          emailSent = !!res.sent;
+        }
+      } catch { emailSent = false; }
+    }
+
+    // Idempotenza + audit
     await stripe.paymentIntents.update(piId, {
-      metadata: { ...(pi.metadata || {}), colpamiaCredited: 'true', minutesCredited: String(minutes||0), excusesCount: String(excuses.length||0) }
+      metadata: {
+        ...(pi.metadata || {}),
+        colpamiaCredited: 'true',
+        minutesCredited: String(minutes || 0),
+        excusesCount: String(excuses.length || 0),
+        colpamiaEmailSent: emailSent ? 'true' : 'false'
+      }
     });
 
-    return ok({ ok: true, credited: minutes > 0, email, minutes, excuses });
+    return ok({ ok: true, credited: minutes > 0, email, minutes, excuses, emailSent });
   } catch (e) {
     return err(500, e.message || 'Errore interno');
   }
