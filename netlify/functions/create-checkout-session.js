@@ -9,14 +9,20 @@ const cors = {
 };
 
 function resp(status, body) {
-  return { statusCode: status, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+  return {
+    statusCode: status,
+    headers: { ...cors, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  };
 }
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
+    if (event.httpMethod === 'OPTIONS') {
+      return { statusCode: 204, headers: cors };
+    }
 
-    // --- input ---
+    // ---- input ----
     let body = {};
     if (event.httpMethod === 'POST') {
       try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
@@ -26,7 +32,7 @@ exports.handler = async (event) => {
         email:   q.get('email'),
         priceId: q.get('priceId') || q.get('price'),
         sku:     q.get('sku'),
-        qty:     q.get('qty')
+        qty:     q.get('qty'),
       };
     } else {
       return resp(405, { error: 'METHOD_NOT_ALLOWED' });
@@ -37,7 +43,7 @@ exports.handler = async (event) => {
     const sku     = String(body.sku || '').trim();
     const qty     = Math.max(1, parseInt(body.qty || '1', 10) || 1);
 
-    // --- resolve price ---
+    // ---- resolve price ----
     let price = null;
     if (priceId) {
       price = await stripe.prices.retrieve(priceId);
@@ -52,7 +58,7 @@ exports.handler = async (event) => {
     }
     if (!price) return resp(400, { error: 'PRICE_NOT_FOUND' });
 
-    // --- reuse customer if exists ---
+    // ---- reuse customer if exists ----
     let existingCustomer = null;
     if (email) {
       try {
@@ -64,32 +70,39 @@ exports.handler = async (event) => {
       }
     }
 
-    // --- URLs ---
+    // ---- URLs ----
     const site =
       process.env.SITE_URL ||
-      (event.headers && event.headers.origin && /^https?:\/\//.test(event.headers.origin) ? event.headers.origin : 'https://colpamia.com');
+      (event.headers?.origin && /^https?:\/\//.test(event.headers.origin)
+        ? event.headers.origin
+        : 'https://colpamia.com');
 
-    // --- session params (puliti, zero fronzoli che rompono) ---
+    // ---- session params ----
     const params = {
       mode: 'payment',
       line_items: [{ price: price.id, quantity: qty }],
       success_url: `${site}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${site}/cancel`,
+
+      // raccoglie il TELEFONO nativamente: disponibile poi in session.customer_details.phone
+      phone_number_collection: { enabled: true },
+
+      // campo contesto facoltativo
       custom_fields: [{
         key: 'need',
-        label: { type: 'custom', custom: 'Esigenza (facoltativa)' },
+        label: { type: 'custom', custom: 'Contesto (facoltativo)' },
         type: 'text',
-        optional: true
+        optional: true,
       }],
+      // se vuoi: allow_promotion_codes: true,
     };
 
     if (existingCustomer) {
       params.customer = existingCustomer.id;
     } else if (email) {
       params.customer_email = email;
-      params.customer_creation = 'if_required'; // non esplode se manca email/altre condizioni
+      params.customer_creation = 'if_required';
     }
-    // se vuoi promo: params.allow_promotion_codes = true;
 
     const session = await stripe.checkout.sessions.create(params);
     return resp(200, { url: session.url, id: session.id });
@@ -97,15 +110,3 @@ exports.handler = async (event) => {
     return resp(500, { error: e.message || 'INTERNAL_ERROR' });
   }
 };
-const session = await stripe.checkout.sessions.create({
-  mode: 'payment',
-  // ...
-  phone_number_collection: { enabled: true }, // <— raccoglie telefono in modo nativo
-  // opzionale: informazione esigenza
-  custom_fields: [{
-    key: 'need',
-    label: { type: 'custom', custom: 'Contesto (facoltativo)' },
-    type: 'text'
-  }],
-  // ...
-});
