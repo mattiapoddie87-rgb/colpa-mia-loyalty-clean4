@@ -6,6 +6,6 @@
   "description": "Colpa Mia static site with Netlify Functions and Stripe",
   "dependencies": {
     "stripe": "^14.19.0",
-    "@netlify/blobs": "^7.0.0"
+    "@netlify/blobs": "^6.1.0"
   }
 }
