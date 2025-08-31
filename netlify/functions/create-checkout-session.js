@@ -1,9 +1,5 @@
 // netlify/functions/create-checkout-session.js
-// Crea una Stripe Checkout Session.
-// - Riusa il Customer esistente (niente duplicati).
-// - Precompila l'email se la passi.
-// - Aggiunge un campo "Esigenza" (custom_fields.need) che il fulfillment userà per generare la scusa.
-// - Accetta POST (JSON) o GET (query) con: { email?, priceId? | sku?, qty? }
+// Crea la Checkout Session: riusa Customer, precompila email, raccoglie segnali di contesto per la scusa.
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -18,7 +14,6 @@ exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
 
-    // ---- input
     let body = {};
     if (event.httpMethod === 'POST') {
       try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
@@ -29,30 +24,27 @@ exports.handler = async (event) => {
       return resp(405, { error: 'Method Not Allowed' });
     }
 
-    const email = String(body.email || '').trim().toLowerCase();
-    const priceIdIn = String(body.priceId || '').trim();
-    const skuIn     = String(body.sku || '').trim();
-    const quantity  = Math.max(1, parseInt(body.qty || '1', 10));
+    const email    = String(body.email || '').trim().toLowerCase();
+    const priceId  = String(body.priceId || '').trim();
+    const sku      = String(body.sku || '').trim();
+    const quantity = Math.max(1, parseInt(body.qty || '1', 10));
 
-    // ---- risolvi il price
+    // 1) Risolvi il price
     let price = null;
-
-    if (priceIdIn) {
-      price = await stripe.prices.retrieve(priceIdIn);
+    if (priceId) {
+      price = await stripe.prices.retrieve(priceId);
       if (!price.active) throw new Error('Price non attivo');
     }
-
-    if (!price && skuIn) {
+    if (!price && sku) {
       const prices = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
       price = prices.data.find(p =>
-        (p.metadata && p.metadata.sku === skuIn) ||
-        (p.product && p.product.metadata && p.product.metadata.sku === skuIn)
+        (p.metadata && p.metadata.sku === sku) ||
+        (p.product && p.product.metadata && p.product.metadata.sku === sku)
       ) || null;
     }
-
     if (!price) return resp(400, { error: 'Price non trovato (passa priceId o sku valido)' });
 
-    // ---- riusa Customer se esiste
+    // 2) Riuso Customer se esiste
     let existingCustomer = null;
     if (email) {
       try {
@@ -64,7 +56,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // ---- crea sessione
+    // 3) Crea Session con campi di contesto (tutti facoltativi)
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       line_items: [{ price: price.id, quantity }],
@@ -74,16 +66,13 @@ exports.handler = async (event) => {
         ? { customer: existingCustomer.id }
         : { customer_email: email || undefined, customer_creation: 'always' }
       ),
-      // Campo testo libero per l'esigenza (letto dal webhook/claim)
-      custom_fields: [{
-        key: 'need',
-        label: { type: 'custom', custom: 'Esigenza (facoltativa)' },
-        type: 'text',
-        optional: true
-      }],
-      // opzionale ma utile: chiedi numero telefono in checkout
+      custom_fields: [
+        { key: 'need',      label: { type: 'custom', custom: 'Esigenza sintetica (facoltativa)' }, type: 'text', optional: true },
+        { key: 'recipient', label: { type: 'custom', custom: 'Nome destinatario (facoltativo)' },  type: 'text', optional: true },
+        { key: 'tone',      label: { type: 'custom', custom: 'Tono (formale/informale)' },         type: 'text', optional: true },
+        { key: 'delay',     label: { type: 'custom', custom: 'Ritardo previsto (minuti)' },        type: 'text', optional: true }
+      ],
       phone_number_collection: { enabled: true },
-      // opzionale: promocode
       allow_promotion_codes: true
     });
 
