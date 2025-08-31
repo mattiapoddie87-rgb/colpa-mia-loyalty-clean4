@@ -1,10 +1,4 @@
 // netlify/functions/create-checkout-session.js
-// Crea una Stripe Checkout Session.
-// - Riusa il Customer esistente (niente duplicati).
-// - Precompila l'email se la passi.
-// - Aggiunge un campo "Esigenza" (custom_fields.need) che il fulfillment userà per generare la scusa.
-// - Accetta POST (JSON) o GET (query) con: { email?, priceId? | sku?, qty? }
-
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
@@ -14,45 +8,51 @@ const cors = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
+function resp(status, body) {
+  return { statusCode: status, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
 exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
 
-    // ---- input
+    // --- input ---
     let body = {};
     if (event.httpMethod === 'POST') {
       try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
     } else if (event.httpMethod === 'GET') {
       const q = new URLSearchParams(event.queryStringParameters || {});
-      body = { email: q.get('email'), priceId: q.get('priceId'), sku: q.get('sku'), qty: q.get('qty') };
+      body = {
+        email:   q.get('email'),
+        priceId: q.get('priceId') || q.get('price'),
+        sku:     q.get('sku'),
+        qty:     q.get('qty')
+      };
     } else {
-      return resp(405, { error: 'Method Not Allowed' });
+      return resp(405, { error: 'METHOD_NOT_ALLOWED' });
     }
 
-    const email = String(body.email || '').trim().toLowerCase();
-    const priceIdIn = String(body.priceId || '').trim();
-    const skuIn     = String(body.sku || '').trim();
-    const quantity  = Math.max(1, parseInt(body.qty || '1', 10));
+    const email   = String(body.email || '').trim().toLowerCase();
+    const priceId = String(body.priceId || '').trim();
+    const sku     = String(body.sku || '').trim();
+    const qty     = Math.max(1, parseInt(body.qty || '1', 10) || 1);
 
-    // ---- risolvi il price
+    // --- resolve price ---
     let price = null;
-
-    if (priceIdIn) {
-      price = await stripe.prices.retrieve(priceIdIn);
-      if (!price.active) throw new Error('Price non attivo');
+    if (priceId) {
+      price = await stripe.prices.retrieve(priceId);
+      if (!price?.active) throw new Error('PRICE_NOT_ACTIVE');
     }
-
-    if (!price && skuIn) {
-      const prices = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
-      price = prices.data.find(p =>
-        (p.metadata && p.metadata.sku === skuIn) ||
-        (p.product && p.product.metadata && p.product.metadata.sku === skuIn)
+    if (!price && sku) {
+      const list = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
+      price = list.data.find(p =>
+        (p.metadata?.sku === sku) ||
+        (p.product && p.product.metadata?.sku === sku)
       ) || null;
     }
+    if (!price) return resp(400, { error: 'PRICE_NOT_FOUND' });
 
-    if (!price) return resp(400, { error: 'Price non trovato (passa priceId o sku valido)' });
-
-    // ---- riusa Customer se esiste
+    // --- reuse customer if exists ---
     let existingCustomer = null;
     if (email) {
       try {
@@ -64,35 +64,36 @@ exports.handler = async (event) => {
       }
     }
 
-    // ---- crea sessione
-    const session = await stripe.checkout.sessions.create({
+    // --- URLs ---
+    const site =
+      process.env.SITE_URL ||
+      (event.headers && event.headers.origin && /^https?:\/\//.test(event.headers.origin) ? event.headers.origin : 'https://colpamia.com');
+
+    // --- session params (puliti, zero fronzoli che rompono) ---
+    const params = {
       mode: 'payment',
-      line_items: [{ price: price.id, quantity }],
-      success_url: 'https://colpamia.com/success?session_id={CHECKOUT_SESSION_ID}',
-      cancel_url:  'https://colpamia.com/cancel',
-      ...(existingCustomer
-        ? { customer: existingCustomer.id }
-        : { customer_email: email || undefined, customer_creation: 'always' }
-      ),
-      // Campo testo libero per l'esigenza (letto dal webhook/claim)
+      line_items: [{ price: price.id, quantity: qty }],
+      success_url: `${site}/success?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url:  `${site}/cancel`,
       custom_fields: [{
         key: 'need',
         label: { type: 'custom', custom: 'Esigenza (facoltativa)' },
         type: 'text',
         optional: true
       }],
-      // opzionale ma utile: chiedi numero telefono in checkout
-      phone_number_collection: { enabled: true },
-      // opzionale: promocode
-      allow_promotion_codes: true
-    });
+    };
 
+    if (existingCustomer) {
+      params.customer = existingCustomer.id;
+    } else if (email) {
+      params.customer_email = email;
+      params.customer_creation = 'if_required'; // non esplode se manca email/altre condizioni
+    }
+    // se vuoi promo: params.allow_promotion_codes = true;
+
+    const session = await stripe.checkout.sessions.create(params);
     return resp(200, { url: session.url, id: session.id });
-  } catch (err) {
-    return resp(500, { error: err.message || 'Errore interno' });
+  } catch (e) {
+    return resp(500, { error: e.message || 'INTERNAL_ERROR' });
   }
 };
-
-function resp(statusCode, body) {
-  return { statusCode, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
-}
