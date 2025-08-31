@@ -1,13 +1,25 @@
 // netlify/functions/create-checkout-session.js
+// Supporta sia { priceId } sia { sku }.
+// Se arriva sku: cerca in Stripe il prezzo attivo del prodotto con metadata.sku === sku
+
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
 
-// Ricava l'origin del sito (usa SITE_URL se presente)
-function siteOrigin() {
-  const fromEnv = process.env.SITE_URL;
-  if (fromEnv) return fromEnv.replace(/\/$/, '');
-  const fromNetlify = process.env.URL || process.env.DEPLOY_URL;
-  if (fromNetlify) return fromNetlify.replace(/\/$/, '');
-  return 'http://localhost:8888';
+// helper: trova un priceId partendo dallo SKU via metadata
+async function getPriceIdFromSku(sku) {
+  // Prendiamo un po' di prezzi attivi e includiamo il prodotto
+  const prices = await stripe.prices.list({
+    active: true,
+    limit: 100,
+    expand: ['data.product'],
+  });
+
+  // Cerca il primo price che ha product.metadata.sku == sku
+  const match = prices.data.find((p) => {
+    const md = p.product && p.product.metadata ? p.product.metadata : {};
+    return (md.sku && md.sku.toUpperCase() === String(sku).toUpperCase());
+  });
+
+  return match ? match.id : null;
 }
 
 exports.handler = async (event) => {
@@ -16,68 +28,42 @@ exports.handler = async (event) => {
       return { statusCode: 405, body: 'Method Not Allowed' };
     }
 
-    // 1) Leggi SKU dal body
-    let sku;
-    try {
-      sku = (JSON.parse(event.body || '{}')).sku;
-    } catch (_) {}
-    if (!sku) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'Missing sku' }) };
+    const { priceId, sku, email } = JSON.parse(event.body || '{}');
+
+    let finalPriceId = priceId;
+
+    // Se non è stato passato un priceId, proviamo con lo sku
+    if (!finalPriceId && sku) {
+      finalPriceId = await getPriceIdFromSku(sku);
     }
 
-    // 2) Trova il Product con metadata.sku === sku
-    const products = await stripe.products.list({ active: true, limit: 100 });
-    const prod = products.data.find(p => p?.metadata?.sku === sku);
-
-    if (!prod) {
+    if (!finalPriceId) {
       return {
-        statusCode: 404,
-        body: JSON.stringify({ error: `Product not found for sku ${sku}. Assicurati di avere metadata.sku="${sku}" su Stripe.` }),
+        statusCode: 400,
+        body: JSON.stringify({ error: 'Missing priceId and/or unknown sku' }),
       };
     }
 
-    // 3) Recupera un Price: prima default_price, altrimenti il primo price attivo del product
-    let priceId = null;
+    const siteUrl = process.env.SITE_URL || process.env.URL || 'http://localhost:8888';
 
-    if (prod.default_price) {
-      priceId = typeof prod.default_price === 'string'
-        ? prod.default_price
-        : prod.default_price.id;
-    } else {
-      const prices = await stripe.prices.list({ product: prod.id, active: true, limit: 100 });
-      // prova a preferire EUR se disponibile
-      const eurFirst = prices.data.find(pr => pr.currency === 'eur') || prices.data[0];
-      if (eurFirst) priceId = eurFirst.id;
-    }
-
-    if (!priceId) {
-      return {
-        statusCode: 404,
-        body: JSON.stringify({ error: `No active price for product sku ${sku}. Aggiungi un Price attivo al Product (anche come default_price).` }),
-      };
-    }
-
-    const origin = siteOrigin();
-
-    // 4) Crea la Checkout Session
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [{ price: priceId, quantity: 1 }],
-      allow_promotion_codes: true,
-      customer_creation: 'if_required',
-      success_url: `${origin}/success.html?sid={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${origin}/cancel.html`,
+      payment_method_types: ['card'],
+      line_items: [{ price: finalPriceId, quantity: 1 }],
+      customer_email: email || undefined, // opzionale
+      success_url: `${siteUrl}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${siteUrl}/cancel.html`,
     });
 
-    // 5) Redirect 303 (Netlify-friendly)
+    // Ritorno JSON con la URL (il client fa location.href=data.url)
     return {
-      statusCode: 303,
-      headers: { Location: session.url },
+      statusCode: 200,
       body: JSON.stringify({ url: session.url }),
     };
 
-  } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+  } catch (e) {
+    console.error('checkout error:', e);
+    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
   }
 };
+
