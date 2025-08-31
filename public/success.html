@@ -2,38 +2,72 @@
 <html lang="it">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Colpa Mia — Conferma pagamento</title>
-  <link rel="stylesheet" href="/styles.css" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pagamento riuscito</title>
   <style>
-    .wrap{width:min(720px,92%);margin:40px auto}
-    .card{background:#0b1020;border:1px solid #1a2340;border-radius:14px;padding:18px}
-    .row{display:grid;gap:.7rem}
-    input{padding:.7rem .9rem;border-radius:10px;border:1px solid #1a2340;background:#0a0e1b;color:#e9eeff}
-    button{padding:.8rem 1.1rem;border:0;border-radius:12px;background:linear-gradient(135deg,#5aa3ff,#8a6bff);color:#fff;cursor:pointer}
-    .msg{margin-top:12px;padding:10px;border-radius:10px;border:1px solid #1a2340;background:#0e1429}
-    .error{color:#ffdede;border-color:#ff6b6b}
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d12; color:#e9eef5; margin:0; }
+    .wrap{ max-width:900px; margin:40px auto; padding:0 16px; }
+    .box { background:#0f1623; border:1px solid #1f2636; border-radius:14px; padding:16px; }
+    input, button { padding:12px; border-radius:10px; border:1px solid #334; background:#111826; color:#e9eef5; }
+    input { width:100%; }
+    button { background:linear-gradient(135deg,#6c7dff,#8a6dff); border:0; cursor:pointer; font-weight:600; }
+    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
+    .msg{margin-left:12px}
+    .ok{color:#29d07b}.warn{color:#ffc14d}.err{color:#ff6b6b}
   </style>
 </head>
 <body>
-  <main class="wrap">
+  <div class="wrap">
     <h1>Pagamento riuscito ✅</h1>
-    <p>Se non abbiamo potuto collegare automaticamente la tua email, inseriscila qui per accreditare i minuti e ricevere la scusa.</p>
+    <p>Se non abbiamo potuto collegare automaticamente la tua email, usa questo recovery.</p>
 
-    <div class="card">
-      <div class="row">
-        <label>Checkout session ID (precompilato se arrivi dal redirect)</label>
-        <input id="sid" placeholder="cs_live_..." />
-        <label>Email (facoltativa: usata come fallback di consegna)</label>
-        <input id="email" type="email" placeholder="tuo@email.com" />
-        <label>Telefono (consigliato: consegna via WhatsApp/SMS, formato +39...)</label>
+    <div class="box">
+      <div>
+        <label><b>Checkout session ID</b></label>
+        <input id="cs" placeholder="cs_live_..." />
+      </div>
+
+      <div style="margin-top:12px">
+        <label><b>Email (fallback, opzionale)</b></label>
+        <input id="emailRecovery" placeholder="email@esempio.com" />
+      </div>
+
+      <div style="margin-top:12px">
+        <label><b>Telefono (opzionale)</b></label>
         <input id="phone" placeholder="+39..." />
-        <button id="claim">Collega e accredita</button>
-        <div id="msg" class="msg" hidden></div>
+      </div>
+
+      <div class="row" style="margin-top:16px">
+        <button id="collega">Collega e accredita</button>
+        <span id="msg" class="msg"></span>
       </div>
     </div>
-  </main>
+  </div>
 
-  <script src="/success.js" defer></script>
+  <script>
+    // Precompila da ?session_id=
+    (function(){
+      const sid = new URL(location.href).searchParams.get('session_id');
+      if (sid) document.querySelector('#cs').value = sid;
+    })();
+
+    function show(m, cls){ const d=document.querySelector('#msg'); d.textContent=m; d.className='msg ' + (cls||''); }
+
+    document.querySelector('#collega').addEventListener('click', async () => {
+      const session_id    = document.querySelector('#cs').value.replace(/\s/g,'');
+      const email_fallback= document.querySelector('#emailRecovery').value.trim();
+      const phone         = document.querySelector('#phone').value.trim();
+
+      const r = await fetch('/.netlify/functions/claim-purchase', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ session_id, email_fallback, phone })
+      });
+      const out = await r.json().catch(()=> ({}));
+      if (!r.ok || out.error) return show(out.error || `HTTP ${r.status}`,'err');
+      if (out.reason)        return show(out.reason,'warn');
+      show(`Accreditati ${out.minutes} minuti a ${out.email}`,'ok');
+    });
+  </script>
 </body>
 </html>
