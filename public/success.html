@@ -1,47 +1,39 @@
-<!-- public/success.html -->
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Grazie! – Colpa Mia</title>
-  <link rel="stylesheet" href="/styles.css">
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Colpa Mia — Conferma pagamento</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <style>
+    .wrap{width:min(720px,92%);margin:40px auto}
+    .card{background:#0b1020;border:1px solid #1a2340;border-radius:14px;padding:18px}
+    .row{display:grid;gap:.7rem}
+    input{padding:.7rem .9rem;border-radius:10px;border:1px solid #1a2340;background:#0a0e1b;color:#e9eeff}
+    button{padding:.8rem 1.1rem;border:0;border-radius:12px;background:linear-gradient(135deg,#5aa3ff,#8a6bff);color:#fff;cursor:pointer}
+    .msg{margin-top:12px;padding:10px;border-radius:10px;border:1px solid #1a2340;background:#0e1429}
+    .error{color:#ffdede;border-color:#ff6b6b}
+  </style>
 </head>
 <body>
-  <main class="wrap section">
+  <main class="wrap">
     <h1>Pagamento riuscito ✅</h1>
-    <p id="msg">Stiamo collegando il tuo Wallet…</p>
-    <div id="cta" style="display:none">
-      <a id="linkWallet" class="btn" href="#">Vedi saldo</a>
-      <a id="linkPremium" class="btn" href="#">Sblocca Premium</a>
-      <a class="btn" href="/">Torna alla Home</a>
+    <p>Se non abbiamo potuto collegare automaticamente la tua email, inseriscila qui per accreditare i minuti e ricevere la scusa.</p>
+
+    <div class="card">
+      <div class="row">
+        <label>Checkout session ID (precompilato se arrivi dal redirect)</label>
+        <input id="sid" placeholder="cs_live_..." />
+        <label>Email (facoltativa: usata come fallback di consegna)</label>
+        <input id="email" type="email" placeholder="tuo@email.com" />
+        <label>Telefono (consigliato: consegna via WhatsApp/SMS, formato +39...)</label>
+        <input id="phone" placeholder="+39..." />
+        <button id="claim">Collega e accredita</button>
+        <div id="msg" class="msg" hidden></div>
+      </div>
     </div>
   </main>
 
-  <script>
-  (async ()=>{
-    const p = new URLSearchParams(location.search);
-    const sid = p.get('sid');
-    try{
-      const r = await fetch('/.netlify/functions/session-email?sid=' + encodeURIComponent(sid));
-      const j = await r.json();
-      const email = j.email || '';
-      if(email){
-        const w = document.getElementById('linkWallet');
-        const pr = document.getElementById('linkPremium');
-        w.href = '/wallet.html?email=' + encodeURIComponent(email);
-        pr.href = '/index.html#premium';
-        document.getElementById('msg').textContent = `Email collegata: ${email}`;
-        document.getElementById('cta').style.display = 'flex';
-        document.getElementById('cta').style.gap = '10px';
-      }else{
-        document.getElementById('msg').textContent = 'Non abbiamo potuto collegare automaticamente la tua email.';
-      }
-    }catch(e){
-      document.getElementById('msg').textContent = 'Errore durante il collegamento.';
-      console.error(e);
-    }
-  })();
-  </script>
+  <script src="/success.js" defer></script>
 </body>
 </html>
