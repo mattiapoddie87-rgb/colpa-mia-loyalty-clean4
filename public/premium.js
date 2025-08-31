@@ -1,4 +1,6 @@
 // public/premium.js
+// Render dei Premium + redeem con POST a /.netlify/functions/redeem
+
 const PREMIUM = [
   {
     id: 'ai_custom',
@@ -34,6 +36,7 @@ const PREMIUM = [
 
 (function renderPremium(){
   const grid = document.getElementById('premium-grid');
+  const msg = document.getElementById('premium-msg');
   if (!grid) return;
 
   PREMIUM.forEach(it=>{
@@ -47,14 +50,49 @@ const PREMIUM = [
         <button class="btn" data-id="${it.id}">Sblocca</button>
       </div>
     `;
-    el.querySelector('button').addEventListener('click', ()=>{
-      const msg = document.getElementById('premium-msg');
-      if (msg) {
-        msg.hidden = false;
-        msg.textContent = 'Per sbloccare i premium useremo i tuoi minuti (feature in arrivo).';
-        msg.classList.remove('error');
-      }
-    });
+    const btn = el.querySelector('button');
+    btn.addEventListener('click', ()=> redeemPremium(it.id, btn, msg));
     grid.appendChild(el);
   });
 })();
+
+async function redeemPremium(itemId, btn, msg){
+  try{
+    if (msg) { msg.hidden = false; msg.textContent = 'Verifico il tuo saldo…'; msg.classList.remove('error'); }
+    btn.disabled = true;
+
+    // Chiedi telefono (default) ed email (fallback) con due prompt rapidi
+    const phone = (prompt('Numero di telefono per la consegna (WhatsApp/SMS):') || '').trim();
+    const email = (prompt('Email (opzionale, usata come backup):') || '').trim();
+
+    if (!phone && !email) {
+      if (msg){ msg.textContent = 'Operazione annullata.'; }
+      btn.disabled = false; 
+      return;
+    }
+
+    const r = await fetch('/.netlify/functions/redeem', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ item_id:itemId, phone, email })
+    });
+
+    const data = await r.json().catch(()=>({}));
+    if (!r.ok || !data?.ok) {
+      const err = data?.error || 'Errore di sblocco';
+      if (msg){ msg.textContent = err; msg.classList.add('error'); }
+      btn.disabled = false;
+      return;
+    }
+
+    if (msg){
+      msg.textContent = `${data.message} — Saldo residuo: ${data.remaining} min.`;
+      msg.classList.remove('error');
+    }
+  }catch(e){
+    console.error(e);
+    if (msg){ msg.textContent = 'Errore imprevisto'; msg.classList.add('error'); }
+  }finally{
+    btn.disabled = false;
+  }
+}
