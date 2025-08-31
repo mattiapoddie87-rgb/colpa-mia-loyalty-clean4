@@ -97,3 +97,15 @@ exports.handler = async (event) => {
     return resp(500, { error: e.message || 'INTERNAL_ERROR' });
   }
 };
+const session = await stripe.checkout.sessions.create({
+  mode: 'payment',
+  // ...
+  phone_number_collection: { enabled: true }, // <— raccoglie telefono in modo nativo
+  // opzionale: informazione esigenza
+  custom_fields: [{
+    key: 'need',
+    label: { type: 'custom', custom: 'Contesto (facoltativo)' },
+    type: 'text'
+  }],
+  // ...
+});
