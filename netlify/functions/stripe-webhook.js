@@ -1,153 +1,74 @@
 // netlify/functions/stripe-webhook.js
-// CommonJS – compatibile con il tuo progetto
-const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { getStore } = require('@netlify/blobs');
-const { sendEmail, sendPhone } = require('./send-utils.js');
+// Webhook Stripe: gestisce checkout.session.completed e accredita minuti automaticamente.
 
-const SITE_URL = process.env.SITE_URL || process.env.URL || 'http://localhost:8888';
-const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-// Helpers saldo (stesso spazio usato per wallet/redeem)
-async function getBalance(email) {
-  const store = getStore('balances');
-  const raw = await store.get(email);
-  if (!raw) return { minutes: 0, history: [] };
-  try { return JSON.parse(raw); } catch { return { minutes: 0, history: [] }; }
-}
-async function setBalance(email, data) {
-  const store = getStore('balances');
-  await store.set(email, JSON.stringify(data));
-}
-
-// Helper oggetto email
-function makeSubject(sku, fields = {}) {
-  switch (sku) {
-    case 'TRAFFICO': {
-      const m = fields.minuti ? `(${fields.minuti}’) ` : '';
-      return `Arrivo in ritardo ${m}- traffico`;
-    }
-    case 'CONN_KO':      return 'Connessione non disponibile — aggiornamento';
-    case 'RIUNIONE':     return 'Riunione spostata/aggiornata';
-    case 'SCUSA_DELUXE': return 'Richiesta di rinvio / aggiornamento';
-    case 'SCUSA_TRIPLA': return 'Aggiornamento disponibilità';
-    default:             return 'Aggiornamento rapido';
-  }
-}
-function escapeHtml(s) {
-  return String(s).replace(/[&<>"']/g, m => ({
-    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;'
-  }[m]));
-}
-
-// Netlify richiede body grezzo per la firma
-exports.config = { path: '/.netlify/functions/stripe-webhook', bodyParser: false };
+// Riusa la stessa mappatura ENV del claim manuale
+const MAP_FROM_ENV = safeJson(process.env.PRICE_MINUTES_JSON) || {};
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
-  }
-
-  let stripeEvent;
   try {
     const sig = event.headers['stripe-signature'];
-    stripeEvent = stripe.webhooks.constructEvent(event.body, sig, WEBHOOK_SECRET);
-  } catch (err) {
-    console.error('Webhook signature error:', err.message);
-    return { statusCode: 400, body: `Webhook Error: ${err.message}` };
-  }
+    // Netlify può inviare body base64
+    const rawBody = event.isBase64Encoded
+      ? Buffer.from(event.body, 'base64').toString('utf8')
+      : event.body;
 
-  if (stripeEvent.type === 'checkout.session.completed') {
+    let stripeEvent;
     try {
-      // 1) Recupera sessione con prodotti espansi (per metadata.minutes)
-      const session = await stripe.checkout.sessions.retrieve(stripeEvent.data.object.id, {
-        expand: ['line_items.data.price.product']
-      });
-
-      // 2) Accredito minuti (Product.metadata.minutes * qty)
-      const email = session.customer_details?.email || session.customer_email || null;
-      if (email) {
-        let totalMinutes = 0;
-        for (const li of (session.line_items?.data || [])) {
-          const product = li.price?.product;
-          const md = product?.metadata || {};
-          const mins = parseInt(md.minutes || '0', 10);
-          const qty = li.quantity || 1;
-          if (mins > 0) totalMinutes += mins * qty;
-        }
-
-        if (totalMinutes > 0) {
-          const bal = await getBalance(email);
-          bal.minutes = (bal.minutes || 0) + totalMinutes;
-          bal.history = bal.history || [];
-          bal.history.push({
-            ts: Date.now(),
-            type: 'add',
-            delta: totalMinutes,
-            reason: 'Acquisto via Stripe',
-            session_id: session.id
-          });
-          await setBalance(email, bal);
-
-          // Email di conferma (se RESEND_* configurati in env)
-          const walletLink  = `${SITE_URL}/wallet.html?email=${encodeURIComponent(email)}`;
-          const premiumLink = `${SITE_URL}/index.html#premium?email=${encodeURIComponent(email)}`;
-          await sendEmail(email, `Colpa Mia — accreditati ${totalMinutes} minuti`, `
-            <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial">
-              <h2>Grazie! 🎉</h2>
-              <p>Abbiamo accreditato <strong>${totalMinutes} minuti</strong> sul tuo wallet.</p>
-              <p>
-                <a href="${walletLink}">Vedi saldo</a> — 
-                <a href="${premiumLink}">Sblocca i Premium</a>
-              </p>
-              <p style="color:#666">Pagamento sicuro con Stripe.</p>
-            </div>
-          `);
-        }
-      }
-
-      // 3) Invio SCUSA se proviene dal Motore AI (metadata.draft_id)
-      const meta = session.metadata || {};
-      const sku  = session.client_reference_id || 'SCUSA_BASE';
-      if (meta.draft_id) {
-        const drafts = getStore('drafts');
-        const raw = await drafts.get(meta.draft_id);
-        const d = raw ? JSON.parse(raw) : null;
-
-        if (d && d.status === 'reserved') {
-          // Usa il testo salvato nel draft (rigenerazione facoltativa)
-          const text = d.draft;
-          const subject = makeSubject(sku, d.fields || {});
-
-          let sent = false; const errors = [];
-
-          // Canale preferito: telefono → WhatsApp/SMS
-          if (d.channel === 'phone' && d.phone) {
-            const r = await sendPhone(d.phone, text);
-            sent = r.ok; if (!r.ok) errors.push(r.error || 'sendPhone failed');
-          }
-          // Email di backup o fallback
-          if (d.email && !sent) {
-            const html = text.split('\n').map(p => `<p>${escapeHtml(p)}</p>`).join('');
-            const r = await sendEmail(d.email, subject, html);
-            sent = r.ok; if (!r.ok) errors.push(r.error || 'sendEmail failed');
-          }
-
-          // marca draft come inviato (anche se solo email)
-          await drafts.set(meta.draft_id, JSON.stringify({
-            ...d,
-            status: 'sent',
-            sent_at: Date.now(),
-            sid: session.id,
-            errors
-          }));
-        }
-      }
-
-    } catch (e) {
-      console.error('Webhook processing error:', e);
-      return { statusCode: 500, body: 'webhook error' };
+      stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    } catch (err) {
+      return { statusCode: 400, body: `Webhook Error: ${err.message}` };
     }
-  }
 
-  return { statusCode: 200, body: 'ok' };
+    if (stripeEvent.type === 'checkout.session.completed') {
+      const s = stripeEvent.data.object; // Checkout.Session
+      // Idempotenza su PI
+      const piId = String(s.payment_intent || '');
+      if (!piId) return ok();
+
+      const pi = await stripe.paymentIntents.retrieve(piId);
+      if (!(pi.metadata && pi.metadata.colpamiaCredited === 'true')) {
+        // Calcola minuti
+        const items = await stripe.checkout.sessions.listLineItems(s.id, { limit: 100, expand: ['data.price.product'] });
+        const minutes = calcMinutes(items.data);
+        if (minutes > 0) {
+          // Accredita (se hai wallet local)
+          try {
+            const wallet = require('./wallet');
+            if (wallet && typeof wallet.creditMinutes === 'function') {
+              const email = (s.customer_details && s.customer_details.email) || s.customer_email;
+              await wallet.creditMinutes(String(email || '').toLowerCase(), minutes, { session_id: s.id, piId });
+            }
+          } catch (_) { /* ignora se non presente */ }
+
+          // Marchia idempotenza
+          await stripe.paymentIntents.update(piId, { metadata: { ...(pi.metadata || {}), colpamiaCredited: 'true' } });
+        }
+      }
+    }
+
+    // (opzionale) gestisci anche payment_intent.succeeded come fallback
+
+    return ok();
+  } catch (err) {
+    return { statusCode: 500, body: err.message || 'Errore interno' };
+  }
 };
+
+function calcMinutes(lineItems) {
+  let tot = 0;
+  for (const li of lineItems) {
+    const price = li.price || {};
+    const product = price.product || {};
+    if (MAP_FROM_ENV[price.id]) { tot += (MAP_FROM_ENV[price.id] * (li.quantity || 1)); continue; }
+    const m1 = parseInt((price.metadata && price.metadata.minutes) || '', 10);
+    const m2 = parseInt((product.metadata && product.metadata.minutes) || '', 10);
+    const mins = (!isNaN(m1) ? m1 : (!isNaN(m2) ? m2 : 0));
+    tot += mins * (li.quantity || 1);
+  }
+  return tot;
+}
+function safeJson(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
+function ok() { return { statusCode: 200, body: JSON.stringify({ received: true }) }; }
