@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Motore AI — Colpa Mia</title>
+  <link rel="stylesheet" href="/styles.css"/>
+</head>
+<body>
+  <!-- bg globale già gestito dal tuo CSS -->
+  <header class="topbar">
+    <div class="wrap topbar__inner">
+      <div class="brand">COLPA MIA</div>
+      <nav class="nav">
+        <a href="/#catalogo">Catalogo</a>
+        <a href="/wallet.html">Wallet</a>
+        <a href="/#faq">FAQ</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap section">
+    <h1>Genera la tua scusa</h1>
+    <p class="hero__sub">Compila 2 cose in croce. Il resto lo fa l’AI. Il testo finale ti arriva su telefono (default) o email dopo il pagamento.</p>
+
+    <form id="ai-form" class="form" autocomplete="on">
+      <input type="hidden" name="sku" id="sku"/>
+
+      <label>Tono</label>
+      <select name="tone" id="tone" required>
+        <option value="professionale">Professionale</option>
+        <option value="formale">Formale</option>
+        <option value="neutro">Neutro</option>
+        <option value="ironico">Ironico</option>
+      </select>
+
+      <label>Destinatario</label>
+      <select name="dest" id="dest" required></select>
+
+      <div id="dyn-fields"></div>
+
+      <fieldset>
+        <legend>Recapito (telefono consigliato)</legend>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:.7rem">
+          <div>
+            <label>Telefono (WhatsApp/SMS)</label>
+            <input type="tel" name="phone" id="phone" placeholder="+39..." />
+          </div>
+          <div>
+            <label>Email (alternativa)</label>
+            <input type="email" name="email" id="email" placeholder="tu@esempio.com"/>
+          </div>
+        </div>
+        <small class="muted">Se metti entrambe, inviamo al telefono (default) e aggiungiamo email di backup.</small>
+      </fieldset>
+
+      <button class="btn btn--xl" type="submit">Genera & continua</button>
+      <div id="msg" class="msg" hidden></div>
+    </form>
+  </main>
+
+  <script src="/motore.js" defer></script>
+</body>
+</html>
