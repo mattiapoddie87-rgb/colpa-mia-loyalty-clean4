@@ -1,33 +1,81 @@
-// --- sostituisci interamente la tua funzione checkout(sku) con questa ---
+// public/shop.js — disegna il catalogo + apre Stripe in modo compatibile
+
+// 1) Catalogo “Minuti di Vita”
+const CATALOG = [
+  { sku:'SCUSA_BASE',   title:'Scusa Base',        desc:'La più usata, funziona sempre.',            eur:100, minutes:10 },
+  { sku:'SCUSA_TRIPLA', title:'Scusa Tripla',      desc:'Tre scuse diverse in un solo pacchetto.',   eur:250, minutes:30 },
+  { sku:'SCUSA_DELUXE', title:'Scusa Deluxe',      desc:'Perfetta, elegante, inattaccabile.',        eur:450, minutes:60 },
+  { sku:'RIUNIONE',     title:'Riunione improvvisa', desc:'Alibi perfetto in orario d’ufficio.',     eur:200, minutes:20 },
+  { sku:'TRAFFICO',     title:'Traffico assurdo',  desc:'Sempreverde, valido ovunque.',              eur:200, minutes:20 },
+  { sku:'CONN_KO',      title:'Connessione KO',    desc:'Speciale smartworking edition.',            eur:200, minutes:20 },
+];
+
+// 2) Riferimenti DOM
+const grid = document.getElementById('grid');
+const msgEl = document.getElementById('msg');
+
+// 3) Disegna le card
+(function renderCatalog(){
+  if (!grid) return; // se manca il contenitore, non facciamo nulla
+  grid.innerHTML = ''; // pulizia
+  for (const it of CATALOG) {
+    const el = document.createElement('article');
+    el.className = 'card';
+    el.innerHTML = `
+      <h3>${it.title}</h3>
+      <p>${it.desc}</p>
+      <div class="price">€ ${(it.eur/100).toFixed(2)}</div>
+      <div class="row">
+        <span class="tag" title="Minuti di credito utilizzabili">Credito: ${it.minutes} min</span>
+        <button class="btn" data-sku="${it.sku}">Acquista</button>
+      </div>`;
+    grid.appendChild(el);
+  }
+
+  // bind dei bottoni
+  grid.querySelectorAll('button[data-sku]').forEach(btn => {
+    btn.addEventListener('click', async () => {
+      btn.disabled = true;
+      await checkout(btn.dataset.sku).catch(()=>{});
+      btn.disabled = false;
+    });
+  });
+})();
+
+// 4) Messaggi helper
+function showMsg(text, isErr=false){
+  if (!msgEl) return;
+  msgEl.hidden = false;
+  msgEl.textContent = text;
+  msgEl.classList.toggle('error', !!isErr);
+}
+
+// 5) Apertura checkout Stripe — robusta a 303/opaqueredirect/JSON
 async function checkout(sku){
   try {
-    // opzionale: mostra messaggio in pagina se hai un elemento #msg
-    const msgEl = document.getElementById('msg');
-    if (msgEl) { msgEl.hidden = false; msgEl.textContent = 'Apro il checkout…'; msgEl.classList.remove('error'); }
+    showMsg('Apro il checkout…', false);
 
     const r = await fetch('/.netlify/functions/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ sku }),
-      // ⬇️ evita che fetch segua in automatico il 303 di Stripe
-      redirect: 'manual'
+      redirect: 'manual'   // <- fondamentale per i 303
     });
 
-    // Caso 1: in modalità manual alcuni browser (Chrome/Safari) rispondono "opaqueredirect"
-    // con la URL di Stripe già in r.url
+    // Caso A: Chrome/Safari in manual → opaqueredirect con r.url
     if (r.type === 'opaqueredirect' && r.url) {
       location.href = r.url;
       return;
     }
 
-    // Caso 2: 303 + Location nell’header (classico redirect di Netlify Function)
+    // Caso B: 303 + Location
     const loc = r.headers.get('Location');
     if (r.status === 303 && loc) {
       location.href = loc;
       return;
     }
 
-    // Caso 3: la function ritorna JSON { url: "https://checkout.stripe.com/..." }
+    // Caso C: JSON { url: "https://checkout.stripe.com/..." }
     let data = {};
     try { data = await r.json(); } catch {}
     if (data && data.url) {
@@ -37,8 +85,7 @@ async function checkout(sku){
 
     throw new Error('Errore checkout');
   } catch (e) {
-    const msgEl = document.getElementById('msg');
-    if (msgEl) { msgEl.hidden = false; msgEl.textContent = e.message || 'Errore checkout'; msgEl.classList.add('error'); }
+    showMsg(e.message || 'Errore checkout', true);
     console.error(e);
   }
 }
