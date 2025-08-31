@@ -1,19 +1,21 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Colpa Mia — Scuse On-Demand</title>
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe.">
-  <link rel="stylesheet" href="/styles.css">
+  <link rel="stylesheet" href="/styles.css" />
 </head>
 <body>
-  <!-- Background -->
+  <!-- Sfondo animato (particelle + strisce + glow) -->
   <canvas id="bg"></canvas>
+  <!-- NB: le classi sono 'stripes stripes-h' e 'stripes stripes-v' (senza doppio trattino) -->
   <div class="stripes stripes-h"></div>
   <div class="stripes stripes-v"></div>
   <div class="glow"></div>
 
+  <!-- Topbar -->
   <header class="topbar">
     <div class="wrap topbar__inner">
       <div class="brand">COLPA MIA</div>
@@ -27,6 +29,7 @@
   </header>
 
   <main>
+    <!-- Hero -->
     <section class="hero">
       <div class="wrap">
         <h1 class="hero__title">Trova sempre la scusa perfetta</h1>
@@ -35,13 +38,14 @@
       </div>
     </section>
 
-    <!-- Catalogo (PACCHETTI A PAGAMENTO IN EURO) -->
-    <section class="wrap" id="catalogo" aria-label="Pacchetti">
+    <!-- Catalogo (i pacchetti vengono montati da shop.js dentro #grid) -->
+    <section class="wrap section" id="catalogo" aria-label="Pacchetti">
+      <h2>Catalogo</h2>
       <div id="grid" class="grid"></div>
       <div id="msg" class="msg" hidden></div>
     </section>
 
-    <!-- Premium (SOLO PUNTI) -->
+    <!-- Premium (render da premium.js dentro #premium-grid) -->
     <section class="wrap section" id="premium" aria-label="Prodotti Premium">
       <h2>Prodotti Premium (solo con punti)</h2>
       <p class="hero__sub">Sblocca contenuti speciali usando i tuoi minuti accumulati (punti).</p>
@@ -52,21 +56,25 @@
     <!-- FAQ -->
     <section id="faq" class="wrap section">
       <h2>FAQ</h2>
+
       <details>
         <summary>Come funziona il pagamento?</summary>
         <p>Usiamo Stripe Checkout. Selezioni il pacchetto, inserisci carta, confermi: fatto. Torni qui alla pagina di conferma.</p>
       </details>
+
       <details>
         <summary>Quando vedo i minuti e i punti?</summary>
-        <p>Subito dopo il pagamento. Vai su <a href="/wallet.html">Wallet</a>, inserisci la tua email e trovi totale minuti acquistati e punti.</p>
+        <p>Subito dopo il pagamento. Vai su <a href="/wallet.html">Wallet</a>, inserisci la tua email e trovi il totale minuti acquistati e i punti.</p>
       </details>
+
       <details>
         <summary>Posso usare coupon o codici promo?</summary>
-        <p>Sì, se attivi codici in Stripe, il checkout li accetta. (Impostazione lato Stripe.)</p>
+        <p>Sì, se attivi i codici in Stripe, il checkout li accetta (impostazione lato Stripe).</p>
       </details>
     </section>
   </main>
 
+  <!-- Footer -->
   <footer class="footer">
     <div class="wrap footer__inner">
       <small>© <span id="year"></span> Colpa Mia — Netlify + GitHub + Stripe</small>
@@ -77,11 +85,16 @@
     </div>
   </footer>
 
+  <!-- Script: sfondo + catalogo + premium -->
   <script src="/bg.js" defer></script>
   <script src="/shop.js" defer></script>
   <script src="/premium.js" defer></script>
-  <script>document.getElementById('year').textContent = new Date().getFullYear();</script>
+  <script>
+    // anno footer
+    document.getElementById('year').textContent = new Date().getFullYear();
+    // smooth scroll globale e compensazione header sticky
+    document.documentElement.style.scrollBehavior = 'smooth';
+  </script>
 </body>
 </html>
-
 
