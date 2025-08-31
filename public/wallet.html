@@ -1,56 +1,97 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Wallet Minuti — Colpa Mia</title>
-  <link rel="stylesheet" href="/styles.css"/>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Wallet Minuti</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d12; color:#e9eef5; margin:0; }
+    .wrap{ max-width:960px; margin:40px auto; padding:0 16px; }
+    .card{ background:#0f1623; border:1px solid #1f2636; border-radius:14px; padding:16px; }
+    input, button { padding:12px; border-radius:10px; border:1px solid #334; background:#111826; color:#e9eef5; }
+    input { width:100%; }
+    button { background:linear-gradient(135deg,#6c7dff,#8a6dff); border:0; cursor:pointer; font-weight:600; }
+    .mt12{ margin-top:12px; } .mt16{ margin-top:16px; }
+    .muted{ opacity:.8; font-size:13px; }
+    .grid{ display:grid; gap:12px; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+    .row{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    .pill{ padding:6px 10px; background:#142035; border-radius:999px; border:1px solid #213250; font-size:12px; }
+    .err{ color:#ff6b6b } .ok{ color:#29d07b }
+    table{ width:100%; border-collapse: collapse; }
+    td,th{ padding:8px; border-bottom:1px solid #1f2636; text-align:left; font-size:14px; }
+  </style>
 </head>
 <body>
-  <canvas id="bg"></canvas><div class="stripes stripes--h"></div><div class="stripes stripes--v"></div><div class="glow"></div>
-  <header class="topbar">
-    <div class="wrap topbar__inner">
-      <div class="brand">COLPA MIA</div>
-      <nav class="nav"><a href="/">Catalogo</a><a href="/wallet.html">Wallet</a></nav>
-    </div>
-  </header>
-
-  <main class="wrap section">
+  <div class="wrap">
     <h1>Wallet Minuti</h1>
-    <p class="hero__sub">Inserisci l’email usata al checkout per vedere minuti e punti accumulati.</p>
-    <form class="form" id="wform" onsubmit="return false;">
-      <input id="email" type="email" placeholder="email@esempio.com" required>
-      <button class="btn" id="go">Vedi saldo</button>
-    </form>
-    <div id="out" class="section"></div>
-  </main>
+    <p class="muted">Inserisci l’email usata al checkout per vedere minuti e punti accumulati.</p>
 
-  <script src="/bg.js"></script>
+    <div class="card">
+      <input id="email" placeholder="email usata in checkout" />
+      <button id="go" class="mt12">Vedi saldo</button>
+      <span id="msg" class="mt12"></span>
+    </div>
+
+    <div class="card mt16">
+      <h2>Saldo</h2>
+      <div class="grid">
+        <div class="row"><b>Minuti:</b><span id="minutes" class="pill">0</span></div>
+        <div class="row"><b>Punti:</b><span id="points" class="pill">0</span></div>
+        <div class="row"><b>Tier:</b><span id="tier" class="pill">None</span></div>
+      </div>
+    </div>
+
+    <div class="card mt16">
+      <h2>Storico acquisti</h2>
+      <table id="history"><thead><tr><th>Data</th><th>PI</th><th>Importo</th></tr></thead><tbody></tbody></table>
+    </div>
+  </div>
+
   <script>
-    const email = document.getElementById('email');
-    const out = document.getElementById('out');
-    document.getElementById('go').addEventListener('click', async () => {
-      out.innerHTML = '<div class="msg">Caricamento…</div>';
-      try{
-        const r = await fetch('/.netlify/functions/wallet?email='+encodeURIComponent(email.value));
-        const data = await r.json();
-        if(data.error){ out.innerHTML = '<div class="msg error">'+data.error+'</div>'; return; }
-        const pts = data.total_minutes; // 1 punto = 1 minuto
-        const tier = data.tier;
-        out.innerHTML = `
-          <div class="card">
-            <h3>Saldo</h3>
-            <p class="price">Minuti: ${data.total_minutes} • Punti: ${pts}</p>
-            <p class="tag">Tier: ${tier}</p>
-          </div>
-          <div class="card" style="margin-top:12px">
-            <h3>Storico acquisti</h3>
-            <pre style="white-space:pre-wrap;margin:0">${JSON.stringify(data.history, null, 2)}</pre>
-          </div>`;
-      }catch(e){
-        out.innerHTML = '<div class="msg error">Errore di rete</div>';
-        console.error(e);
+    const $ = s => document.querySelector(s);
+    const fmtDate = ts => new Date(ts * 1000).toLocaleString();
+    const fmtAmount = (cents, cur) => (cents/100).toFixed(2) + ' ' + String(cur || '').toUpperCase();
+
+    async function loadBalance(email) {
+      $('#msg').textContent = 'Carico…';
+      const r = await fetch('/.netlify/functions/balance?email=' + encodeURIComponent(email));
+      const out = await r.json().catch(()=> ({}));
+      if (!r.ok || out.error) {
+        $('#msg').textContent = out.error || ('HTTP ' + r.status);
+        $('#msg').className = 'err';
+        return;
       }
+      $('#msg').textContent = 'OK';
+      $('#msg').className = 'ok';
+
+      $('#minutes').textContent = out.minutes ?? 0;
+      $('#points').textContent  = out.points  ?? 0;
+      $('#tier').textContent    = out.tier    ?? 'None';
+
+      const tb = $('#history tbody'); tb.innerHTML = '';
+      (out.history || []).forEach(h => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td>${fmtDate(h.created)}</td><td>${h.id}</td><td>${fmtAmount(h.amount, h.currency)}</td>`;
+        tb.appendChild(tr);
+      });
+      if (!out.history || !out.history.length) {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `<td colspan="3" class="muted">Nessun pagamento registrato</td>`;
+        tb.appendChild(tr);
+      }
+    }
+
+    // Prefill da query (?email=)
+    (function() {
+      const e = new URL(location.href).searchParams.get('email');
+      if (e) $('#email').value = e;
+    })();
+
+    $('#go').addEventListener('click', () => {
+      const email = $('#email').value.trim();
+      if (!email) { $('#msg').textContent = 'Inserisci una email'; $('#msg').className = 'err'; return; }
+      loadBalance(email);
     });
   </script>
 </body>
