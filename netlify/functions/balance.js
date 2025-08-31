@@ -1,21 +1,36 @@
 // netlify/functions/balance.js
-const { getStore } = require('@netlify/blobs');
+// API pubblica per leggere saldo minuti/punti per email.
 
-async function getBalance(email) {
-  const store = getStore('balances');
-  const raw = await store.get(email);
-  if (!raw) return { minutes: 0, history: [] };
-  try { return JSON.parse(raw); } catch { return { minutes: 0, history: [] }; }
-}
+const { getBalance } = require('./wallet');
+
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
 
 exports.handler = async (event) => {
   try {
-    const { email } = event.queryStringParameters || {};
-    if (!email) return { statusCode: 400, body: JSON.stringify({ error:'missing email' }) };
-    const bal = await getBalance(email);
-    return { statusCode: 200, body: JSON.stringify(bal) };
-  } catch (e) {
-    console.error(e);
-    return { statusCode: 500, body: JSON.stringify({ error: e.message }) };
+    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
+
+    let email = '';
+    if (event.httpMethod === 'POST') {
+      try { email = (JSON.parse(event.body || '{}').email || '').trim(); } catch { email = ''; }
+    } else if (event.httpMethod === 'GET') {
+      email = String((event.queryStringParameters || {}).email || '').trim();
+    } else {
+      return resp(405, { error: 'Method Not Allowed' });
+    }
+
+    if (!email) return resp(400, { error: 'Email mancante' });
+
+    const data = await getBalance(email);
+    return resp(200, data);
+  } catch (err) {
+    return resp(500, { error: err.message || 'Errore interno' });
   }
 };
+
+function resp(statusCode, body) {
+  return { statusCode, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
