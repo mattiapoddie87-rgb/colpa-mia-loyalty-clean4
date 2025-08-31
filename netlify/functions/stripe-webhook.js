@@ -2,142 +2,183 @@
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const crypto = require('crypto');
-
-// --- Email (Resend) ---
+// ---------------- Email (Resend) ----------------
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const RESEND_FROM = process.env.RESEND_FROM || process.env.MAIL_FROM || 'COLPA MIA <no-reply@colpamia.com>';
+const RESEND_FROM    = process.env.RESEND_FROM || process.env.MAIL_FROM || 'COLPA MIA <no-reply@colpamia.com>';
+
 async function sendEmail(to, subject, html) {
-  if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY missing');
+  if (!RESEND_API_KEY) return;
   const r = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({ from: RESEND_FROM, to, subject, html })
   });
-  if (!r.ok) throw new Error('Resend failed: ' + (await r.text()).slice(0,200));
+  if (!r.ok) throw new Error('Resend failed: ' + (await r.text()).slice(0, 200));
 }
 
-// --- AI (OpenAI) con fallback locale ---
+// ---------------- WhatsApp (Twilio) ----------------
+const TWILIO_SID   = process.env.TWILIO_ACCOUNT_SID || '';
+const TWILIO_TOKEN = process.env.TWILIO_AUTH_TOKEN || '';
+const TWILIO_FROM  = process.env.TWILIO_FROM_WA || ''; // es. "whatsapp:+14155238886" (sandbox) o il tuo numero WA business
+const DEFAULT_CC   = process.env.DEFAULT_COUNTRY_CODE || '+39';
+
+function fmtPhoneE164(phone) {
+  if (!phone) return null;
+  let p = String(phone).replace(/[^\d+]/g, '');
+  if (!p.startsWith('+')) p = DEFAULT_CC + p; // assume Italia se manca prefisso
+  return p;
+}
+async function sendWhatsApp(toE164, text) {
+  if (!TWILIO_SID || !TWILIO_TOKEN || !TWILIO_FROM || !toE164) return;
+  const body = new URLSearchParams({
+    To:   `whatsapp:${toE164}`,
+    From: TWILIO_FROM,
+    Body: text
+  }).toString();
+  const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_SID}/Messages.json`, {
+    method: 'POST',
+    headers: {
+      Authorization: 'Basic ' + Buffer.from(`${TWILIO_SID}:${TWILIO_TOKEN}`).toString('base64'),
+      'Content-Type': 'application/x-www-form-urlencoded'
+    },
+    body
+  });
+  // non bloccare il webhook se fallisce
+}
+
+// ---------------- AI (OpenAI) con fallback ----------------
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
-const OPENAI_MODEL = process.env.OPENAI_MODEL || 'gpt-4o';
-async function genExcuses({ kind, need, minutes }) {
-  // fallback locale se niente API
-  const base = [
-    `Mi dispiace, ho avuto un imprevisto (${kind}). Arrivo appena possibile.`,
-    `Scusa il ritardo, sto gestendo un contrattempo (${kind}). Ti aggiorno tra poco.`,
-    `Ti chiedo pazienza: situazione imprevista (${kind}). `
+const OPENAI_MODEL   = process.env.OPENAI_MODEL || 'gpt-4o';
+
+function fallbackExcuses() {
+  // NIENTE "(base)" qui.
+  return [
+    'Mi dispiace, ho avuto un imprevisto. Arrivo appena possibile.',
+    'Scusa il ritardo, sto gestendo un contrattempo. Ti aggiorno tra poco.',
+    'Ti chiedo pazienza: situazione imprevista. Ti scrivo appena si sblocca.'
   ];
-  if (!OPENAI_API_KEY) return base;
+}
+
+async function genExcuses({ kind, need }) {
+  // se non hai la chiave, usa fallback pulito
+  if (!OPENAI_API_KEY) return fallbackExcuses();
 
   const prompt = [
-    `Genera 3 scuse naturali e convincenti, tono credibile, 1-2 frasi ciascuna.`,
-    `Contesto: tipo=${kind}; esigenza="${need||''}".`,
-    `Non nominare l'AI. Niente eccessi.`,
+    'Genera 3 scuse brevi, naturali e convincenti (1–2 frasi ciascuna).',
+    `Contesto utente: categoria=${kind||'generica'}; esigenza="${need||''}".`,
+    'Evita etichette tipo "(base)" o riferimenti a categorie. Nessun tono robotico.',
+    'Rispondi con elenco puntato semplice, una scusa per riga.'
   ].join('\n');
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
     method: 'POST',
-    headers: { 'Authorization': `Bearer ${OPENAI_API_KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      model: OPENAI_MODEL,
-      messages: [{ role: 'user', content: prompt }],
-      temperature: 0.8
-    })
+    headers: { Authorization: `Bearer ${OPENAI_API_KEY}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({ model: OPENAI_MODEL, messages: [{ role:'user', content: prompt }], temperature: 0.8 })
   });
-  if (!res.ok) return base;
+  if (!res.ok) return fallbackExcuses();
   const data = await res.json();
-  const txt = data.choices?.[0]?.message?.content || '';
-  const items = txt.split('\n').map(s=>s.replace(/^\d+[\)\.\-]\s*/,'').trim()).filter(Boolean).slice(0,3);
-  return items.length ? items : base;
+  const txt  = data.choices?.[0]?.message?.content || '';
+  const items = txt.split('\n').map(s => s.replace(/^[\-\*\d\)\.]+\s*/,'').trim()).filter(Boolean).slice(0,3);
+  return items.length ? items : fallbackExcuses();
 }
 
-// --- mapping minuti ---
+// ---------------- Mappature minuti ----------------
 function safeJson(s){ try{ return s?JSON.parse(s):null } catch { return null } }
 const RULES = safeJson(process.env.PRICE_RULES_JSON) || {};
 
-function minutesFromLineItem(li) {
+function minutesFromLI(li) {
   const priceId = li?.price?.id;
   if (priceId && RULES[priceId]?.minutes) return Number(RULES[priceId].minutes)||0;
-  const metaMin = parseInt(li?.price?.metadata?.minutes || li?.price?.product?.metadata?.minutes || '0',10) || 0;
+  const metaMin = parseInt(li?.price?.metadata?.minutes || li?.price?.product?.metadata?.minutes || '0', 10) || 0;
   return metaMin;
 }
-
-function kindFromLineItem(li) {
+function kindFromLI(li) {
   const priceId = li?.price?.id;
-  const k = priceId && RULES[priceId]?.excuse;
-  return (k || li?.price?.metadata?.excuse || li?.price?.product?.metadata?.excuse || 'base').toLowerCase();
+  return (priceId && RULES[priceId]?.excuse) || li?.price?.metadata?.excuse || li?.price?.product?.metadata?.excuse || 'generica';
 }
 
+// ---------------- Email HTML ----------------
 function htmlEmail({ excuses, minutes }) {
   return `
-  <div style="font-family:system-ui,sans-serif;line-height:1.5">
+  <div style="font-family:system-ui,sans-serif;line-height:1.55">
     <h2>La tua Scusa è pronta ✅</h2>
     <p>Hai ricevuto <b>${minutes}</b> minuti nel tuo wallet.</p>
-    <ol>
-      ${excuses.map(e=>`<li>${e}</li>`).join('')}
-    </ol>
+    <ol>${excuses.map(e=>`<li>${e}</li>`).join('')}</ol>
     <p style="margin-top:16px">Grazie da COLPA MIA.</p>
   </div>`;
 }
 
+// ---------------- Webhook ----------------
 exports.handler = async (event) => {
-  // Stripe signature check
+  // firma Stripe
   const sig = event.headers['stripe-signature'];
   if (!sig) return { statusCode: 400, body: 'Missing Stripe-Signature' };
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
   if (!secret) return { statusCode: 500, body: 'STRIPE_WEBHOOK_SECRET not set' };
 
-  let stripeEvent;
-  try {
-    stripeEvent = stripe.webhooks.constructEvent(event.body, sig, secret);
-  } catch (e) {
-    return { statusCode: 400, body: `Signature error: ${e.message}` };
-  }
+  let se;
+  try { se = stripe.webhooks.constructEvent(event.body, sig, secret); }
+  catch (e) { return { statusCode: 400, body: `Signature error: ${e.message}` }; }
 
-  // Solo checkout.session.completed
-  if (stripeEvent.type !== 'checkout.session.completed') {
-    return { statusCode: 200, body: 'ignored' };
-  }
+  if (se.type !== 'checkout.session.completed') return { statusCode: 200, body: 'ignored' };
 
   try {
-    const session = stripeEvent.data.object;
+    const session = se.data.object;
     const sessionId = session.id;
     const piId = session.payment_intent;
     if (!piId) return { statusCode: 200, body: 'no payment_intent' };
 
     const pi = await stripe.paymentIntents.retrieve(piId);
-    const alreadyCredited = pi.metadata?.colpamiaCredited === 'true';
-    const emailSent = pi.metadata?.colpamiaEmailSent === 'true';
+
+    // Email e telefono
     const email = (session.customer_details?.email || session.customer_email || '').toLowerCase();
+    const phoneRaw =
+      session.customer_details?.phone ||
+      (session.custom_fields || []).find(f=>f.key==='phone')?.text?.value ||
+      pi.metadata?.phone || null;
 
-    // Line items (per minuti/tipo scusa)
+    // Calcolo minuti + tipo scusa
     const items = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 100, expand: ['data.price.product'] });
-    let minutes = 0; let kind = 'base';
+    let minutes = 0; let kind = 'generica';
     for (const li of items.data) {
-      minutes += minutesFromLineItem(li) * (li.quantity || 1);
-      if (kind === 'base') kind = kindFromLineItem(li);
+      minutes += minutesFromLI(li) * (li.quantity || 1);
+      if (kind === 'generica') kind = kindFromLI(li);
     }
+    const need = (session.custom_fields || []).find(f=>f.key==='need')?.text?.value || '';
 
-    // Se già accreditato ma mail non inviata -> invia solo mail
+    // Se già accreditato ma mail non inviata → manda SOLO mail/WA
+    const alreadyCredited = pi.metadata?.colpamiaCredited === 'true';
+    const emailSent       = pi.metadata?.colpamiaEmailSent === 'true';
+
+    const excuses = await genExcuses({ kind, need });
+
     if (alreadyCredited && !emailSent) {
-      const excuses = await genExcuses({ kind, need: session.custom_fields?.find?.(f=>f.key==='need')?.text?.value, minutes });
-      await sendEmail(email, 'La tua Scusa è pronta', htmlEmail({ excuses, minutes }));
+      if (email) await sendEmail(email, 'La tua Scusa è pronta', htmlEmail({ excuses, minutes }));
+      // WhatsApp opzionale
+      const to = fmtPhoneE164(phoneRaw);
+      if (to) {
+        const waText = `COLPA MIA — La tua Scusa:\n• ${excuses[0]}\nHai ricevuto ${minutes} minuti nel wallet.`;
+        await sendWhatsApp(to, waText);
+      }
       await stripe.paymentIntents.update(piId, { metadata: { ...pi.metadata, colpamiaEmailSent: 'true' } });
-      return { statusCode: 200, body: 'resent email only' };
+      return { statusCode: 200, body: 'resent email/wa only' };
     }
 
-    // Se non accreditato -> accredita + mail
+    // Accredito + invii
     if (!alreadyCredited) {
-      // accredito nel tuo sistema (se esiste)
+      // (opzionale) accredito nel tuo wallet locale
       try {
         const wallet = require('./wallet');
-        if (wallet?.creditMinutes) {
-          await wallet.creditMinutes(email, minutes, { sessionId, piId, kind });
-        }
+        if (wallet?.creditMinutes) await wallet.creditMinutes(email, minutes, { sessionId, piId, kind });
       } catch(_) {}
 
-      const excuses = await genExcuses({ kind, need: session.custom_fields?.find?.(f=>f.key==='need')?.text?.value, minutes });
-      await sendEmail(email, 'La tua Scusa è pronta', htmlEmail({ excuses, minutes }));
+      if (email) await sendEmail(email, 'La tua Scusa è pronta', htmlEmail({ excuses, minutes }));
+
+      const to = fmtPhoneE164(phoneRaw);
+      if (to) {
+        const waText = `COLPA MIA — La tua Scusa:\n• ${excuses[0]}\nHai ricevuto ${minutes} minuti nel wallet.`;
+        await sendWhatsApp(to, waText);
+      }
 
       await stripe.paymentIntents.update(piId, {
         metadata: {
@@ -145,16 +186,14 @@ exports.handler = async (event) => {
           colpamiaCredited: 'true',
           minutesCredited: String(minutes),
           colpamiaEmailSent: 'true',
-          emailUsed: email
+          emailUsed: email || ''
         }
       });
 
-      return { statusCode: 200, body: 'credited + mailed' };
+      return { statusCode: 200, body: 'credited + mailed + wa' };
     }
 
-    // già accreditato e mail già inviata → niente da fare
     return { statusCode: 200, body: 'already credited & mailed' };
-
   } catch (err) {
     return { statusCode: 500, body: 'Webhook error: ' + (err.message || String(err)) };
   }
