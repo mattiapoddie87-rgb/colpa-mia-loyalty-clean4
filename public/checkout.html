@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Checkout COLPA MIA</title>
+  <style>
+    :root { color-scheme: dark; }
+    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d12; color:#e9eef5;}
+    .wrap { max-width:900px; margin:40px auto; padding:0 16px; }
+    .card { background:#0f1623; border:1px solid #1f2636; border-radius:14px; padding:16px; }
+    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    label { font-size:14px; opacity:.9; }
+    input { width:100%; padding:12px; border-radius:10px; border:1px solid #334; background:#111826; color:#e9eef5; }
+    button { padding:12px 14px; border-radius:10px; border:0; cursor:pointer; background:linear-gradient(135deg,#6c7dff,#8a6dff); color:white; font-weight:600; }
+    .muted{opacity:.8;font-size:13px;margin-top:4px}
+    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+    .price{font-weight:700;font-size:18px}
+    .sku{opacity:.8;font-size:12px}
+    .msg{margin-top:12px;font-size:14px}
+    .err{color:#ff6b6b}.ok{color:#29d07b}
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Checkout COLPA MIA</h1>
+    <p class="muted">Inserisci l’email che userai in cassa. Ti verrà precompilata in Stripe Checkout.</p>
+
+    <div class="card" style="margin:16px 0">
+      <label for="email">Email</label>
+      <input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email" />
+      <div id="msg" class="msg"></div>
+    </div>
+
+    <div class="grid">
+      <!-- Esempi prodotti: usa i tuoi SKU o i tuoi PRICE ID -->
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div><b>Base 5</b></div>
+            <div class="sku">SKU: BASE_5</div>
+          </div>
+          <div class="price">€</div>
+        </div>
+        <button data-checkout data-sku="BASE_5">Compra Base 5</button>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div><b>Base 15</b></div>
+            <div class="sku">SKU: BASE_15</div>
+          </div>
+          <div class="price">€€</div>
+        </div>
+        <button data-checkout data-sku="BASE_15">Compra Base 15</button>
+      </div>
+
+      <div class="card">
+        <div class="row" style="justify-content:space-between">
+          <div>
+            <div><b>Premium 30</b></div>
+            <div class="sku">SKU: PREMIUM_30</div>
+          </div>
+          <div class="price">€€€</div>
+        </div>
+        <button data-checkout data-sku="PREMIUM_30">Compra Premium 30</button>
+      </div>
+
+      <!-- Se preferisci PRICE ID diretti, usa data-price-id="price_XXXX" al posto di data-sku -->
+    </div>
+  </div>
+
+  <script>
+    const msgEl = document.querySelector('#msg');
+    function show(m, cls){ msgEl.textContent=m||''; msgEl.className='msg ' + (cls||''); }
+
+    async function startCheckout(key, email, qty=1){
+      const payload = (key.startsWith('price_')) ? { priceId:key, email, qty } : { sku:key, email, qty };
+      const r = await fetch('/.netlify/functions/create-checkout-session', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      });
+      const out = await r.json().catch(()=>({}));
+      if(!r.ok || !out.url){ show(out.error || `Errore checkout (HTTP ${r.status})`,'err'); return; }
+      location.href = out.url;
+    }
+
+    document.addEventListener('click', (e)=>{
+      const btn = e.target.closest('[data-checkout]'); if(!btn) return;
+      e.preventDefault();
+      const email = (document.querySelector('#email')?.value || '').trim();
+      const key = btn.getAttribute('data-price-id') || btn.getAttribute('data-sku') || '';
+      if(!key){ show('Manca priceId/sku','err'); return; }
+      show('');
+      startCheckout(key, email, 1);
+    });
+  </script>
+</body>
+</html>
