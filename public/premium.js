@@ -1,64 +1,53 @@
 // public/premium.js
 const PREMIUM = [
-  { id:'AI_COACH', title:'AI Excuse Coach', cost:30,
-    desc:'Un assistant che ti produce 3 scuse su misura in base alla situazione.' },
-  { id:'VOICE_CALL', title:'Chiamata automatizzata', cost:50,
-    desc:'Bot vocale che simula una chiamata urgente per coprirti in riunione.' },
-  { id:'EMAIL_ALIBI', title:'Email Alibi Pro', cost:40,
-    desc:'Template email “perfetto” + subject line per uscire da ogni impiccio.' },
-  { id:'MEETING_COVER', title:'Cover Meet “problemi rete”', cost:25,
-    desc:'Overlay e script pronti per fingere micro disconnessioni.' },
-  { id:'VIP_PACK', title:'Pacchetto VIP – 24h su misura', cost:120,
-    desc:'1 giornata di coperture cucite addosso: AI + script + reminder.' },
+  {
+    id: 'ai_excuse',
+    title: 'Scusa AI su misura',
+    desc: 'La nostra AI ti scrive l’alibi perfetto in 30 secondi. Tono a scelta (professionale, romantico, ironico).',
+    cost: 30
+  },
+  {
+    id: 'voice_note',
+    title: 'Vocale credibile',
+    desc: 'Ricevi un vocale “alibi” con rumori ambientali realistici (traffico, ufficio, metropolitana).',
+    cost: 20
+  },
+  {
+    id: 'doctor_note',
+    title: 'Parere medico plausibile',
+    desc: 'Testo plausibile di una giustificazione medica per una lieve indisposizione.',
+    cost: 40
+  },
+  {
+    id: 'calendar_block',
+    title: 'Blocco calendario',
+    desc: 'Template ICS per “riunione non rinviabile” + guida di invio credibile per Slack/Teams.',
+    cost: 15
+  },
+  {
+    id: 'email_template',
+    title: 'Email di scuse premium',
+    desc: 'Email pronta all’uso, 3 varianti (formale, amichevole, assertiva).',
+    cost: 25
+  }
 ];
 
-const grid = document.getElementById('premium-grid');
-const msg = document.getElementById('premium-msg');
+(function renderPremium(){
+  const el = document.getElementById('premium-grid');
+  const msg = document.getElementById('premium-msg');
+  if(!el) return;
 
-function info(t, err=false){
-  if(!msg) return;
-  msg.hidden = false;
-  msg.textContent = t;
-  msg.classList.toggle('error', !!err);
-}
-
-function getEmailFromURL(){
-  const email = new URLSearchParams(location.search).get('email') || '';
-  return email.trim();
-}
-
-for (const it of PREMIUM){
-  const el = document.createElement('article');
-  el.className = 'card';
-  el.innerHTML = `
-    <h3>${it.title}</h3>
-    <p>${it.desc}</p>
-    <div class="row">
-      <span class="tag">Costo: ${it.cost} min</span>
-      <button class="btn">Sblocca</button>
-    </div>
-  `;
-  el.querySelector('button').addEventListener('click', ()=> redeem(it));
-  grid.appendChild(el);
-}
-
-async function redeem(item){
-  try{
-    info('Verifica saldo…');
-    const email = getEmailFromURL() || prompt('Inserisci la tua email:') || '';
-    if(!email) return info('Email necessaria', true);
-
-    const r = await fetch('/.netlify/functions/redeem', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ email, premiumId: item.id, cost: item.cost })
-    });
-    const j = await r.json().catch(()=> ({}));
-    if(!r.ok) throw new Error(j.error || 'Operazione non riuscita');
-
-    info(`Sbloccato "${item.title}". Minuti residui: ${j.minutes}`);
-  }catch(e){
-    console.error(e);
-    info(e.message, true);
+  el.innerHTML = '';
+  for(const item of PREMIUM){
+    const a = document.createElement('article');
+    a.className = 'card';
+    a.innerHTML = `
+      <h3>${item.title}</h3>
+      <p>${item.desc}</p>
+      <div class="row">
+        <span class="tag" title="Punti richiesti">Costo: ${item.cost} min</span>
+        <a class="btn" href="/wallet.html#premium?redeem=${item.id}">Sblocca</a>
+      </div>`;
+    el.appendChild(a);
   }
-}
+})();
