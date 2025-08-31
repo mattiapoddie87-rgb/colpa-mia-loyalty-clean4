@@ -1,11 +1,12 @@
 {
-  "name": "colpa-mia",
+  "name": "colpamia-functions",
   "version": "1.0.0",
   "private": true,
-  "license": "UNLICENSED",
-  "description": "Colpa Mia static site with Netlify Functions and Stripe",
+  "type": "commonjs",
+  "engines": { "node": ">=18" },
   "dependencies": {
-    "stripe": "^14.19.0",
-    "@netlify/blobs": "^6.1.0"
+    "stripe": "^15.6.0",
+    "resend": "^3.2.0",
+    "twilio": "^4.21.0"
   }
 }
