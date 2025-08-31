@@ -1,28 +1,47 @@
+<!-- public/success.html -->
 <!doctype html>
 <html lang="it">
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Grazie! — Colpa Mia</title>
-  <link rel="stylesheet" href="/styles.css"/>
+  <title>Grazie! – Colpa Mia</title>
+  <link rel="stylesheet" href="/styles.css">
 </head>
 <body>
-  <canvas id="bg"></canvas><div class="stripes stripes--h"></div><div class="stripes stripes--v"></div><div class="glow"></div>
-  <main class="wrap section" style="min-height:60vh;display:grid;place-items:center">
-    <div style="text-align:center;max-width:720px">
-      <h1>✅ Pagamento riuscito!</h1>
-      <p class="msg">Grazie per aver ricaricato i tuoi “Minuti di Vita”.</p>
-      <p id="info" class="msg" style="margin-top:12px"></p>
-      <p><a class="btn" href="/">Torna al catalogo</a> <a class="btn" href="/wallet.html">Vai al Wallet</a></p>
+  <main class="wrap section">
+    <h1>Pagamento riuscito ✅</h1>
+    <p id="msg">Stiamo collegando il tuo Wallet…</p>
+    <div id="cta" style="display:none">
+      <a id="linkWallet" class="btn" href="#">Vedi saldo</a>
+      <a id="linkPremium" class="btn" href="#">Sblocca Premium</a>
+      <a class="btn" href="/">Torna alla Home</a>
     </div>
   </main>
-  <script src="/bg.js"></script>
+
   <script>
-    const qs = new URLSearchParams(location.search);
-    const m = Number(qs.get('m')||0), e = Number(qs.get('e')||0), s = qs.get('s')||'';
-    const points = m; // 1 punto = 1 minuto
-    const euros = (e/100).toFixed(2);
-    document.getElementById('info').textContent = s ? `Pacchetto: ${s} • Minuti: ${m} • Punti: ${points} • Importo: €${euros}` : '';
+  (async ()=>{
+    const p = new URLSearchParams(location.search);
+    const sid = p.get('sid');
+    try{
+      const r = await fetch('/.netlify/functions/session-email?sid=' + encodeURIComponent(sid));
+      const j = await r.json();
+      const email = j.email || '';
+      if(email){
+        const w = document.getElementById('linkWallet');
+        const pr = document.getElementById('linkPremium');
+        w.href = '/wallet.html?email=' + encodeURIComponent(email);
+        pr.href = '/index.html#premium';
+        document.getElementById('msg').textContent = `Email collegata: ${email}`;
+        document.getElementById('cta').style.display = 'flex';
+        document.getElementById('cta').style.gap = '10px';
+      }else{
+        document.getElementById('msg').textContent = 'Non abbiamo potuto collegare automaticamente la tua email.';
+      }
+    }catch(e){
+      document.getElementById('msg').textContent = 'Errore durante il collegamento.';
+      console.error(e);
+    }
+  })();
   </script>
 </body>
 </html>
