@@ -1,7 +1,7 @@
 [functions]
   node_bundler = "esbuild"
+  external_node_modules = ["stripe", "resend", "twilio", "@netlify/blobs"]
   included_files = ["netlify/functions/**"]
-  external_node_modules = ["stripe", "resend", "twilio"]
 
 [functions."stripe-webhook"]
   timeout = 26
