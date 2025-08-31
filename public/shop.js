@@ -1,4 +1,4 @@
-// public/shop.js — catalog + checkout (SKU-only)
+// public/shop.js — usa sku, la funzione server trova il priceId
 const CATALOG = [
   { sku:'SCUSA_BASE',   title:'Scusa Base',        desc:'La più usata, funziona sempre.',       eur:100, minutes:10 },
   { sku:'SCUSA_TRIPLA', title:'Scusa Tripla',      desc:'Tre scuse diverse in un solo pacchetto.', eur:250, minutes:30 },
@@ -17,7 +17,6 @@ const showMsg = (t, err=false)=>{
   msgEl.textContent = t;
   msgEl.classList.toggle('error', err);
 };
-
 
 for (const it of CATALOG) {
   const el = document.createElement('article');
@@ -39,19 +38,23 @@ for (const it of CATALOG) {
   grid.appendChild(el);
 }
 
-
 async function checkout(sku){
   try{
     showMsg('Apro il checkout…');
     const r = await fetch('/.netlify/functions/create-checkout-session',{
-      method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({ sku })
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ sku })   // <— passiamo lo SKU
     });
-    if(r.status===303){
-      const loc=r.headers.get('Location'); if(loc) return location.href=loc;
-    }
     const data = await r.json().catch(()=>({}));
-    if(data?.url) return location.href=data.url;
+    if (r.ok && data?.url) {
+      location.href = data.url;
+      return;
+    }
     throw new Error(data?.error || 'Errore checkout');
-  }catch(e){ showMsg(e.message, true); console.error(e); }
+  }catch(e){
+    showMsg(e.message, true);
+    console.error(e);
+  }
 }
+
