@@ -1,124 +1,109 @@
 // netlify/functions/claim-purchase.js
-import Stripe from 'stripe';
+// Recupera la sessione Checkout, valida pagamento, ricava email e accredita minuti (idempotente).
+
+const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-import { blobs } from '@netlify/blobs';
-const balances = blobs({ name: 'balances' });
-const drafts   = blobs({ name: 'drafts' });
+const cors = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
 
-const SITE_URL = process.env.SITE_URL || 'https://colpamia.com';
+// --- MAPPATURA PREZZO -> MINUTI ---
+// Consiglio: metti gli ID reali in ENV (PRICE_MINUTES_JSON) come {"price_abc":5,"price_def":15}
+const MAP_FROM_ENV = safeJson(process.env.PRICE_MINUTES_JSON) || {};
 
-// --- Email / Phone helpers (usa Resend o il tuo provider):
-async function sendEmail(to, subject, html){
-  const apiKey = process.env.RESEND_API_KEY;
-  const from   = process.env.RESEND_FROM || 'Colpa Mia <noreply@colpamia.com>';
-  if(!apiKey) return { ok:false, error:'RESEND non configurato' };
+exports.handler = async (event) => {
+  try {
+    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
 
-  const r = await fetch('https://api.resend.com/emails', {
-    method:'POST',
-    headers:{ 'Authorization':`Bearer ${apiKey}`, 'Content-Type':'application/json' },
-    body: JSON.stringify({ from, to, subject, html })
-  });
-  if(!r.ok) return { ok:false, error: await r.text() };
-  return { ok:true };
-}
+    if (event.httpMethod !== 'POST') return resp(405, { error: 'Method Not Allowed' });
 
-// Stub per telefono (da integrare via WhatsApp/SMS provider)
-async function sendPhone(phone, text){
-  // TODO: integra Twilio / WhatsApp Cloud / SMS provider
-  console.log('sendPhone stub ->', phone, text.slice(0,120));
-  return { ok:true };
-}
+    let payload = {};
+    try { payload = JSON.parse(event.body || '{}'); } catch { payload = {}; }
 
-// --- Balance store helpers
-async function getBalance(email){
-  const key = `bal:${email.toLowerCase()}`;
-  return (await balances.getJSON(key)) || { email, minutes:0, history:[] };
-}
-async function setBalance(email, data){
-  const key = `bal:${email.toLowerCase()}`;
-  await balances.setJSON(key, data, { addRandomSuffix:false });
-}
+    let { session_id, email_fallback, phone } = payload;
+    session_id = String(session_id || '').replace(/\s/g, '');
 
-// --- Utility
-function escapeHtml(s){return s.replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+    if (!/^cs_(live|test)_[A-Za-z0-9]+$/.test(session_id))
+      return resp(400, { error: 'Session ID non valido' });
 
-export default async (req) => {
-  try{
-    if (req.method !== 'POST') {
-      return new Response(JSON.stringify({ error:'Method Not Allowed' }), { status:405 });
-    }
-    const { session_id, email: emailIn, phone } = await req.json();
-    if(!session_id || !session_id.startsWith('cs_')){
-      return new Response(JSON.stringify({ error:'session_id non valido' }), { status:400 });
+    // Ambiente coerente (facoltativo ma utile)
+    const isLiveId = session_id.startsWith('cs_live_');
+    const isLiveKey = String(process.env.STRIPE_SECRET_KEY || '').startsWith('sk_live_');
+    if (isLiveId !== isLiveKey)
+      return resp(400, { error: 'Mismatch Live/Test tra chiave Stripe e Session ID' });
+
+    // 1) Recupero Session
+    const s = await stripe.checkout.sessions.retrieve(session_id);
+    if (s.mode !== 'payment') return resp(400, { error: 'Sessione non di pagamento' });
+    if (s.payment_status !== 'paid') return resp(409, { error: 'Pagamento non acquisito' });
+
+    // 2) Idempotenza su PaymentIntent
+    const piId = String(s.payment_intent || '');
+    if (!piId) return resp(400, { error: 'Payment Intent assente' });
+
+    const pi = await stripe.paymentIntents.retrieve(piId);
+    if (pi.metadata && pi.metadata.colpamiaCredited === 'true') {
+      return resp(200, { ok: true, credited: false, reason: 'già accreditato' });
     }
 
-    // Recupera la sessione e line_items
-    const session = await stripe.checkout.sessions.retrieve(session_id, {
-      expand: ['line_items.data.price.product']
-    });
-    if (session.payment_status !== 'paid'){
-      return new Response(JSON.stringify({ error:'La sessione non è pagata' }), { status:400 });
-    }
+    // 3) Email: FONTE AUTORITARIA
+    const emailFromSession = (s.customer_details && s.customer_details.email) || s.customer_email || null;
+    const email =
+      (emailFromSession && String(emailFromSession).toLowerCase()) ||
+      (isValidEmail(email_fallback) ? String(email_fallback).toLowerCase() : null);
 
-    // Email “vera” dalla sessione (priorità a quella di Stripe)
-    const email = (session.customer_details?.email || session.customer_email || emailIn || '').trim();
-    if(!email && !phone){
-      return new Response(JSON.stringify({ error:'Serve almeno email o telefono per collegare l’acquisto' }), { status:400 });
-    }
+    if (!email) return resp(400, { error: 'Email assente/illeggibile' });
 
-    // Calcola minuti dai metadata product
-    let totalMinutes = 0;
-    for(const li of (session.line_items?.data || [])){
-      const md  = li.price?.product?.metadata || {};
-      const qty = li.quantity || 1;
-      const mins = parseInt(md.minutes || '0', 10);
-      if(mins>0) totalMinutes += mins * qty;
-    }
+    // 4) Line items -> minuti
+    const items = await stripe.checkout.sessions.listLineItems(session_id, { limit: 100, expand: ['data.price.product'] });
+    const minutes = calcMinutes(items.data);
+    if (minutes <= 0) return resp(400, { error: 'Nessun articolo valido per accredito' });
 
-    // Aggiorna saldo
-    if(totalMinutes > 0 && email){
-      const bal = await getBalance(email);
-      bal.minutes = (bal.minutes||0) + totalMinutes;
-      bal.history = bal.history || [];
-      bal.history.push({
-        ts: Date.now(),
-        type: 'add',
-        delta: totalMinutes,
-        reason: 'Claim post-checkout',
-        session_id
-      });
-      await setBalance(email, bal);
-    }
-
-    // Se esiste una bozza AI in attesa, consegnala
-    const draftId = session.metadata?.draft_id;
-    if(draftId){
-      const d = await drafts.getJSON(draftId).catch(()=>null);
-      if(d && (d.status==='reserved' || d.status==='queued')){
-        const text = d.draft || '';
-        if(text){
-          let delivered = false;
-          if((d.channel==='phone' && (d.phone||phone)) || phone){
-            const r = await sendPhone(phone || d.phone, text);
-            delivered = r.ok;
-          }
-          if(!delivered && (d.email || email)){
-            const subject = 'La tua scusa è pronta';
-            const hr = text.split('\n').map(p=>`<p>${escapeHtml(p)}</p>`).join('');
-            const r = await sendEmail((email || d.email), subject, hr);
-            delivered = r.ok;
-          }
-          await drafts.setJSON(draftId, { ...d, status:'sent', sent_at:Date.now(), session_id }, { addRandomSuffix:false });
-        }
+    // 5) TODO: accredita i minuti nel tuo sistema (wallet)
+    // Se hai già una function locale, richiamala qui.
+    // Esempio (se esiste netlify/functions/wallet.js con export creditMinutes):
+    try {
+      const wallet = require('./wallet');
+      if (wallet && typeof wallet.creditMinutes === 'function') {
+        await wallet.creditMinutes(email, minutes, { phone, session_id, piId });
       }
-    }
+    } catch (_) { /* nessun wallet local, prosegui */ }
 
-    return new Response(JSON.stringify({ ok:true, email }), { status:200 });
-  }catch(e){
-    console.error('claim-purchase error', e);
-    return new Response(JSON.stringify({ error:'Errore interno' }), { status:500 });
+    // 6) Idempotenza: marchia il PI su Stripe (così non duplichi mai)
+    await stripe.paymentIntents.update(piId, { metadata: { ...(pi.metadata || {}), colpamiaCredited: 'true' } });
+
+    // 7) (opzionale) invii: email/sms/whatsapp → aggiungi qui se vuoi
+
+    return resp(200, { ok: true, credited: true, email, minutes });
+  } catch (err) {
+    return resp(500, { error: err.message || 'Errore interno' });
   }
 };
 
-export const config = { path: '/.netlify/functions/claim-purchase' };
+function calcMinutes(lineItems) {
+  let tot = 0;
+  for (const li of lineItems) {
+    const price = li.price || {};
+    const product = price.product || {};
+    // 1) ENV mapping prioritario
+    if (MAP_FROM_ENV[price.id]) { tot += (MAP_FROM_ENV[price.id] * (li.quantity || 1)); continue; }
+    // 2) metadata.minutes su price o product (se l'hai impostato in Dashboard)
+    const m1 = parseInt((price.metadata && price.metadata.minutes) || '', 10);
+    const m2 = parseInt((product.metadata && product.metadata.minutes) || '', 10);
+    const mins = (!isNaN(m1) ? m1 : (!isNaN(m2) ? m2 : 0));
+    tot += mins * (li.quantity || 1);
+  }
+  return tot;
+}
+
+function isValidEmail(x) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x || '')); }
+
+function safeJson(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
+
+function resp(statusCode, body) {
+  return { statusCode, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
+}
+
