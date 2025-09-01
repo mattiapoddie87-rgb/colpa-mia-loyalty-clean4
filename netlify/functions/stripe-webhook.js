@@ -1,317 +1,297 @@
 // netlify/functions/stripe-webhook.js
-// Webhook Stripe: accredita minuti + invia scuse (email & WhatsApp) con AI naturale/varia.
+// Webhook Stripe: accredita minuti/punti, genera 3 scuse naturali e invia email + (opzionale) WhatsApp.
 
-const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const Stripe = require("stripe");
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: "2024-06-20" });
 
-const { Resend } = require('resend');
-const resend = process.env.RESEND_API_KEY ? new Resend(process.env.RESEND_API_KEY) : null;
-
-const twilio = (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN)
-  ? require('twilio')(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN)
-  : null;
-
-const OpenAI = require('openai');
-const openai = process.env.OPENAI_API_KEY ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY }) : null;
-
-// ---------- Helpers ----------
-const JSON_MAP_RULES = safeJson(process.env.PRICE_RULES_JSON) || {}; // {price_id: {excuse:"...", minutes:10}}
-const EMAIL_ALIASES   = safeJson(process.env.EMAIL_ALIASES_JSON)   || {}; // {"alias@..":"vero@.."}
-
-function safeJson(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
-function isValidEmail(x) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x||'')); }
-
-function normEmail(email) {
-  const e = String(email || '').trim().toLowerCase();
-  if (!e) return null;
-  return EMAIL_ALIASES[e] || e;
-}
-
-// Calcolo minuti: 1) PRICE_RULES_JSON (prioritario) 2) metadata.minutes su Price/Product
-function calcMinutes(lineItems) {
-  let tot = 0;
-  for (const li of lineItems) {
-    const price = li.price || {};
-    const product = price.product || {};
-    const qty = li.quantity || 1;
-
-    if (JSON_MAP_RULES[price.id] && Number.isFinite(JSON_MAP_RULES[price.id].minutes)) {
-      tot += (JSON_MAP_RULES[price.id].minutes * qty);
-      continue;
-    }
-    const m1 = parseInt((price.metadata && price.metadata.minutes) || '', 10);
-    const m2 = parseInt((product.metadata && product.metadata.minutes) || '', 10);
-    const mins = (!isNaN(m1) ? m1 : (!isNaN(m2) ? m2 : 0));
-    tot += mins * qty;
+// Twilio è opzionale; se non configurato, lo saltiamo.
+let twilioClient = null;
+if (process.env.TWILIO_ACCOUNT_SID && process.env.TWILIO_AUTH_TOKEN) {
+  try {
+    const twilio = require("twilio");
+    twilioClient = twilio(process.env.TWILIO_ACCOUNT_SID, process.env.TWILIO_AUTH_TOKEN);
+  } catch (_) {
+    // nessun crash: semplicemente non invieremo WhatsApp
   }
-  return tot;
 }
 
-function getAnyProductName(lineItems) {
-  const li = (lineItems || [])[0];
-  if (!li) return null;
-  const price = li.price || {};
-  const product = price.product || {};
-  return price.nickname || product.name || null;
-}
+// -------- Utilità comuni --------
+const cors = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, Stripe-Signature",
+};
+const ok = (b) => ({ statusCode: 200, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify(b) });
+const bad = (s, m) => ({ statusCode: s, headers: { ...cors, "Content-Type": "application/json" }, body: JSON.stringify({ error: m }) });
 
-function countryNormPhone(phone) {
-  const dflt = process.env.DEFAULT_COUNTRY_CODE || '+39';
-  const p = String(phone || '').trim();
-  if (!p) return null;
-  if (/^\+/.test(p)) return p; // già E.164
-  // es. 349xxxx -> +39 349xxxx
-  return dflt + p.replace(/\D+/g, '');
-}
+const PRICE_RULES = safeJSON(process.env.PRICE_RULES_JSON) || {}; // { price_id: { excuse:"base|riunione|...", minutes:number } }
+const OPENAI_URL = "https://api.openai.com/v1/responses";
+const OPENAI_MODEL = process.env.OPENAI_MODEL || "gpt-4o-mini";
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || "";
+const RESEND_KEY = process.env.RESEND_API_KEY || "";
+const MAIL_FROM = process.env.RESEND_FROM || process.env.MAIL_FROM || "COLPA MIA <no-reply@colpamia.com>";
+const TWILIO_FROM_WA = process.env.TWILIO_FROM_WA || "";
+const DEFAULT_COUNTRY = process.env.DEFAULT_COUNTRY_CODE || "+39";
 
-// --------- AI: generatore scuse naturali & varie (UNA SOLA "grande" modifica) ---------
-function pickNUnique(arr, n) {
-  const bag = [...arr];
-  const out = [];
-  while (out.length < n && bag.length) {
-    const i = Math.floor(Math.random() * bag.length);
-    out.push(bag.splice(i, 1)[0]);
-  }
-  return out;
-}
+function safeJSON(s) { try { return s ? JSON.parse(s) : null; } catch { return null; } }
+const take = (x, n) => (Array.isArray(x) ? x.slice(0, n) : []);
 
-/**
- * Genera 3 scuse in italiano, naturali, diverse e plausibili.
- * Usa contesto, prodotto, canale e nome destinatario per personalizzare.
- */
-async function generateExcuses({ context, productName, minutes, channel, recipientName }) {
-  // Fallback soft se manca la chiave OpenAI
-  if (!openai) {
-    const base = context || 'un imprevisto';
-    return [
-      `Ciao${recipientName ? ' ' + recipientName : ''}, ho avuto ${base} e arrivo con qualche minuto di ritardo. Ti aggiorno a breve.`,
-      `Mi scuso: è saltato fuori ${base}. Sto risolvendo e ti raggiungo appena possibile.`,
-      `Coincidenza infelice: ${base}. Recupero subito e ti tengo informato finché non arrivo.`
-    ];
+// Strippa nomi/greeting superflui e evita eco diretto del contesto
+function postProcessExcuse(txt, { buyerName, rawContext }) {
+  let t = String(txt || "").trim();
+
+  // 1) niente saluti + nome dell'acquirente
+  const candidates = [
+    `ciao ${buyerName}`, `ciao, ${buyerName}`, `ehi ${buyerName}`, `${buyerName},`,
+    `ciao`, `ehi`, `hey`
+  ].filter(Boolean).map(s => s.toLowerCase());
+  const low = t.toLowerCase();
+  for (const c of candidates) {
+    if (low.startsWith(c + " ")) { t = t.slice(c.length + 1).trim(); break; }
+    if (low.startsWith(c + ",")) { t = t.slice(c.length + 1).trim(); break; }
   }
 
-  const tones = pickNUnique(
-    ['professionale', 'empatico', 'amichevole', 'determinato', 'ironico-leggero', 'formale'],
-    3
-  );
+  // 2) se contiene troppo del contesto, accorcia/parafrasa un minimo
+  const ctx = String(rawContext || "").toLowerCase().trim();
+  if (ctx && t.toLowerCase().includes(ctx) && ctx.length > 10) {
+    // Togliamo la frase più simile al contesto
+    t = t.replace(new RegExp(ctx.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "gi"), "").trim();
+    if (!t) t = "Sto incastrando un imprevisto, arrivo più tardi e ti aggiorno presto.";
+  }
 
-  const sys = [
-    'Sei un ghostwriter italiano che scrive scuse realistiche, brevi e plausibili.',
-    'Stile naturale: evita ripetizioni e rigidità da bot.',
-    'Niente dati sensibili o dettagli falsificabili.',
-    'Ogni scusa deve essere diversa: cambia struttura, lessico e ritmo.',
-    'Massimo 1-3 frasi ciascuna.'
-  ].join(' ');
+  // 3) pulizia minima
+  t = t.replace(/\s+/g, " ").trim();
+  if (t.length > 220) t = t.slice(0, 220).trim();
+  if (!/[.!?]$/.test(t)) t += ".";
 
-  const user = {
-    istruzioni: [
-      'Genera esattamente 3 scuse in italiano, una per ciascun tono.',
-      'Adatta il registro al canale (WhatsApp più colloquiale, email leggermente più curata).',
-      'Inserisci un dettaglio concreto ma generico (es. “treno in ritardo”, “blocco in tangenziale”, “revisione urgente”).',
-      'Non ripetere le stesse espressioni tra le 3 scuse.',
-      'Restituisci JSON: {"varianti":[{"tono":"…","testo":"…"}, …]}',
-      'Niente etichette tipo (base) e niente testo fuori JSON.'
-    ].join(' '),
-    contesto: {
-      esigenza: context || null,
-      prodotto: productName || null,
-      minuti_accreditati: minutes || null,
-      canale: channel || 'email',
-      destinatario: recipientName || null,
-      toni_richiesti: tones
-    }
-  };
+  return t;
+}
 
-  const res = await openai.chat.completions.create({
-    model: process.env.OPENAI_MODEL || 'gpt-4o-mini',
-    temperature: 1.1,
-    top_p: 0.92,
-    presence_penalty: 0.85,
-    frequency_penalty: 0.4,
-    messages: [
-      { role: 'system', content: sys },
-      { role: 'user', content: JSON.stringify(user) }
-    ],
-    response_format: { type: 'json_object' }
+// -------- AI: prompt curato per naturalezza/varietà --------
+async function generateExcuses({ excuseType, context, buyerName, lang = "it" }) {
+  // Guidiamo lo stile: 3 varianti con toni diversi, NO nome acquirente, NO eco letterale, 1–2 frasi ciascuna.
+  const sys = `
+Sei uno scrittore esperto di messaggi brevi per WhatsApp/SMS/Email.
+Devi creare SCUSE credibili in prima persona singolare che sembrino scritte da un umano.
+Regole tassative:
+- Lingua: ${lang}.
+- NON salutare e NON usare nomi propri (non usare "${buyerName}" né altri).
+- NON copiare letteralmente il "Contesto"; usalo solo come ispirazione e parafrasa.
+- 1–2 frasi per variante, massimo ~220 caratteri.
+- Sii credibile e vario: una variante più professionale, una più informale, una più empatica.
+- Non menzionare piani/livelli (es. "base", "deluxe"), AI o Stripe.
+- Tono: diretto, naturale; piccola promessa di aggiornamento o alternativa è ben accetta.
+- Tema scusa: ${excuseType || "generico"}.
+Ritorna SOLO un JSON valido:
+{"varianti": ["...", "...", "..."]}
+`;
+
+  const user = `
+Contesto (ispirazione, da parafrasare): """${(context || "").trim()}"""
+`;
+
+  // Chiamata Responses API (Node 18: fetch nativo)
+  const r = await fetch(OPENAI_URL, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${OPENAI_API_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OPENAI_MODEL,
+      input: [{ role: "system", content: sys }, { role: "user", content: user }],
+      temperature: 0.95,
+      max_output_tokens: 320,
+    }),
   });
+  if (!r.ok) {
+    const txt = await r.text().catch(() => "");
+    throw new Error(`OpenAI error ${r.status}: ${txt}`);
+  }
+  const data = await r.json();
+  const raw = data?.output?.[0]?.content?.[0]?.text || data?.output_text || "";
 
+  // Proviamo a leggere JSON
   let out = [];
   try {
-    const obj = JSON.parse(res.choices[0].message.content);
-    out = (obj.varianti || []).map(v => String(v.testo || '').trim()).filter(Boolean);
-  } catch (_) {
-    out = [];
+    const parsed = JSON.parse(raw);
+    out = take(parsed.varianti, 3).map(x => String(x || "").trim());
+  } catch {
+    // Fallback: separiamo per righe/punti elenco
+    out = raw.split(/\n+/g).map(s => s.replace(/^[-•\d.)\s]+/, "").trim()).filter(Boolean);
+    out = take(out, 3);
   }
 
-  // Fallback ulteriore se il JSON non fosse perfetto
-  if (out.length < 3) {
-    const base = (context || productName || 'un imprevisto').toLowerCase();
-    const saluto = channel === 'whatsapp'
-      ? `Ciao${recipientName ? ' ' + recipientName : ''}`
-      : (recipientName ? `Gentile ${recipientName}` : 'Buongiorno');
-    out = [
-      `${saluto}, si è creato un imprevisto legato a ${base}. Sto sistemando e arrivo a breve.`,
-      `${saluto}, ho un contrattempo (${base}). Recupero il ritardo e ti aggiorno man mano.`,
-      `${saluto}, imprevisto dell’ultimo minuto su ${base}. Ci sono e sto riorganizzando: ti tengo allineato.`
-    ];
-  }
-
-  return out.slice(0, 3);
-}
-
-// --------- Invii ---------
-async function sendEmail(to, subject, html) {
-  const from = process.env.RESEND_FROM || process.env.MAIL_FROM;
-  if (!resend || !from || !isValidEmail(to)) return false;
-  try {
-    await resend.emails.send({ from, to, subject, html });
-    return true;
-  } catch (_) { return false; }
-}
-
-async function sendWhatsAppText(toE164, text) {
-  if (!twilio || !toE164) return false;
-  const from = process.env.TWILIO_FROM_WA; // es. whatsapp:+14155238886
-  if (!from) return false;
-  try {
-    await twilio.messages.create({ from, to: `whatsapp:${toE164.replace(/^whatsapp:/,'')}`, body: text });
-    return true;
-  } catch (_) { return false; }
-}
-
-// --------- Wallet opzionale ---------
-async function creditWalletIfAvailable(email, minutes, metadata) {
-  try {
-    const wallet = require('./wallet'); // opzionale
-    if (wallet && typeof wallet.creditMinutes === 'function') {
-      await wallet.creditMinutes(email, minutes, metadata);
+  // Post-process robusto
+  const uniq = new Set();
+  const final = [];
+  for (const x of out) {
+    const y = postProcessExcuse(x, { buyerName, rawContext: context });
+    if (y && !uniq.has(y.toLowerCase())) {
+      uniq.add(y.toLowerCase());
+      final.push(y);
     }
-  } catch (_) {
-    // nessun wallet locale: ignora
+  }
+  // Se per qualunque motivo meno di 3, completiamo con mini-varianti sicure
+  while (final.length < 3) {
+    final.push("Sto gestendo un imprevisto, potrei tardare un po’. Ti aggiorno appena posso.");
+  }
+  return take(final, 3);
+}
+
+// -------- invio email (Resend) --------
+async function sendEmail({ to, subject, html }) {
+  if (!RESEND_KEY || !to) return;
+  const r = await fetch("https://api.resend.com/emails", {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${RESEND_KEY}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ from: MAIL_FROM, to, subject, html }),
+  });
+  if (!r.ok) {
+    const t = await r.text().catch(() => "");
+    throw new Error(`Resend ${r.status}: ${t}`);
   }
 }
 
-// ======================================================
-//                HANDLER WEBHOOK STRIPE
-// ======================================================
+// -------- invio WhatsApp (Twilio) --------
+async function sendWhatsApp({ toPhone, body }) {
+  if (!twilioClient || !TWILIO_FROM_WA || !toPhone) return;
+  let to = String(toPhone).trim();
+  if (!to.startsWith("whatsapp:")) {
+    // normalizziamo a E.164 con prefisso
+    if (!to.startsWith("+")) to = DEFAULT_COUNTRY + to.replace(/\D+/g, "");
+    to = "whatsapp:" + to;
+  }
+  await twilioClient.messages.create({
+    from: TWILIO_FROM_WA,
+    to,
+    body,
+  });
+}
+
+// -------- HTML email semplice --------
+function emailHTML(varianti, minutes) {
+  const item = (t) => `<div style="margin:8px 0;padding:10px;border:1px solid #e5e7eb;border-radius:10px;background:#0f1623;color:#e9eef5">${escapeHTML(t)}</div>`;
+  return `
+  <div style="font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; color:#e9eef5; background:#0b0d12; padding:18px">
+    <h2 style="margin:0 0 8px">La tua scusa</h2>
+    ${varianti.map(item).join("")}
+    <p style="margin-top:16px">Accreditati <b>${minutes}</b> minuti sul tuo wallet.</p>
+    <p style="opacity:.8;font-size:13px">Suggerimento: copia la variante che preferisci e incollala nel canale giusto.</p>
+  </div>`;
+}
+function escapeHTML(s){return String(s||"").replace(/[&<>"]/g, m=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" }[m]));}
+
+// -------- minutes/tier dalle line items --------
+async function minutesFromSession(sessionId) {
+  const items = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 100, expand: ["data.price"] });
+  let tot = 0;
+  let type = "generico";
+  for (const li of items.data) {
+    const priceId = li?.price?.id;
+    const q = li?.quantity || 1;
+    const rule = priceId && PRICE_RULES[priceId];
+    if (rule) {
+      tot += (Number(rule.minutes) || 0) * q;
+      if (rule.excuse) type = rule.excuse;
+    }
+  }
+  return { minutes: tot, excuseType: type };
+}
+
+// -------- Handler principale --------
 exports.handler = async (event) => {
   try {
-    // Stripe richiede RAW body per la firma
-    const sig = event.headers['stripe-signature'];
-    if (!sig) return { statusCode: 400, body: 'Missing signature' };
+    if (event.httpMethod === "OPTIONS") return { statusCode: 204, headers: cors };
+    if (event.httpMethod !== "POST") return bad(405, "Method not allowed");
 
-    const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
+    const sig = event.headers["stripe-signature"];
+    const secret = process.env.STRIPE_WEBHOOK_SECRET;
+    if (!secret) return bad(500, "Missing STRIPE_WEBHOOK_SECRET");
+
     let stripeEvent;
     try {
-      stripeEvent = stripe.webhooks.constructEvent(event.rawBody || event.body, sig, whSecret);
+      stripeEvent = stripe.webhooks.constructEvent(event.body, sig, secret);
     } catch (err) {
-      return { statusCode: 400, body: `Signature error: ${err.message}` };
+      return bad(400, `Signature error: ${err.message}`);
     }
 
-    // Gestiamo solo eventi rilevanti
-    if (stripeEvent.type === 'checkout.session.completed') {
-      const s = stripeEvent.data.object;
-
-      // Session deve essere payment & paid
-      if (s.mode !== 'payment') return ok('Not a payment session');
-      if (s.payment_status !== 'paid') return ok('Payment not captured');
-
-      // PaymentIntent & idempotenza
-      const piId = s.payment_intent;
-      if (!piId) return ok('No payment_intent in session');
-
-      const pi = await stripe.paymentIntents.retrieve(piId);
-      if (pi.metadata && pi.metadata.colpamiaCredited === 'true') {
-        return ok('Already credited');
-      }
-
-      // Email cliente
-      const emailFromSession = (s.customer_details && s.customer_details.email) || s.customer_email || null;
-      const email = normEmail(emailFromSession);
-      if (!email) return ok('No email');
-
-      // Line items
-      const itemsResp = await stripe.checkout.sessions.listLineItems(s.id, {
-        limit: 100,
-        expand: ['data.price.product']
-      });
-      const items = itemsResp.data || [];
-      const minutes = calcMinutes(items);
-      if (minutes <= 0) return ok('No valid minutes');
-
-      const productName = getAnyProductName(items);
-
-      // "Esigenza" (custom_field key=need) se disponibile
-      const needText =
-        (s.custom_fields || []).find(f => f.key === 'need')?.text?.value ||
-        (pi.metadata && pi.metadata.need) ||
-        null;
-
-      // Accredito wallet (se presente)
-      await creditWalletIfAvailable(email, minutes, { session_id: s.id, piId });
-
-      // Generazione scuse (una volta per email, già naturale/varia)
-      const customerName = s.customer_details?.name || null;
-      const excusesEmail = await generateExcuses({
-        context: needText,
-        productName,
-        minutes,
-        channel: 'email',
-        recipientName: customerName
-      });
-
-      // Email
-      const html =
-        `<p>La tua Scusa è pronta ✅</p>
-         <p>Hai ricevuto <b>${minutes}</b> minuti nel tuo wallet.</p>
-         ${needText ? `<p><i>Contesto:</i> ${escapeHtml(needText)}</p>` : ''}
-         <p>Tre varianti tra cui scegliere:</p>
-         <ol>
-           <li>${escapeHtml(excusesEmail[0])}</li>
-           <li>${escapeHtml(excusesEmail[1])}</li>
-           <li>${escapeHtml(excusesEmail[2])}</li>
-         </ol>
-         <p>Grazie da COLPA MIA.</p>`;
-
-      const mailOk = await sendEmail(email, 'La tua Scusa è pronta ✅', html);
-
-      // WhatsApp (invio testo unico con 3 varianti)
-      let waOk = false;
-      if (twilio && s.customer_details?.phone) {
-        const waText =
-          `La tua Scusa è pronta ✅\n` +
-          (needText ? `Contesto: ${needText}\n` : ``) +
-          `Hai ricevuto ${minutes} minuti nel tuo wallet.\n\n` +
-          `1) ${excusesEmail[0]}\n\n2) ${excusesEmail[1]}\n\n3) ${excusesEmail[2]}`;
-        waOk = await sendWhatsAppText(countryNormPhone(s.customer_details.phone), waText);
-      }
-
-      // Idempotenza: marchiamo il PI
-      await stripe.paymentIntents.update(piId, {
-        metadata: {
-          ...(pi.metadata || {}),
-          colpamiaCredited: 'true',
-          colpamiaMinutes: String(minutes),
-          colpamiaEmail: email,
-          colpamiaEmailSent: mailOk ? 'true' : 'false',
-          colpamiaWASent: waOk ? 'true' : 'false'
-        }
-      });
-
-      return ok('done');
+    if (stripeEvent.type !== "checkout.session.completed") {
+      return ok({ received: true, skipped: stripeEvent.type });
     }
 
-    // Ignora altri eventi
-    return ok('no-op');
+    const session = stripeEvent.data.object;
+    // Email e telefono autorevoli dalla sessione Stripe
+    const email = session?.customer_details?.email || session?.customer_email || null;
+    const phone = session?.customer_details?.phone || null;
+    const buyerName = (session?.customer_details?.name || "").split(" ")[0] || ""; // solo per evitare di usarlo
+
+    const { minutes, excuseType } = await minutesFromSession(session.id);
+    const piId = String(session.payment_intent || "");
+    if (!piId) return ok({ received: true, note: "no PI" });
+
+    // Idempotenza: se già accreditato, skip (ma possiamo rigenerare e reinviare se vuoi; qui evitiamo doppio accredito)
+    const pi = await stripe.paymentIntents.retrieve(piId);
+    if (pi?.metadata?.colpamiaCredited === "true") {
+      return ok({ received: true, credited: false, reason: "already-credited" });
+    }
+
+    // Preleva "contesto" dal campo personalizzato
+    let context = "";
+    try {
+      const cf = session?.custom_fields || [];
+      const found = cf.find(f => (f.key === "need" || f.key === "contesto") && f.text?.value);
+      context = found?.text?.value || "";
+    } catch {}
+
+    // --- Accredito minuti nel tuo sistema (se hai una funzione wallet locale la chiami qui) ---
+    try {
+      const wallet = require("./wallet");
+      if (wallet && typeof wallet.creditMinutes === "function") {
+        await wallet.creditMinutes(email, minutes, { session_id: session.id, piId });
+      }
+    } catch (_) { /* opzionale */ }
+
+    // Marca il PI come accreditato su Stripe (idempotenza)
+    const newMeta = { ...(pi.metadata || {}), colpamiaCredited: "true" };
+    await stripe.paymentIntents.update(piId, { metadata: newMeta });
+
+    // --- Genera scuse (AI migliorata) ---
+    let varianti = ["Sto gestendo un imprevisto, ti aggiorno appena posso.", "Ritardo per un contrattempo, recupero tra poco.", "Mi scuso, ho dovuto cambiare i piani all’ultimo: ti faccio sapere a breve."];
+    if (OPENAI_API_KEY) {
+      try {
+        varianti = await generateExcuses({
+          excuseType,
+          context,
+          buyerName, // usato solo per vietarne l’uso
+          lang: "it",
+        });
+      } catch (err) {
+        // fallback soft senza bloccare il flusso
+        console.error("AI generation failed:", err?.message || err);
+      }
+    }
+
+    // --- Invii ---
+    const subject = "La tua scusa è pronta";
+    const html = emailHTML(varianti, minutes);
+    if (RESEND_KEY && email) {
+      try {
+        await sendEmail({ to: email, subject, html });
+        await stripe.paymentIntents.update(piId, {
+          metadata: { ...(pi.metadata || {}), colpamiaEmailSent: "true" },
+        });
+      } catch (err) {
+        console.error("Resend error:", err?.message || err);
+      }
+    }
+
+    // WhatsApp: inviamo solo la variante 2 (informale) per non essere prolissi
+    if (twilioClient && TWILIO_FROM_WA && phone) {
+      const waBody = `La tua scusa (variante breve):\n${varianti[1]}\n\n(+${minutes} minuti nel wallet)`;
+      try { await sendWhatsApp({ toPhone: phone, body: waBody }); } catch (err) { console.error("Twilio error:", err?.message || err); }
+    }
+
+    return ok({ received: true, credited: true, email, minutes, excuseType });
   } catch (err) {
-    return { statusCode: 500, body: `Webhook Error: ${err.message}` };
+    console.error("Webhook error:", err);
+    return bad(500, err.message || "internal error");
   }
 };
-
-// ---------- utilities ----------
-function ok(msg) { return { statusCode: 200, body: msg }; }
-function escapeHtml(s = '') {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-}
