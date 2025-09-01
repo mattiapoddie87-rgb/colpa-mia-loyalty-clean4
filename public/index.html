@@ -13,7 +13,7 @@
   <link rel="stylesheet" href="assets/colpamia-hud.css">
   <script defer src="assets/colpamia-hud.js"></script>
 
-  <!-- Disattiva il VECCHIO sfondo (se vuoi solo l'HUD) -->
+  <!-- Nasconde il vecchio sfondo (manteniamo i nodi per evitare errori in bg.js) -->
   <style>
     #bg, .stripes, .glow { display: none !important; }
   </style>
@@ -33,7 +33,7 @@
       <nav class="nav">
         <a href="#catalogo">Catalogo</a>
         <a href="#premium">Premium</a>
-        <a href="wallet.html">Wallet</a> <!-- relativo, non /wallet.html -->
+        <a href="wallet.html">Wallet</a> <!-- relativo -->
         <a href="#faq">FAQ</a>
       </nav>
     </div>
@@ -96,8 +96,8 @@
     </div>
   </footer>
 
-  <!-- Script: catalogo + premium (percorsi relativi per GitHub Pages) -->
-  <!-- Se non usi più il vecchio sfondo, puoi commentare/eliminare bg.js -->
+  <!-- Script: catalogo + premium (percorsi relativi) -->
+  <!-- Se non usi più il vecchio sfondo, puoi rimuovere bg.js definitivamente -->
   <script src="bg.js" defer></script>
   <script src="shop.js" defer></script>
   <script src="premium.js" defer></script>
