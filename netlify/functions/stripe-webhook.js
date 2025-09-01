@@ -169,7 +169,12 @@ exports.handler = async (event)=>{
     let waStatus = 'no_phone';
 
     if (phoneCandidates.length){
-      const waText = `${excuses.short}\n\n(+${minutes} min accreditati su COLPA MIA)`;
+      const waText = [
+  'La tua Scusa (3 varianti):',
+  ...excuses.variants.map((v, i) => `${i + 1}) ${v}`),
+  '',
+  `(+${minutes} min accreditati su COLPA MIA)`
+].join('\n');
       for (const raw of phoneCandidates){
         const res = await sendWhatsApp(raw, waText, piId);
         if (res.ok){ waStatus = 'sent'; break; }
