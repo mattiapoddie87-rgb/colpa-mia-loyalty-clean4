@@ -1,0 +1,144 @@
+/* ============ COLPAMIA HUD THEME (2100 vibe) ============ */
+/* Non invade gli stili del sito: tutto è namespaced .hud-*  */
+
+:root {
+  --hud-bg-1: #06090f;
+  --hud-bg-2: #0a0f17;
+  --hud-grid: rgba(0, 230, 255, 0.07);
+  --hud-ring: rgba(0, 255, 214, 0.06);
+  --hud-glow: #00ffe1;
+  --hud-ui: #0e1522;
+  --hud-ui-text: #cfefff;
+  --hud-ui-shadow: 0 6px 25px rgba(0,255,214,.15), inset 0 0 20px rgba(0,255,214,.06);
+}
+
+/* wrapper fisso dietro a tutto */
+.hud-root {
+  position: fixed;
+  inset: 0;
+  z-index: -1;            /* dietro i contenuti */
+  pointer-events: none;   /* non intercetta click */
+}
+
+/* layer base: gradiente spaziale */
+.hud-sky {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(1200px 800px at 20% 15%, rgba(0,255,214,.06), transparent 60%),
+    radial-gradient(1000px 700px at 80% 75%, rgba(0,173,255,.05), transparent 60%),
+    linear-gradient(180deg, var(--hud-bg-1), var(--hud-bg-2));
+  filter: saturate(105%) contrast(102%);
+}
+
+/* cerchi concentrici con movimento lentissimo */
+.hud-rings {
+  position: absolute; inset: -20%;
+  background:
+    repeating-radial-gradient(
+      circle at 50% 50%,
+      var(--hud-ring) 0 2px,
+      transparent 2px 40px
+    );
+  animation: hud-rotate 60s linear infinite;
+  transform-origin: 50% 50%;
+}
+
+/* griglia diagonale sottilissima che scorre */
+.hud-grid {
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(transparent 96%, var(--hud-grid) 100%),
+    linear-gradient(90deg, transparent 96%, var(--hud-grid) 100%);
+  background-size: 28px 28px, 28px 28px;
+  filter: blur(.25px);
+  animation: hud-pan 40s linear infinite;
+  opacity: .7;
+}
+
+/* stelline random (fake) */
+.hud-stars {
+  position: absolute; inset: 0;
+  background-image:
+    radial-gradient(2px 2px at 10% 20%, rgba(255,255,255,.35), transparent 70%),
+    radial-gradient(1.5px 1.5px at 65% 35%, rgba(255,255,255,.28), transparent 70%),
+    radial-gradient(1.2px 1.2px at 35% 75%, rgba(255,255,255,.25), transparent 70%),
+    radial-gradient(1.8px 1.8px at 80% 60%, rgba(255,255,255,.28), transparent 70%),
+    radial-gradient(1.2px 1.2px at 25% 55%, rgba(255,255,255,.2), transparent 70%);
+  opacity: .9;
+  animation: hud-twinkle 6s ease-in-out infinite alternate;
+}
+
+/* grana leggerissima per evitare banding */
+.hud-noise {
+  position: absolute; inset: 0;
+  background:
+    radial-gradient(100% 100% at 50% 50%, rgba(255,255,255,.035), transparent 60%),
+    repeating-conic-gradient(from 0deg, rgba(255,255,255,.018) 0 1deg, transparent 1deg 3deg);
+  mix-blend-mode: overlay;
+  opacity: .35;
+  animation: hud-breathe 12s ease-in-out infinite;
+}
+
+/* UI overlay (z-index altissimo) per bottoni ecc */
+.hud-ui {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none; /* abilitiamo solo sugli elementi interni */
+}
+
+/* bottone “torna al catalogo” */
+.hud-back {
+  pointer-events: auto;
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  padding: 10px 14px;
+  font: 600 14px/1 system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+  color: var(--hud-ui-text);
+  background: linear-gradient(180deg, rgba(7,14,24,.9), rgba(5,10,18,.92));
+  border: 1px solid rgba(0,255,214,.35);
+  border-radius: 12px;
+  box-shadow: var(--hud-ui-shadow);
+  backdrop-filter: blur(6px) saturate(120%);
+  text-decoration: none;
+  transition: transform .15s ease, box-shadow .2s ease, border-color .2s ease;
+}
+.hud-back:hover {
+  transform: translateY(-2px);
+  border-color: rgba(0,255,214,.6);
+  box-shadow:
+    0 10px 30px rgba(0,255,214,.18),
+    0 0 18px rgba(0,255,214,.25) inset;
+}
+.hud-back svg {
+  margin-right: 8px;
+  width: 16px; height: 16px;
+  vertical-align: -2px;
+  filter: drop-shadow(0 0 6px rgba(0,255,214,.45));
+}
+
+/* animazioni */
+@keyframes hud-rotate {
+  from { transform: rotate(0deg) scale(1); }
+  to   { transform: rotate(360deg) scale(1); }
+}
+@keyframes hud-pan {
+  from { background-position: 0 0, 0 0; }
+  to   { background-position: 2800px 2800px, 2800px 0; }
+}
+@keyframes hud-twinkle {
+  0%   { opacity: .55; }
+  50%  { opacity: .95; }
+  100% { opacity: .65; }
+}
+@keyframes hud-breathe {
+  0%   { opacity: .22; }
+  50%  { opacity: .35; }
+  100% { opacity: .22; }
+}
+
+/* Rispetto “reduce motion” */
+@media (prefers-reduced-motion: reduce) {
+  .hud-rings, .hud-grid, .hud-stars, .hud-noise { animation: none !important; }
+}
