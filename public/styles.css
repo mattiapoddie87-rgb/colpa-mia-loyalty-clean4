@@ -112,3 +112,32 @@ header, main, footer {
 /* 5) Scrolling morbido e compensazione sticky header per l’ancora */
 html { scroll-behavior: smooth; }
 #catalogo { scroll-margin-top: 72px; } /* altezza approx della topbar sticky */
+/* === HUD: mettilo dietro e alleggerisci === */
+
+/* L’HUD non deve mai bloccare i click */
+#hud, #hud * {
+  pointer-events: none !important;
+}
+
+/* HUD dietro a tutto */
+#hud {
+  position: fixed;          /* sicurezza */
+  inset: 0;
+  z-index: 0 !important;
+}
+
+/* Metti i contenuti sopra */
+.topbar, main, footer {
+  position: relative;
+  z-index: 2;
+}
+
+/* Opacità più leggera (adatta al tuo gusto) */
+#hud .hud-vignette { opacity: 0.18 !important; }   /* vignetta ai bordi */
+#hud .hud-scan, 
+#hud .hud-scanlines { opacity: 0.04 !important; }  /* righe/scansioni */
+#hud .hud-radar { opacity: 0.10 !important; }      /* cerchi radar */
+
+/* Fallback generico, nel caso i nomi layer fossero diversi */
+#hud .hud-layer { opacity: 0.10; }
+
