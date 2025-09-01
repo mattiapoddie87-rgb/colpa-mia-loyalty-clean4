@@ -6,14 +6,14 @@
   <title>Colpa Mia — Scuse On-Demand</title>
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe. Checkout sicuro.">
 
-  <!-- Stili principali del sito (tuoi attuali) -->
-  <link rel="stylesheet" href="styles.css" />
+  <!-- Stili principali del sito -->
+  <link rel="stylesheet" href="/styles.css?v=6" />
 
-  <!-- Nuovo tema/sfondo cyberpunk (CSS) -->
-  <link rel="stylesheet" href="assets/cyberpunk-bg.css">
+  <!-- Tema/sfondo cyberpunk -->
+  <link rel="stylesheet" href="/assets/cyberpunk-bg.css?v=6" />
 </head>
 <body>
-  <!-- Canvas + overlay cyberpunk vengono creati dallo script JS; non serve altro markup -->
+  <!-- Lo sfondo (canvas + overlay) viene creato da /assets/cyberpunk-bg.js -->
 
   <!-- Topbar -->
   <header class="topbar">
@@ -22,7 +22,7 @@
       <nav class="nav">
         <a href="#catalogo">Catalogo</a>
         <a href="#premium">Premium</a>
-        <a href="wallet.html">Wallet</a>
+        <a href="/wallet.html">Wallet</a>
         <a href="#faq">FAQ</a>
       </nav>
     </div>
@@ -66,7 +66,7 @@
 
       <details>
         <summary>Quando vedo i minuti e i punti?</summary>
-        <p>Subito dopo il pagamento. Vai su <a href="wallet.html">Wallet</a>, inserisci la tua email e trovi il totale minuti acquistati e i punti.</p>
+        <p>Subito dopo il pagamento. Vai su <a href="/wallet.html">Wallet</a>, inserisci la tua email e trovi il totale minuti acquistati e i punti.</p>
       </details>
 
       <details>
@@ -93,14 +93,13 @@
     </div>
   </noscript>
 
-  <!-- Script applicazione (i tuoi file esistenti) -->
-  <script src="shop.js" defer></script>
-  <script src="premium.js" defer></script>
+  <!-- Script applicazione -->
+  <script src="/shop.js?v=6" defer></script>
+  <script src="/premium.js?v=6" defer></script>
 
-  <!-- Nuovo sfondo cyberpunk (JS) -->
-  <!-- Se vuoi renderlo statico, scommenta la riga sotto: -->
-  <!-- <script>window.CYBERPUNK_MOTION = false;</script> -->
-  <script src="assets/cyberpunk-bg.js" defer></script>
+  <!-- Sfondo cyberpunk -->
+  <!-- Se vuoi renderlo statico: <script>window.CYBERPUNK_MOTION = false;</script> -->
+  <script src="/assets/cyberpunk-bg.js?v=6" defer></script>
 
   <script>
     // Anno footer + smooth scroll
