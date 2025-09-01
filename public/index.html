@@ -7,10 +7,10 @@
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe. Checkout sicuro.">
 
   <!-- Stili principali del sito -->
-  <link rel="stylesheet" href="/styles.css?v=6" />
+  <link rel="stylesheet" href="/styles.css?v=7" />
 
   <!-- Tema/sfondo cyberpunk -->
-  <link rel="stylesheet" href="/assets/cyberpunk-bg.css?v=6" />
+  <link rel="stylesheet" href="/assets/cyberpunk-bg.css?v=7" />
 </head>
 <body>
   <!-- Lo sfondo (canvas + overlay) viene creato da /assets/cyberpunk-bg.js -->
@@ -40,14 +40,14 @@
       </div>
     </section>
 
-    <!-- Catalogo (montato da shop.js in #grid) -->
+    <!-- Catalogo -->
     <section class="wrap section" id="catalogo" aria-label="Pacchetti">
       <h2>Catalogo</h2>
       <div id="grid" class="grid"></div>
       <div id="msg" class="msg" hidden></div>
     </section>
 
-    <!-- Premium (montato da premium.js in #premium-grid) -->
+    <!-- Premium -->
     <section class="wrap section" id="premium" aria-label="Prodotti Premium">
       <h2>Prodotti Premium (solo con punti)</h2>
       <p class="hero__sub">Sblocca contenuti speciali usando i tuoi minuti accumulati (punti).</p>
@@ -94,12 +94,18 @@
   </noscript>
 
   <!-- Script applicazione -->
-  <script src="/shop.js?v=6" defer></script>
-  <script src="/premium.js?v=6" defer></script>
+  <script src="/shop.js?v=7" defer></script>
+  <script src="/premium.js?v=7" defer></script>
 
-  <!-- Sfondo cyberpunk -->
-  <!-- Se vuoi renderlo statico: <script>window.CYBERPUNK_MOTION = false;</script> -->
-  <script src="/assets/cyberpunk-bg.js?v=6" defer></script>
+  <!-- Sfondo cyberpunk: senza defer per forzare la richiesta -->
+  <script>
+    console.log('[CP] attaching cyberpunk-bg');
+  </script>
+  <script src="/assets/cyberpunk-bg.js?v=7"></script>
+  <script>
+    // Flag per verifica rapida in console
+    console.log('[CP] cyberpunk-bg loaded? ->', !!window.CP_BG_READY);
+  </script>
 
   <script>
     // Anno footer + smooth scroll
