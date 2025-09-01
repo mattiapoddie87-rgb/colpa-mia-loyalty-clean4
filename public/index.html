@@ -7,46 +7,32 @@
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe. Checkout sicuro.">
 
   <!-- I TUOI STILI -->
-  <link rel="stylesheet" href="/styles.css?v=9" />
+  <link rel="stylesheet" href="/styles.css?v=10" />
 
-  <!-- ======= CYBERCITY BACKGROUND (CSS inline) ======= -->
+  <!-- ======= CYBERCITY BACKGROUND (CSS) ======= -->
   <style>
-    /* Canvas a pieno schermo dietro a tutto */
-    #cybercity {
-      position: fixed;
-      inset: 0;
-      z-index: 0;              /* contenuto sopra */
-      width: 100vw;
-      height: 100vh;
-      pointer-events: none;
-      display: block;
+    #cybercity{
+      position:fixed; inset:0; z-index:0;
+      width:100vw; height:100vh; pointer-events:none;
+      display:block;
     }
-    /* Vignettatura/nebbiolina e bagliori */
-    #city-overlay {
-      position: fixed;
-      inset: 0;
-      z-index: 1;
-      pointer-events: none;
+    #city-overlay{
+      position:fixed; inset:0; z-index:1; pointer-events:none;
       background:
-        radial-gradient(1400px 900px at 80% 15%, rgba(0, 255, 248, 0.12), transparent 60%),
-        radial-gradient(1200px 800px at 15% 85%, rgba(245, 20, 140, 0.10), transparent 55%),
+        radial-gradient(1200px 900px at 82% 18%, rgba(0, 255, 248, 0.12), transparent 60%),
+        radial-gradient(1000px 700px at 18% 85%, rgba(245, 20, 140, 0.10), transparent 55%),
         linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.65));
-      mix-blend-mode: screen;
+      mix-blend-mode:screen;
     }
-    /* Riduzione movimento: fondale statico */
-    @media (prefers-reduced-motion: reduce) {
-      #cybercity { display: none; }
-      #city-overlay {
-        background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.75));
-      }
+    @media (prefers-reduced-motion: reduce){
+      #cybercity{ display:none; }
+      #city-overlay{ background:linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.75)); }
     }
-
-    /* Assicura che UI stia sopra il fondale */
-    body > header, body > main, body > footer { position: relative; z-index: 2; }
+    body>header, body>main, body>footer{ position:relative; z-index:2; }
   </style>
 </head>
 <body>
-  <!-- ======= CYBERCITY BACKGROUND (nodi) ======= -->
+  <!-- ======= CYBERCITY BACKGROUND ======= -->
   <canvas id="cybercity"></canvas>
   <div id="city-overlay" aria-hidden="true"></div>
 
@@ -127,135 +113,171 @@
   </noscript>
 
   <!-- I TUOI SCRIPT APP -->
-  <script src="/shop.js?v=9" defer></script>
-  <script src="/premium.js?v=9" defer></script>
+  <script src="/shop.js?v=10" defer></script>
+  <script src="/premium.js?v=10" defer></script>
 
-  <!-- ======= CYBERCITY BACKGROUND (JS inline) ======= -->
+  <!-- ======= CYBERCITY BACKGROUND (JS) ======= -->
   <script>
-  (function () {
+  (function(){
     const canvas = document.getElementById('cybercity');
-    const ctx = canvas.getContext('2d', { alpha: true });
+    const ctx = canvas.getContext('2d', { alpha:true });
 
-    let DPR, W, H;
-    function resize() {
-      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      W = canvas.width  = Math.floor(window.innerWidth  * DPR);
-      H = canvas.height = Math.floor(window.innerHeight * DPR);
-      canvas.style.width = (W / DPR) + 'px';
-      canvas.style.height = (H / DPR) + 'px';
-      ctx.setTransform(1,0,0,1,0,0);
-      // ricostruisci layer prerenderizzati
-      buildAllLayers();
-    }
-    window.addEventListener('resize', resize, { passive: true });
-
-    // ---------- Palette neon
+    const DARK = 'rgba(8,12,20,1)';
     const CYAN  = 'rgba(0,255,255,';
     const MAG   = 'rgba(245,20,140,';
     const AMBER = 'rgba(255,190,0,';
     const WHITE = 'rgba(255,255,255,';
-    const DARK  = 'rgba(8,12,20,1)';
 
-    // ---------- Parametri scena
-    const LAYERS = [
-      { depth: 0.15, fog: 0.6,  density: 90,  windows: 0.10 }, // lontanissimi
-      { depth: 0.35, fog: 0.45, density: 70,  windows: 0.18 },
-      { depth: 0.6,  fog: 0.30, density: 55,  windows: 0.26 }, // medio
-      { depth: 0.9,  fog: 0.15, density: 40,  windows: 0.32 }  // vicino
+    // Settings (puoi ritoccare)
+    const LAYERS_DEF = [
+      { depth:.15, fog:.6,  density:90,  windows:.10 },
+      { depth:.35, fog:.45, density:70,  windows:.18 },
+      { depth:.60, fog:.30, density:55,  windows:.26 },
+      { depth:.90, fog:.16, density:42,  windows:.34 } // foreground (tetti per splash)
     ];
+    const RAIN_COUNT_BASE = 260;
+    const DRONES_COUNT    = 5;
+    const CARS_COUNT      = 8;
+    const ADS_COUNT       = 6;
+    const SPLASH_PARTICLES = 6;
 
-    // offscreen per performance
-    let layerCanvases = [];
-    function buildAllLayers() {
-      layerCanvases = LAYERS.map(makeSkylineLayer);
-      seedAds(); // rigenera ologrammi / light shafts
+    // Stato canvas
+    let DPR=1, W=0, H=0;
+    let layers=[], roofSegments=[]; // tetti del layer più vicino
+    let rain=[], splashes=[], drones=[], cars=[], ads=[];
+    let reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    function resize(){
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = canvas.width  = Math.floor(window.innerWidth  * DPR);
+      H = canvas.height = Math.floor(window.innerHeight * DPR);
+      canvas.style.width  = (W/DPR) + 'px';
+      canvas.style.height = (H/DPR) + 'px';
+      ctx.setTransform(1,0,0,1,0,0);
+      buildScene();
+    }
+    window.addEventListener('resize', resize, { passive:true });
+
+    function buildScene(){
+      layers = buildLayers(LAYERS_DEF);
+      rain = buildRain(reduced ? Math.floor(RAIN_COUNT_BASE*0.5) : RAIN_COUNT_BASE);
+      splashes.length = 0;
+      drones = buildDrones(reduced ? Math.max(2, Math.floor(DRONES_COUNT*0.6)) : DRONES_COUNT);
+      cars   = buildCars(reduced ? Math.max(4, Math.floor(CARS_COUNT*0.6)) : CARS_COUNT);
+      ads    = buildAds(ADS_COUNT);
     }
 
-    // ---------- Skyline prerenderizzato
-    function makeSkylineLayer(set) {
-      const c = document.createElement('canvas');
-      c.width = W; c.height = H;
-      const g = c.getContext('2d');
+    // ------------------------ Util
+    const rand=(a,b)=>Math.random()*(b-a)+a;
+    const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
 
-      const ground = H * (0.55 + (1 - set.depth) * 0.15);
-      g.fillStyle = DARK;
-      g.fillRect(0,0,W,H);
+    // ------------------------ Layers skyline + tetti
+    function buildLayers(defs){
+      roofSegments = [];
+      return defs.map((set, idx)=>{
+        const c = document.createElement('canvas');
+        c.width = W; c.height = H;
+        const g = c.getContext('2d');
+        const ground = H * (0.55 + (1 - set.depth) * 0.15);
 
-      const n = Math.floor((W / 28) * set.density / 100);
-      for (let i=0;i<n;i++) {
-        const w = rand(18, 60) * set.depth * DPR;
-        const h = rand(H*0.12, H*0.45) * set.depth;
-        const x = rand(-50, W + 50);
-        const y = ground - h;
-        // corpo edificio
-        g.fillStyle = 'rgba(12,16,26,'+(0.55+0.35*set.depth)+')';
-        g.fillRect(x,y,w,h);
+        const n = Math.floor((W/28) * set.density/100);
+        const localRoofs = [];
+        for(let i=0;i<n;i++){
+          const w = rand(18,60)*set.depth*DPR;
+          const h = rand(H*.12, H*.45)*set.depth;
+          const x = rand(-50, W+50);
+          const y = ground - h;
 
-        // dettagli verticali
-        g.fillStyle = 'rgba(30,36,56,'+(0.2+0.2*set.depth)+')';
-        for (let k=0;k<rand(1,4);k++) {
-          const vx = x + rand(3, w-6);
-          g.fillRect(vx, y+4, 2*DPR, h-8);
-        }
+          // shape
+          g.fillStyle = 'rgba(12,16,26,'+(0.55+0.35*set.depth)+')';
+          g.fillRect(x,y,w,h);
 
-        // finestre “a griglia” casuali
-        const stepX = 6 * DPR, stepY = 6 * DPR;
-        for (let yy=y+8; yy<y+h-8; yy+=stepY) {
-          for (let xx=x+4; xx<x+w-4; xx+=stepX) {
-            if (Math.random() < set.windows) {
-              const tint = Math.random()<0.6 ? AMBER : (Math.random()<0.5 ? CYAN : MAG);
-              g.fillStyle = tint + (0.18 + 0.35*Math.random()) + ')';
-              g.fillRect(xx, yy, 3*DPR, 2.5*DPR);
+          // dettaglio verticale
+          g.fillStyle = 'rgba(30,36,56,'+(0.2+0.2*set.depth)+')';
+          for(let k=0;k<rand(1,4);k++){
+            const vx = x + rand(3, w-6);
+            g.fillRect(vx, y+4, 2*DPR, h-8);
+          }
+
+          // finestre
+          const stepX = 6*DPR, stepY = 6*DPR;
+          for(let yy=y+8; yy<y+h-8; yy+=stepY){
+            for(let xx=x+4; xx<x+w-4; xx+=stepX){
+              if(Math.random() < set.windows){
+                const tint = Math.random()<0.6 ? AMBER : (Math.random()<0.5 ? CYAN : MAG);
+                g.fillStyle = tint + (0.18 + 0.35*Math.random()) + ')';
+                g.fillRect(xx, yy, 3*DPR, 2.5*DPR);
+              }
             }
           }
+
+          // registra tetti solo sul layer più vicino
+          if(idx === defs.length-1) localRoofs.push({x, y: y-1*DPR, w});
         }
-      }
 
-      // foschia sul layer
-      const fog = g.createLinearGradient(0, 0, 0, H);
-      fog.addColorStop(0,    'rgba(10,14,24,' + (0.15*set.fog) + ')');
-      fog.addColorStop(0.45, 'rgba(10,14,24,' + (0.10*set.fog) + ')');
-      fog.addColorStop(1,    'rgba(10,14,24,' + (0.40*set.fog) + ')');
-      g.fillStyle = fog;
-      g.fillRect(0,0,W,H);
+        // foschia
+        const fog = g.createLinearGradient(0,0,0,H);
+        fog.addColorStop(0,    'rgba(10,14,24,' + (0.15*set.fog) + ')');
+        fog.addColorStop(0.45, 'rgba(10,14,24,' + (0.10*set.fog) + ')');
+        fog.addColorStop(1,    'rgba(10,14,24,' + (0.40*set.fog) + ')');
+        g.fillStyle=fog; g.fillRect(0,0,W,H);
 
-      return { canvas: c, depth: set.depth, fog: set.fog, ground };
+        if(localRoofs.length) roofSegments = localRoofs;
+        return { canvas:c, depth:set.depth };
+      });
     }
 
-    // ---------- Ologrammi / fasci di luce (procedurali)
-    let ads = [];
-    function seedAds() {
-      ads = [];
-      const count = 6;
-      for (let i=0;i<count;i++) {
-        ads.push({
-          x: rand(0, W),
-          y: rand(H*0.15, H*0.55),
-          w: rand(110, 220)*DPR,
-          h: rand(70, 160)*DPR,
+    // ------------------------ Ads con testo scorrevole
+    const SLOGANS = [
+      'COLPA MIA // SCUSE ON-DEMAND',
+      'LA SCUSA PERFETTA IN 10 SECONDI',
+      'WALLET + PUNTI = POTERI SPECIALI',
+      'NEON // PRIVACY // STRIPE SECURE',
+      'JUSTIFY ANY LATE.™',
+    ];
+    function buildAds(n){
+      const arr=[];
+      for(let i=0;i<n;i++){
+        arr.push({
+          x: rand(0, W), y: rand(H*.15, H*.55),
+          w: rand(110,220)*DPR, h: rand(70,160)*DPR,
           hue: [CYAN,MAG,AMBER][(Math.random()*3)|0],
           alpha: rand(0.12, 0.24),
           flicker: rand(0.015, 0.045),
+          text: SLOGANS[(Math.random()*SLOGANS.length)|0],
+          scroll: rand(0, 400)*DPR, speed: rand(24, 48)*DPR,
           beam: Math.random()<0.7
         });
       }
+      return arr;
     }
-    function drawAds(t) {
-      ctx.globalCompositeOperation = 'screen';
-      for (const ad of ads) {
-        // billboard
+    function drawAds(t){
+      ctx.save(); ctx.globalCompositeOperation='screen';
+      for(const ad of ads){
         const A = ad.alpha + Math.sin(t*ad.flicker)*0.06;
-        ctx.fillStyle = ad.hue + clamp(A, 0, 0.4) + ')';
+        ctx.fillStyle = ad.hue + clamp(A, 0, 0.45) + ')';
         ctx.fillRect(ad.x, ad.y, ad.w, ad.h);
 
-        // righe orizzontali “scanlines”
-        ctx.fillStyle = WHITE + '0.05)';
-        for (let y=ad.y; y<ad.y+ad.h; y+=6*DPR) {
-          ctx.fillRect(ad.x, y, ad.w, 1*DPR);
-        }
+        // scanlines
+        ctx.fillStyle = WHITE + '0.06)';
+        for(let y=ad.y; y<ad.y+ad.h; y+=6*DPR) ctx.fillRect(ad.x, y, ad.w, 1*DPR);
 
-        // fasci luce
-        if (ad.beam) {
+        // testo scorrevole dentro il pannello
+        ctx.save();
+        ctx.beginPath(); ctx.rect(ad.x, ad.y, ad.w, ad.h); ctx.clip();
+        ctx.font = `${12*DPR}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
+        ctx.fillStyle = WHITE + '0.8)';
+        ctx.shadowColor = WHITE + '0.45)'; ctx.shadowBlur = 6*DPR;
+        ad.scroll -= ad.speed * 0.016; // ~60fps
+        const tw = ctx.measureText(ad.text).width + 40*DPR;
+        let sx = ad.x + (ad.scroll % tw);
+        for(; sx < ad.x + ad.w + tw; sx += tw){
+          ctx.fillText(ad.text, sx, ad.y + ad.h/2 + 4*DPR);
+        }
+        ctx.restore();
+
+        // fascio verticale
+        if(ad.beam){
           const g = ctx.createLinearGradient(ad.x+ad.w/2, ad.y+ad.h, ad.x+ad.w/2, H);
           g.addColorStop(0, ad.hue + '0.20)');
           g.addColorStop(1, 'rgba(0,0,0,0)');
@@ -263,154 +285,192 @@
           ctx.fillRect(ad.x+ad.w/2 - 2*DPR, ad.y+ad.h, 4*DPR, H);
         }
       }
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.restore();
     }
 
-    // ---------- Pioggia
-    const RAIN_COUNT = 260;
-    let rain = [];
-    function resetDrop(d) {
-      d.x = Math.random() * W;
-      d.y = -rand(0, H);
-      const s = rand(0.65, 1.35);
-      d.vx =  -120 * s * DPR;
-      d.vy =  480 * s * DPR;
-      d.len = rand(12,22) * s * DPR;
-      d.alpha = rand(0.08, 0.18);
-    }
-    function buildRain() {
-      rain = new Array(RAIN_COUNT);
-      for (let i=0;i<RAIN_COUNT;i++) {
-        const d = {}; resetDrop(d); d.y = Math.random()*H;
-        rain[i] = d;
+    // ------------------------ Pioggia + splash sui tetti
+    function buildRain(n){
+      const arr = new Array(n);
+      for(let i=0;i<n;i++){
+        const d={}; resetDrop(d); d.y=Math.random()*H; arr[i]=d;
       }
+      return arr;
     }
-    function drawRain(dt) {
-      ctx.globalCompositeOperation = 'screen';
-      ctx.strokeStyle = WHITE + '0.25)';
-      ctx.lineWidth = DPR;
+    function resetDrop(d){
+      d.x = Math.random()*W; d.y = -rand(0,H);
+      const s = rand(.65,1.35);
+      d.vx = -120*s*DPR; d.vy = 480*s*DPR;
+      d.len = rand(12,22)*s*DPR;
+    }
+    function drawRain(dt){
+      ctx.save(); ctx.globalCompositeOperation='screen';
+      ctx.strokeStyle = WHITE+'0.25)'; ctx.lineWidth = DPR;
       ctx.beginPath();
-      for (const d of rain) {
-        d.x += d.vx * dt; d.y += d.vy * dt;
-        const x2 = d.x - d.vx * 0.035, y2 = d.y - d.vy * 0.035;
-        ctx.moveTo(d.x, d.y);
-        ctx.lineTo(x2, y2);
-        if (d.y > H || d.x < -50) resetDrop(d);
+      for(const d of rain){
+        const ox=d.x, oy=d.y;
+        d.x += d.vx*dt; d.y += d.vy*dt;
+
+        // Collisione con tetti front layer?
+        // (test semplice: se supera y del tetto e x nel range)
+        for(const r of roofSegments){
+          if(d.y >= r.y && d.x >= r.x && d.x <= r.x + r.w){
+            spawnSplash(d.x, r.y);
+            resetDrop(d);
+            break;
+          }
+        }
+
+        const x2 = d.x - d.vx * .035, y2 = d.y - d.vy * .035;
+        ctx.moveTo(d.x, d.y); ctx.lineTo(x2, y2);
+
+        if(d.y>H || d.x<-50) resetDrop(d);
       }
-      ctx.stroke();
-      ctx.globalCompositeOperation = 'source-over';
+      ctx.stroke(); ctx.restore();
+
+      // splashes
+      for(let i=splashes.length-1; i>=0; i--){
+        const s = splashes[i];
+        s.vy += 980*DPR*dt*0.4; // gravità attenuata
+        s.x += s.vx*dt; s.y += s.vy*dt; s.life -= dt;
+        const a = clamp(s.life/s.max, 0, 1)*.8;
+        ctx.fillStyle = WHITE + a + ')';
+        ctx.fillRect(s.x, s.y, 2*DPR, 2*DPR);
+        if(s.life<=0) splashes.splice(i,1);
+      }
     }
-
-    // ---------- Flying cars
-    const CARS = [];
-    function makeCar() {
-      const side = Math.random()<0.5 ? -1 : 1; // sx->dx o dx->sx
-      const y = rand(H*0.25, H*0.55);
-      const speed = rand(110, 220) * DPR * (side<0 ? 1 : -1);
-      return {
-        x: side<0 ? -80*DPR : W+80*DPR, y,
-        vx: speed, wob: rand(0.8,1.8), t0: Math.random()*1000,
-        hue: Math.random()<0.5 ? CYAN : MAG
-      };
-    }
-    for (let i=0;i<8;i++) CARS.push(makeCar());
-
-    function drawCar(c, t) {
-      const wob = Math.sin((t + c.t0) * 0.002*c.wob) * 6*DPR;
-      const x = c.x, y = c.y + wob;
-
-      // scia posteriore (glow)
-      ctx.globalCompositeOperation = 'screen';
-      const grad = ctx.createLinearGradient(x, y, x - Math.sign(c.vx)*90*DPR, y+wob*0.1);
-      grad.addColorStop(0, c.hue + '0.55)');
-      grad.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(x - Math.sign(c.vx)*80*DPR, y-2*DPR, Math.sign(c.vx)*80*DPR, 4*DPR);
-
-      // scafo
-      ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = 'rgba(28,34,52,0.9)';
-      ctx.beginPath();
-      ctx.ellipse(x, y, 14*DPR, 7.5*DPR, 0, 0, Math.PI*2);
-      ctx.fill();
-      // cabine/led
-      ctx.fillStyle = WHITE + '0.7)';
-      ctx.fillRect(x-4*DPR, y-2*DPR, 8*DPR, 4*DPR);
-      // lampeggianti
-      ctx.fillStyle = MAG + '0.8)';   ctx.fillRect(x-12*DPR, y-1.5*DPR, 3*DPR, 3*DPR);
-      ctx.fillStyle = CYAN + '0.8)';  ctx.fillRect(x+9*DPR,  y-1.5*DPR, 3*DPR, 3*DPR);
-
-      ctx.globalCompositeOperation = 'source-over';
-    }
-
-    // ---------- Lampi
-    let flash = 0;
-    function maybeLightning() {
-      if (Math.random() < 0.003) flash = 1.0;
-      if (flash > 0) {
-        ctx.fillStyle = WHITE + (0.12 * flash) + ')';
-        ctx.fillRect(0,0,W,H);
-        flash *= 0.88;
+    function spawnSplash(x,y){
+      for(let i=0;i<SPLASH_PARTICLES;i++){
+        const a = rand(-Math.PI*.9, -Math.PI*.2);
+        const sp = rand(90, 220)*DPR;
+        splashes.push({
+          x, y: y-1*DPR,
+          vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
+          max: rand(.15,.30), life: rand(.15,.30)
+        });
       }
     }
 
-    // ---------- Util
-    function rand(a,b){ return Math.random()*(b-a)+a; }
-    function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
-
-    // ---------- Build iniziale
-    resize(); buildRain();
-
-    // ---------- Loop
-    let last = performance.now();
-    function frame(now) {
-      const dt = Math.min(0.034, (now-last)/1000); last = now;
-
-      // sfondo base scuro
-      ctx.globalCompositeOperation = 'source-over';
-      ctx.fillStyle = DARK; ctx.fillRect(0,0,W,H);
-
-      // skyline parallax (scorrimento lentissimo per “vita”)
-      for (let i=0;i<layerCanvases.length;i++) {
-        const L = layerCanvases[i];
-        const par = (now*0.00003) * L.depth * W;
-        const x = - (par % W);
-        ctx.globalAlpha = 1;
-        ctx.drawImage(L.canvas, x, 0);
-        ctx.drawImage(L.canvas, x + W, 0);
+    // ------------------------ Droni con fari di ricerca
+    function buildDrones(n){
+      const arr=[];
+      for(let i=0;i<n;i++){
+        arr.push({
+          x: rand(0,W), y: rand(H*.18,H*.48),
+          vx: rand(-80,80)*DPR, vy: rand(-30,30)*DPR,
+          beamDir: rand(-.7,.7), beamRotSpeed: rand(.2,.6),
+          hue: Math.random()<.5 ? CYAN : MAG, phase: Math.random()*1000
+        });
       }
+      return arr;
+    }
+    function drawDrones(t, dt){
+      ctx.save();
+      for(const d of drones){
+        // small wander
+        d.x += d.vx*dt; d.y += d.vy*dt;
+        if(d.x<40*DPR||d.x>W-40*DPR) d.vx*=-1;
+        if(d.y<H*.18||d.y>H*.6)     d.vy*=-1;
 
-      // ologrammi / fasci luce
-      drawAds(now);
+        // beam oscillante
+        d.beamDir += Math.sin((t+d.phase)*0.001)*0.002*d.beamRotSpeed;
+        const B = 120*DPR;
+        const dx = Math.cos(d.beamDir)*B, dy = Math.sin(d.beamDir)*B;
+        const gx = ctx.createLinearGradient(d.x, d.y, d.x+dx, d.y+dy);
+        gx.addColorStop(0, d.hue+'0.28)');
+        gx.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.globalCompositeOperation='screen';
+        ctx.fillStyle=gx;
+        ctx.beginPath();
+        ctx.moveTo(d.x-3*DPR, d.y);
+        ctx.lineTo(d.x+3*DPR, d.y);
+        ctx.lineTo(d.x+dx, d.y+dy);
+        ctx.closePath(); ctx.fill();
 
-      // pioggia
-      drawRain(dt);
+        // corpo drone
+        ctx.globalCompositeOperation='lighter';
+        ctx.fillStyle='rgba(26,32,50,.95)';
+        ctx.beginPath(); ctx.arc(d.x, d.y, 6*DPR, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle=WHITE+'0.8)'; ctx.fillRect(d.x-3*DPR, d.y-2*DPR, 6*DPR, 4*DPR);
 
-      // auto volanti
-      for (const c of CARS) {
-        c.x += c.vx * dt;
-        drawCar(c, now);
-        if (c.vx<0 && c.x < -120*DPR || c.vx>0 && c.x > W+120*DPR) {
-          const idx = CARS.indexOf(c);
-          CARS[idx] = makeCar();
+        // rotori (anelli)
+        ctx.strokeStyle=d.hue+'0.7)'; ctx.lineWidth=1.5*DPR;
+        ctx.beginPath(); ctx.arc(d.x-8*DPR, d.y-6*DPR, 3*DPR, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(d.x+8*DPR, d.y-6*DPR, 3*DPR, 0, Math.PI*2); ctx.stroke();
+      }
+      ctx.restore();
+    }
+
+    // ------------------------ Auto volanti (come prima)
+    function buildCars(n){ const arr=[]; for(let i=0;i<n;i++) arr.push(makeCar()); return arr; }
+    function makeCar(){
+      const side = Math.random()<.5 ? -1 : 1;
+      const y = rand(H*.25,H*.55);
+      const speed = rand(110,220)*DPR*(side<0?1:-1);
+      return { x: side<0 ? -80*DPR : W+80*DPR, y, vx:speed, wob: rand(.8,1.8), t0: Math.random()*1000, hue: Math.random()<.5?CYAN:MAG };
+    }
+    function drawCars(t, dt){
+      for(const c of cars){
+        const wob = Math.sin((t + c.t0)*0.002*c.wob)*6*DPR;
+        const x=c.x, y=c.y+wob; c.x += c.vx*dt;
+
+        // scia
+        ctx.globalCompositeOperation='screen';
+        const grad = ctx.createLinearGradient(x, y, x - Math.sign(c.vx)*90*DPR, y+wob*.1);
+        grad.addColorStop(0, c.hue+'0.55)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
+        ctx.fillStyle=grad;
+        ctx.fillRect(x - Math.sign(c.vx)*80*DPR, y-2*DPR, Math.sign(c.vx)*80*DPR, 4*DPR);
+
+        // scafo
+        ctx.globalCompositeOperation='lighter';
+        ctx.fillStyle='rgba(28,34,52,.9)';
+        ctx.beginPath(); ctx.ellipse(x,y,14*DPR,7.5*DPR,0,0,Math.PI*2); ctx.fill();
+
+        ctx.fillStyle=WHITE+'0.75)'; ctx.fillRect(x-4*DPR,y-2*DPR,8*DPR,4*DPR);
+        ctx.fillStyle=MAG+'0.85)';   ctx.fillRect(x-12*DPR,y-1.5*DPR,3*DPR,3*DPR);
+        ctx.fillStyle=CYAN+'0.85)';  ctx.fillRect(x+9*DPR,y-1.5*DPR,3*DPR,3*DPR);
+
+        if((c.vx<0 && c.x<-120*DPR) || (c.vx>0 && c.x>W+120*DPR)){
+          const i=cars.indexOf(c); cars[i]=makeCar();
         }
       }
+    }
 
-      // lampi
+    // ------------------------ Lampi sporadici
+    let flash=0;
+    function maybeLightning(){
+      if(Math.random()<.003) flash=1;
+      if(flash>0){ ctx.fillStyle = WHITE + (.12*flash) + ')'; ctx.fillRect(0,0,W,H); flash*=.88; }
+    }
+
+    // ------------------------ Loop
+    let last=performance.now();
+    function frame(now){
+      const dt = Math.min(.034,(now-last)/1000); last=now;
+
+      // sfondo base
+      ctx.globalCompositeOperation='source-over';
+      ctx.fillStyle=DARK; ctx.fillRect(0,0,W,H);
+
+      // parallax layers
+      for(const L of layers){
+        const par = (now*0.00003)*L.depth*W;
+        const x = -(par % W);
+        ctx.drawImage(L.canvas, x, 0);
+        ctx.drawImage(L.canvas, x+W, 0);
+      }
+
+      drawAds(now);
+      drawRain(dt);
+      drawDrones(now, dt);
+      drawCars(now, dt);
       maybeLightning();
 
       requestAnimationFrame(frame);
     }
-    requestAnimationFrame(frame);
 
-    // pausa quando tab non visibile
-    document.addEventListener('visibilitychange', () => {
-      if (document.hidden) last = performance.now();
-    });
-
-    // debug flag
-    window.CITY_BG_READY = true;
-    console.log('[CityBG] ready');
+    // init
+    resize(); requestAnimationFrame(frame);
+    document.addEventListener('visibilitychange', ()=>{ if(document.hidden) last=performance.now(); });
   })();
   </script>
 
