@@ -1,44 +1,56 @@
-/* =========================================================
-   COLPA MIA — HUD “CIRCUITS”
-   Sostituisce completamente il vecchio sfondo.
-   - Niente radiale/scurimento
-   - Niente movimento che blocca la UI
-   - Canvas sempre dietro, non cliccabile
-   ========================================================= */
+/* === HUD FUTURISTICO A CIRCUITI (rev. neon) ============================== */
 
-/* Spegni qualsiasi vecchio layer eventualmente ancora in pagina */
-#bg, .stripes, .glow { display: none !important; }
-
-/* Palette + base */
 :root{
-  --bg: #0b0e12;
-  --line: #0a1624;   /* piste statiche molto leggere */
-  --node: #102235;   /* nodi circuitali */
-  --pulseA: #38bdf8; /* impulsi (azzurro) */
-  --pulseB: #22d3ee; /* impulsi (ciano) */
+  --board-deep: #050b11;   /* base molto scura */
+  --board-mid:  #081522;   /* sfumatura */
+  --glow-cyan:  #08e8ff;   /* ciano neon */
+  --glow-blue:  #00d7ff;
+  --glow-amber: #ffb100;   /* arancio neon */
+  --glow-orange:#ff7a00;
 }
 
-html, body {
-  background: var(--bg);
+/* sfondo “motherboard”: gradienti + vignette, sempre dietro al contenuto */
+html, body{
+  height:100%;
+  background:
+    radial-gradient(1200px 800px at 15% 15%, rgba(185, 40, 255, .20), transparent 60%),
+    radial-gradient(1200px 900px at 85% 20%, rgba(0, 180, 255, .18), transparent 55%),
+    linear-gradient(160deg, var(--board-deep) 0%, var(--board-mid) 100%);
+  color-scheme: dark;
 }
 
-/* Canvas del circuito: sempre dietro, trasparente ai click */
-#circuits {
-  position: fixed;
-  inset: 0;
-  z-index: 0 !important;
-  pointer-events: none !important;
-  display: block;
+/* vignette leggera ai bordi */
+body::after{
+  content:"";
+  position:fixed; inset:0;
+  pointer-events:none;
+  background: radial-gradient(80% 80% at 50% 50%, transparent 60%, rgba(0,0,0,.35) 100%);
+  z-index:0;
 }
 
-/* I contenuti stanno sopra */
-.topbar, main, footer {
-  position: relative;
-  z-index: 2;
-  isolation: isolate; /* evita blending strani con il canvas */
+/* canvas dei circuiti */
+#circuits{
+  position:fixed; inset:0;
+  width:100%; height:100%;
+  z-index:0;                         /* dietro al contenuto */
+  pointer-events:none;
+  filter: saturate(115%) contrast(110%); /* colori più vivi */
 }
 
-/* Accessibilità: se l’utente preferisce meno movimento, resterà statico */
-@media (prefers-reduced-motion: reduce) {
-  #circuits { animation: none !important; }
+/* il contenuto deve stare davanti */
+header, main, footer, .wrap, .topbar{
+  position:relative; z-index:1;
+}
+
+/* disattiva i vecchi layer (bg.js, stripes, glow) se ancora presenti */
+#bg, .stripes, .glow{ display:none !important; }
+
+/* piccoli tocchi di UI coerenti */
+.btn--primary{
+  box-shadow: 0 0 0 0 rgba(8, 232, 255, .6);
+  transition: box-shadow .25s ease, transform .25s ease;
+}
+.btn--primary:hover{
+  transform: translateY(-1px);
+  box-shadow: 0 0 25px 0 rgba(8, 232, 255, .35);
 }
