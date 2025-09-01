@@ -140,4 +140,40 @@ html { scroll-behavior: smooth; }
 
 /* Fallback generico, nel caso i nomi layer fossero diversi */
 #hud .hud-layer { opacity: 0.10; }
+/* === HUD 2100: sempre dietro, non scurire la UI, non catturare click === */
+
+/* 1) L’HUD non deve mai bloccare gli input */
+#hud, #hud * {
+  pointer-events: none !important;
+  mix-blend-mode: normal !important;  /* evita darken/multiply che scuriscono tutto */
+  filter: none !important;
+}
+
+/* 2) Dietro a tutto */
+#hud {
+  position: fixed;
+  inset: 0;
+  z-index: 0 !important;
+}
+.topbar, main, footer {
+  position: relative;
+  z-index: 2;
+}
+
+/* 3) Cap globale dell’opacità dei layer HUD (più leggero) */
+#hud > * { opacity: .06 !important; }
+
+/* 4) Tuning mirato (matcha nomi comuni + data-attr) */
+#hud [class*="vignette"],  #hud [data-layer*="vignette"]  { opacity: .10 !important; }
+#hud [class*="scan"],      #hud [class*="line"]           { opacity: .03 !important; }
+#hud [class*="radar"],     #hud [data-layer*="radar"]     { opacity: .08 !important; }
+
+/* 5) Se lo script disegna un overlay/mask scuro, lo spengo del tutto */
+#hud .cover, #hud [class*="mask"], #hud [class*="overlay"] { display: none !important; }
+
+/* (opzionale) aumenta il contrasto di sfondo per i contenuti */
+body {
+  background: radial-gradient(1000px 700px at 70% 120%, #0b1922 0%, #0b1016 60%, #0a0e13 100%) fixed;
+}
+
 
