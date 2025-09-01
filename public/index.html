@@ -6,46 +6,49 @@
   <title>Colpa Mia — Scuse On-Demand</title>
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe. Checkout sicuro.">
 
-  <!-- Stili principali del sito -->
-  <link rel="stylesheet" href="/styles.css?v=8" />
+  <!-- I TUOI STILI -->
+  <link rel="stylesheet" href="/styles.css?v=9" />
 
-  <!-- ======= CYBERPUNK BACKGROUND (INLINE CSS) ======= -->
+  <!-- ======= CYBERCITY BACKGROUND (CSS inline) ======= -->
   <style>
-    /* Canvas fisso dietro a tutto */
-    #cp-bg-canvas {
+    /* Canvas a pieno schermo dietro a tutto */
+    #cybercity {
       position: fixed;
       inset: 0;
-      z-index: 0;           /* dietro a tutto il contenuto (che ha z-index auto/1) */
-      pointer-events: none; /* non blocca click/scroll */
+      z-index: 0;              /* contenuto sopra */
       width: 100vw;
       height: 100vh;
+      pointer-events: none;
       display: block;
     }
-    /* Vignettatura/gradiente leggero sopra il canvas per contrasto */
-    #cp-bg-overlay {
+    /* Vignettatura/nebbiolina e bagliori */
+    #city-overlay {
       position: fixed;
       inset: 0;
       z-index: 1;
       pointer-events: none;
       background:
-        radial-gradient(1200px 800px at 80% 20%, rgba(0,255,255,0.15), transparent 60%),
-        radial-gradient(900px 700px at 20% 80%, rgba(255,0,180,0.12), transparent 60%),
-        linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.6));
-      mix-blend-mode: screen; /* dona un glow leggero */
+        radial-gradient(1400px 900px at 80% 15%, rgba(0, 255, 248, 0.12), transparent 60%),
+        radial-gradient(1200px 800px at 15% 85%, rgba(245, 20, 140, 0.10), transparent 55%),
+        linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.65));
+      mix-blend-mode: screen;
     }
-    /* Riduci animazione se l’utente lo richiede */
+    /* Riduzione movimento: fondale statico */
     @media (prefers-reduced-motion: reduce) {
-      #cp-bg-canvas { display: none; }
-      #cp-bg-overlay { background: linear-gradient(180deg, rgba(0,0,0,0.4), rgba(0,0,0,0.65)); }
+      #cybercity { display: none; }
+      #city-overlay {
+        background: linear-gradient(180deg, rgba(0,0,0,0.45), rgba(0,0,0,0.75));
+      }
     }
-    /* Il resto del tuo layout deve stare sopra (z-index naturale) */
+
+    /* Assicura che UI stia sopra il fondale */
     body > header, body > main, body > footer { position: relative; z-index: 2; }
   </style>
 </head>
 <body>
-  <!-- ======= CYBERPUNK BACKGROUND (INLINE NODES) ======= -->
-  <canvas id="cp-bg-canvas"></canvas>
-  <div id="cp-bg-overlay" aria-hidden="true"></div>
+  <!-- ======= CYBERCITY BACKGROUND (nodi) ======= -->
+  <canvas id="cybercity"></canvas>
+  <div id="city-overlay" aria-hidden="true"></div>
 
   <!-- Topbar -->
   <header class="topbar">
@@ -65,9 +68,7 @@
     <section class="hero">
       <div class="wrap">
         <h1 class="hero__title">Trova sempre la scusa perfetta</h1>
-        <p class="hero__sub">
-          Ricarica “Minuti di Vita” in 10 secondi. Checkout sicuro con Stripe. Zero complicazioni.
-        </p>
+        <p class="hero__sub">Ricarica “Minuti di Vita” in 10 secondi. Checkout sicuro con Stripe. Zero complicazioni.</p>
         <a class="btn btn--xl btn--primary" href="#premium">🔒 Scopri i pacchetti premium</a>
       </div>
     </section>
@@ -121,146 +122,300 @@
 
   <noscript>
     <div style="position:fixed;bottom:0;left:0;right:0;background:#111;color:#fff;padding:.75rem 1rem;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif;z-index:9999;">
-      Questo sito usa JavaScript per il catalogo e lo sfondo dinamico. Abilitalo per la migliore esperienza.
+      Questo sito usa JavaScript per il catalogo e il fondale dinamico. Abilitalo per la migliore esperienza.
     </div>
   </noscript>
 
-  <!-- Script applicazione -->
-  <script src="/shop.js?v=8" defer></script>
-  <script src="/premium.js?v=8" defer></script>
+  <!-- I TUOI SCRIPT APP -->
+  <script src="/shop.js?v=9" defer></script>
+  <script src="/premium.js?v=9" defer></script>
 
-  <!-- ======= CYBERPUNK BACKGROUND (INLINE JS) ======= -->
+  <!-- ======= CYBERCITY BACKGROUND (JS inline) ======= -->
   <script>
-    (function () {
-      const canvas = document.getElementById('cp-bg-canvas');
-      const ctx = canvas.getContext('2d', { alpha: true });
-      let w = canvas.width = window.innerWidth;
-      let h = canvas.height = window.innerHeight;
+  (function () {
+    const canvas = document.getElementById('cybercity');
+    const ctx = canvas.getContext('2d', { alpha: true });
 
-      // Griglia “pcb”
-      const GRID = 34;        // dimensione celle
-      const LINES = 70;       // quante tracce simultanee
-      const SPEED = 0.9;      // velocità animazione
-      const PULSE_CHANCE = 0.02; // probabilità di bagliore locale
-      const colors = [
-        'rgba(0,255,255,',    // cyan
-        'rgba(255,0,180,',    // magenta
-        'rgba(255,190,0,'     // amber
-      ];
+    let DPR, W, H;
+    function resize() {
+      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
+      W = canvas.width  = Math.floor(window.innerWidth  * DPR);
+      H = canvas.height = Math.floor(window.innerHeight * DPR);
+      canvas.style.width = (W / DPR) + 'px';
+      canvas.style.height = (H / DPR) + 'px';
+      ctx.setTransform(1,0,0,1,0,0);
+      // ricostruisci layer prerenderizzati
+      buildAllLayers();
+    }
+    window.addEventListener('resize', resize, { passive: true });
 
-      // Precompute nodi della griglia
-      let cols, rows, nodes;
-      function buildGrid() {
-        cols = Math.ceil(w / GRID) + 2;
-        rows = Math.ceil(h / GRID) + 2;
-        nodes = new Array(cols * rows);
-        for (let y = 0; y < rows; y++) {
-          for (let x = 0; x < cols; x++) {
-            const i = y * cols + x;
-            nodes[i] = {
-              x: x * GRID - GRID/2,
-              y: y * GRID - GRID/2
-            };
+    // ---------- Palette neon
+    const CYAN  = 'rgba(0,255,255,';
+    const MAG   = 'rgba(245,20,140,';
+    const AMBER = 'rgba(255,190,0,';
+    const WHITE = 'rgba(255,255,255,';
+    const DARK  = 'rgba(8,12,20,1)';
+
+    // ---------- Parametri scena
+    const LAYERS = [
+      { depth: 0.15, fog: 0.6,  density: 90,  windows: 0.10 }, // lontanissimi
+      { depth: 0.35, fog: 0.45, density: 70,  windows: 0.18 },
+      { depth: 0.6,  fog: 0.30, density: 55,  windows: 0.26 }, // medio
+      { depth: 0.9,  fog: 0.15, density: 40,  windows: 0.32 }  // vicino
+    ];
+
+    // offscreen per performance
+    let layerCanvases = [];
+    function buildAllLayers() {
+      layerCanvases = LAYERS.map(makeSkylineLayer);
+      seedAds(); // rigenera ologrammi / light shafts
+    }
+
+    // ---------- Skyline prerenderizzato
+    function makeSkylineLayer(set) {
+      const c = document.createElement('canvas');
+      c.width = W; c.height = H;
+      const g = c.getContext('2d');
+
+      const ground = H * (0.55 + (1 - set.depth) * 0.15);
+      g.fillStyle = DARK;
+      g.fillRect(0,0,W,H);
+
+      const n = Math.floor((W / 28) * set.density / 100);
+      for (let i=0;i<n;i++) {
+        const w = rand(18, 60) * set.depth * DPR;
+        const h = rand(H*0.12, H*0.45) * set.depth;
+        const x = rand(-50, W + 50);
+        const y = ground - h;
+        // corpo edificio
+        g.fillStyle = 'rgba(12,16,26,'+(0.55+0.35*set.depth)+')';
+        g.fillRect(x,y,w,h);
+
+        // dettagli verticali
+        g.fillStyle = 'rgba(30,36,56,'+(0.2+0.2*set.depth)+')';
+        for (let k=0;k<rand(1,4);k++) {
+          const vx = x + rand(3, w-6);
+          g.fillRect(vx, y+4, 2*DPR, h-8);
+        }
+
+        // finestre “a griglia” casuali
+        const stepX = 6 * DPR, stepY = 6 * DPR;
+        for (let yy=y+8; yy<y+h-8; yy+=stepY) {
+          for (let xx=x+4; xx<x+w-4; xx+=stepX) {
+            if (Math.random() < set.windows) {
+              const tint = Math.random()<0.6 ? AMBER : (Math.random()<0.5 ? CYAN : MAG);
+              g.fillStyle = tint + (0.18 + 0.35*Math.random()) + ')';
+              g.fillRect(xx, yy, 3*DPR, 2.5*DPR);
+            }
           }
         }
       }
-      buildGrid();
 
-      function rnd(a, b) { return Math.random() * (b - a) + a; }
-      function pick(arr) { return arr[(Math.random() * arr.length) | 0]; }
+      // foschia sul layer
+      const fog = g.createLinearGradient(0, 0, 0, H);
+      fog.addColorStop(0,    'rgba(10,14,24,' + (0.15*set.fog) + ')');
+      fog.addColorStop(0.45, 'rgba(10,14,24,' + (0.10*set.fog) + ')');
+      fog.addColorStop(1,    'rgba(10,14,24,' + (0.40*set.fog) + ')');
+      g.fillStyle = fog;
+      g.fillRect(0,0,W,H);
 
-      // “Tracce” in movimento sulla griglia
-      function makeTrace() {
-        return {
-          x: (Math.random() * cols) | 0,
-          y: (Math.random() * rows) | 0,
-          dir: (Math.random() * 4) | 0, // 0=E 1=S 2=W 3=N
-          life: rnd(60, 220),
-          hue: pick(colors),
-          w: rnd(1.2, 2.2),
-          glow: rnd(8, 18),
-          alpha: rnd(0.25, 0.55)
-        };
+      return { canvas: c, depth: set.depth, fog: set.fog, ground };
+    }
+
+    // ---------- Ologrammi / fasci di luce (procedurali)
+    let ads = [];
+    function seedAds() {
+      ads = [];
+      const count = 6;
+      for (let i=0;i<count;i++) {
+        ads.push({
+          x: rand(0, W),
+          y: rand(H*0.15, H*0.55),
+          w: rand(110, 220)*DPR,
+          h: rand(70, 160)*DPR,
+          hue: [CYAN,MAG,AMBER][(Math.random()*3)|0],
+          alpha: rand(0.12, 0.24),
+          flicker: rand(0.015, 0.045),
+          beam: Math.random()<0.7
+        });
       }
-      const traces = Array.from({ length: LINES }, makeTrace);
+    }
+    function drawAds(t) {
+      ctx.globalCompositeOperation = 'screen';
+      for (const ad of ads) {
+        // billboard
+        const A = ad.alpha + Math.sin(t*ad.flicker)*0.06;
+        ctx.fillStyle = ad.hue + clamp(A, 0, 0.4) + ')';
+        ctx.fillRect(ad.x, ad.y, ad.w, ad.h);
 
-      function step(t) {
-        // Fade morbido dello sfondo per “scie”
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.fillStyle = 'rgba(5,10,18,0.28)'; // base scura
-        ctx.fillRect(0, 0, w, h);
-
-        ctx.globalCompositeOperation = 'lighter';
-        for (let tr of traces) {
-          // piccola possibilità di impulso locale
-          if (Math.random() < PULSE_CHANCE) tr.glow = rnd(12, 28);
-
-          // disegna un segmento
-          const i = tr.y * cols + tr.x;
-          const n = nodes[i];
-          if (!n) { Object.assign(tr, makeTrace()); continue; }
-
-          ctx.lineWidth = tr.w;
-          ctx.shadowBlur = tr.glow;
-          ctx.shadowColor = tr.hue + '1)';
-          ctx.strokeStyle = tr.hue + tr.alpha + ')';
-
-          ctx.beginPath();
-          ctx.moveTo(n.x, n.y);
-
-          // direzione
-          if (tr.dir === 0) tr.x++;
-          else if (tr.dir === 1) tr.y++;
-          else if (tr.dir === 2) tr.x--;
-          else tr.y--;
-
-          // cambio direzione casuale ogni tanto
-          if (Math.random() < 0.25) {
-            tr.dir = (tr.dir + (Math.random() < 0.5 ? 1 : 3)) & 3;
-          }
-
-          // clamp & respawn se esce
-          tr.x = Math.max(0, Math.min(cols - 1, tr.x));
-          tr.y = Math.max(0, Math.min(rows - 1, tr.y));
-          const j = tr.y * cols + tr.x;
-          const m = nodes[j];
-          ctx.lineTo(m.x, m.y);
-          ctx.stroke();
-
-          tr.life -= SPEED;
-          if (tr.life <= 0 || j === i) {
-            Object.assign(tr, makeTrace());
-          }
+        // righe orizzontali “scanlines”
+        ctx.fillStyle = WHITE + '0.05)';
+        for (let y=ad.y; y<ad.y+ad.h; y+=6*DPR) {
+          ctx.fillRect(ad.x, y, ad.w, 1*DPR);
         }
-        requestAnimationFrame(step);
+
+        // fasci luce
+        if (ad.beam) {
+          const g = ctx.createLinearGradient(ad.x+ad.w/2, ad.y+ad.h, ad.x+ad.w/2, H);
+          g.addColorStop(0, ad.hue + '0.20)');
+          g.addColorStop(1, 'rgba(0,0,0,0)');
+          ctx.fillStyle = g;
+          ctx.fillRect(ad.x+ad.w/2 - 2*DPR, ad.y+ad.h, 4*DPR, H);
+        }
       }
-      requestAnimationFrame(step);
+      ctx.globalCompositeOperation = 'source-over';
+    }
 
-      function resize() {
-        const dpr = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-        canvas.width = (w = window.innerWidth) * dpr;
-        canvas.height = (h = window.innerHeight) * dpr;
-        canvas.style.width = w + 'px';
-        canvas.style.height = h + 'px';
-        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-        buildGrid();
+    // ---------- Pioggia
+    const RAIN_COUNT = 260;
+    let rain = [];
+    function resetDrop(d) {
+      d.x = Math.random() * W;
+      d.y = -rand(0, H);
+      const s = rand(0.65, 1.35);
+      d.vx =  -120 * s * DPR;
+      d.vy =  480 * s * DPR;
+      d.len = rand(12,22) * s * DPR;
+      d.alpha = rand(0.08, 0.18);
+    }
+    function buildRain() {
+      rain = new Array(RAIN_COUNT);
+      for (let i=0;i<RAIN_COUNT;i++) {
+        const d = {}; resetDrop(d); d.y = Math.random()*H;
+        rain[i] = d;
       }
-      window.addEventListener('resize', resize, { passive: true });
-      resize();
+    }
+    function drawRain(dt) {
+      ctx.globalCompositeOperation = 'screen';
+      ctx.strokeStyle = WHITE + '0.25)';
+      ctx.lineWidth = DPR;
+      ctx.beginPath();
+      for (const d of rain) {
+        d.x += d.vx * dt; d.y += d.vy * dt;
+        const x2 = d.x - d.vx * 0.035, y2 = d.y - d.vy * 0.035;
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(x2, y2);
+        if (d.y > H || d.x < -50) resetDrop(d);
+      }
+      ctx.stroke();
+      ctx.globalCompositeOperation = 'source-over';
+    }
 
-      // Pausa quando la tab non è visibile
-      document.addEventListener('visibilitychange', () => {
-        if (document.hidden) ctx.fillRect(0,0,w,h);
-      });
+    // ---------- Flying cars
+    const CARS = [];
+    function makeCar() {
+      const side = Math.random()<0.5 ? -1 : 1; // sx->dx o dx->sx
+      const y = rand(H*0.25, H*0.55);
+      const speed = rand(110, 220) * DPR * (side<0 ? 1 : -1);
+      return {
+        x: side<0 ? -80*DPR : W+80*DPR, y,
+        vx: speed, wob: rand(0.8,1.8), t0: Math.random()*1000,
+        hue: Math.random()<0.5 ? CYAN : MAG
+      };
+    }
+    for (let i=0;i<8;i++) CARS.push(makeCar());
 
-      // Debug flag
-      window.CP_BG_READY = true;
-      console.log('[CP] background ready');
-    })();
+    function drawCar(c, t) {
+      const wob = Math.sin((t + c.t0) * 0.002*c.wob) * 6*DPR;
+      const x = c.x, y = c.y + wob;
+
+      // scia posteriore (glow)
+      ctx.globalCompositeOperation = 'screen';
+      const grad = ctx.createLinearGradient(x, y, x - Math.sign(c.vx)*90*DPR, y+wob*0.1);
+      grad.addColorStop(0, c.hue + '0.55)');
+      grad.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.fillStyle = grad;
+      ctx.fillRect(x - Math.sign(c.vx)*80*DPR, y-2*DPR, Math.sign(c.vx)*80*DPR, 4*DPR);
+
+      // scafo
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = 'rgba(28,34,52,0.9)';
+      ctx.beginPath();
+      ctx.ellipse(x, y, 14*DPR, 7.5*DPR, 0, 0, Math.PI*2);
+      ctx.fill();
+      // cabine/led
+      ctx.fillStyle = WHITE + '0.7)';
+      ctx.fillRect(x-4*DPR, y-2*DPR, 8*DPR, 4*DPR);
+      // lampeggianti
+      ctx.fillStyle = MAG + '0.8)';   ctx.fillRect(x-12*DPR, y-1.5*DPR, 3*DPR, 3*DPR);
+      ctx.fillStyle = CYAN + '0.8)';  ctx.fillRect(x+9*DPR,  y-1.5*DPR, 3*DPR, 3*DPR);
+
+      ctx.globalCompositeOperation = 'source-over';
+    }
+
+    // ---------- Lampi
+    let flash = 0;
+    function maybeLightning() {
+      if (Math.random() < 0.003) flash = 1.0;
+      if (flash > 0) {
+        ctx.fillStyle = WHITE + (0.12 * flash) + ')';
+        ctx.fillRect(0,0,W,H);
+        flash *= 0.88;
+      }
+    }
+
+    // ---------- Util
+    function rand(a,b){ return Math.random()*(b-a)+a; }
+    function clamp(v,a,b){ return v<a?a:(v>b?b:v); }
+
+    // ---------- Build iniziale
+    resize(); buildRain();
+
+    // ---------- Loop
+    let last = performance.now();
+    function frame(now) {
+      const dt = Math.min(0.034, (now-last)/1000); last = now;
+
+      // sfondo base scuro
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.fillStyle = DARK; ctx.fillRect(0,0,W,H);
+
+      // skyline parallax (scorrimento lentissimo per “vita”)
+      for (let i=0;i<layerCanvases.length;i++) {
+        const L = layerCanvases[i];
+        const par = (now*0.00003) * L.depth * W;
+        const x = - (par % W);
+        ctx.globalAlpha = 1;
+        ctx.drawImage(L.canvas, x, 0);
+        ctx.drawImage(L.canvas, x + W, 0);
+      }
+
+      // ologrammi / fasci luce
+      drawAds(now);
+
+      // pioggia
+      drawRain(dt);
+
+      // auto volanti
+      for (const c of CARS) {
+        c.x += c.vx * dt;
+        drawCar(c, now);
+        if (c.vx<0 && c.x < -120*DPR || c.vx>0 && c.x > W+120*DPR) {
+          const idx = CARS.indexOf(c);
+          CARS[idx] = makeCar();
+        }
+      }
+
+      // lampi
+      maybeLightning();
+
+      requestAnimationFrame(frame);
+    }
+    requestAnimationFrame(frame);
+
+    // pausa quando tab non visibile
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) last = performance.now();
+    });
+
+    // debug flag
+    window.CITY_BG_READY = true;
+    console.log('[CityBG] ready');
+  })();
   </script>
 
   <script>
-    // anno footer + smooth scroll
+    // Footer + smooth scroll
     document.getElementById('year').textContent = new Date().getFullYear();
     document.documentElement.style.scrollBehavior = 'smooth';
   </script>
