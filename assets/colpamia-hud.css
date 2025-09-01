@@ -16,8 +16,8 @@
 .hud-root {
   position: fixed;
   inset: 0;
-  z-index: -1;            /* dietro i contenuti */
-  pointer-events: none;   /* non intercetta click */
+  z-index: 0;            /* <<< PRIMA ERA -1: veniva nascosto dal body */
+  pointer-events: none;  /* non intercetta click */
 }
 
 /* layer base: gradiente spaziale */
