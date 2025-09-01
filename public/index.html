@@ -5,12 +5,23 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>Colpa Mia — Scuse On-Demand</title>
   <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe.">
-  <link rel="stylesheet" href="/styles.css" />
+
+  <!-- CSS principale del sito -->
+  <link rel="stylesheet" href="styles.css" />
+
+  <!-- HUD 2100: tema futuristico -->
+  <link rel="stylesheet" href="assets/colpamia-hud.css">
+  <script defer src="assets/colpamia-hud.js"></script>
+
+  <!-- Disattiva il VECCHIO sfondo (se vuoi solo l'HUD) -->
+  <style>
+    #bg, .stripes, .glow { display: none !important; }
+  </style>
 </head>
 <body>
-  <!-- Sfondo animato (particelle + strisce + glow) -->
+
+  <!-- Vecchio sfondo (nascosto) -->
   <canvas id="bg"></canvas>
-  <!-- NB: le classi sono 'stripes stripes-h' e 'stripes stripes-v' (senza doppio trattino) -->
   <div class="stripes stripes-h"></div>
   <div class="stripes stripes-v"></div>
   <div class="glow"></div>
@@ -22,7 +33,7 @@
       <nav class="nav">
         <a href="#catalogo">Catalogo</a>
         <a href="#premium">Premium</a>
-        <a href="/wallet.html">Wallet</a>
+        <a href="wallet.html">Wallet</a> <!-- relativo, non /wallet.html -->
         <a href="#faq">FAQ</a>
       </nav>
     </div>
@@ -64,7 +75,7 @@
 
       <details>
         <summary>Quando vedo i minuti e i punti?</summary>
-        <p>Subito dopo il pagamento. Vai su <a href="/wallet.html">Wallet</a>, inserisci la tua email e trovi il totale minuti acquistati e i punti.</p>
+        <p>Subito dopo il pagamento. Vai su <a href="wallet.html">Wallet</a>, inserisci la tua email e trovi il totale minuti acquistati e i punti.</p>
       </details>
 
       <details>
@@ -85,16 +96,16 @@
     </div>
   </footer>
 
-  <!-- Script: sfondo + catalogo + premium -->
-  <script src="/bg.js" defer></script>
-  <script src="/shop.js" defer></script>
-  <script src="/premium.js" defer></script>
+  <!-- Script: catalogo + premium (percorsi relativi per GitHub Pages) -->
+  <!-- Se non usi più il vecchio sfondo, puoi commentare/eliminare bg.js -->
+  <script src="bg.js" defer></script>
+  <script src="shop.js" defer></script>
+  <script src="premium.js" defer></script>
   <script>
     // anno footer
     document.getElementById('year').textContent = new Date().getFullYear();
-    // smooth scroll globale e compensazione header sticky
+    // smooth scroll globale
     document.documentElement.style.scrollBehavior = 'smooth';
   </script>
 </body>
 </html>
-
