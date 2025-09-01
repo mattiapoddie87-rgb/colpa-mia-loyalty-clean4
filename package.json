@@ -1,13 +1,14 @@
 {
-  "name": "colpamia-functions",
-  "version": "1.0.0",
+  "name": "colpamia-site",
   "private": true,
-  "type": "commonjs",
-  "engines": { "node": ">=18" },
+  "engines": {
+    "node": ">=18"
+  },
   "dependencies": {
-    "@netlify/blobs": "^6.0.0",
+    "@netlify/blobs": "^6.3.0",
+    "openai": "^4.56.0",
     "resend": "^3.2.0",
-    "stripe": "^15.6.0",
-    "twilio": "^4.21.0"
+    "stripe": "^14.0.0",
+    "twilio": "^4.20.1"
   }
 }
