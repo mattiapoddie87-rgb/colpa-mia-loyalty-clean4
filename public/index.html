@@ -224,12 +224,17 @@
       <div id="premium-grid"></div>
     </section>
 
-    <!-- WALLET -->
-    <section class="wrap section" id="wallet">
-      <h2>Wallet</h2>
-      <div id="wallet-grid"></div>
-      <p id="wallet-msg"></p>
-    </section>
+    <<!-- WALLET -->
+<section class="wrap section" id="wallet">
+  <h2>Wallet</h2>
+  <div style="margin-bottom:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
+    <input type="email" id="wallet-email" placeholder="Email usata in checkout" style="flex:1;padding:.5rem;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text)">
+    <button class="btn" id="wallet-fetch">Vedi saldo</button>
+  </div>
+  <div id="wallet-grid"></div>
+  <p id="wallet-msg"></p>
+</section>
+
 
     <!-- FAQ -->
     <section class="wrap section" id="faq">
