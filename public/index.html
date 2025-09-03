@@ -30,7 +30,24 @@
     }
     body>header, body>main, body>footer{ position:relative; z-index:2; }
   </style>
-</head>
+</    <!-- GA4 + Meta Pixel tracking -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){ dataLayer.push(arguments); }
+      gtag('js', new Date());
+      gtag('config', 'G-XXXXXXXXXX');
+    </script>
+    <script>
+      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
+      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
+      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
+      fbq('init','YOUR_PIXEL_ID');
+      fbq('track','PageView');
+    </script>
+    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
+head>
 <body>
   <!-- ======= CYBERCITY BACKGROUND ======= -->
   <canvas id="cybercity"></canvas>
@@ -51,12 +68,54 @@
 
   <main>
     <!-- Hero -->
-    <section class="hero">
-      <div class="wrap">
-        <h1 class="hero__title">Trova sempre la scusa perfetta</h1>
-        <p class="hero__sub">Ricarica “Minuti di Vita” in 10 secondi. Checkout sicuro con Stripe. Zero complicazioni.</p>
-        <a class="btn btn--xl btn--primary" href="#premium">🔒 Scopri i pacchetti premium</a>
-      </div>
+ <section class="hero">
+  <div class="wrap">
+    <h1 class="hero__title">Ti serve una scusa credibile? Te la scriviamo in 30 secondi</h1>
+    <p class="hero__sub">Compra in 10 secondi con Stripe. Consegna automatica 30s–10m.</p>
+    <div class="cta-row">
+      <a class="btn btn--xl btn--primary" href="#catalogo">Compra ora</a>
+      <a class="btn btn--xl" href="#entry-offer">Prova a metà prezzo</a>
+    </div>
+  </div>
+</section>
+
+<!-- LEAD MAGNET -->
+<section class="wrap section leadbox" id="lead">
+  <h2>Quiz: che tipo di “scusatore” sei?</h2>
+  <p class="hero__sub">Ricevi il PDF <b>“7 scuse che non funzionano più”</b> e un codice sconto.</p>
+  <form class="form" method="post" action="https://YOUR-DC.list-manage.com/subscribe/post?u=YOUR_U&id=YOUR_ID">
+    <input type="email" name="EMAIL" placeholder="La tua email" required>
+    <div style="display:flex;gap:.6rem">
+      <input type="tel" name="PHONE" placeholder="WhatsApp (opzionale)" style="flex:1">
+      <button class="btn" type="submit">Scarica PDF</button>
+    </div>
+  </form>
+</section>
+
+<!-- OFFERTA D’INGRESSO -->
+<section class="wrap section" id="entry-offer">
+  <h2>Offerta d’ingresso</h2>
+  <p class="hero__sub">Prova il servizio con la <b>Prima Scusa -50%</b>. Stesse funzioni, metà prezzo.</p>
+</section>
+
+<!-- PROVA SOCIALE -->
+<section class="wrap section" id="prove">
+  <h2>Cosa dicono i clienti</h2>
+  <div class="reviews">
+    <article class="review"><strong>Marco</strong><span>★ ★ ★ ★ ★</span><p>Alibi confezionato in 2 minuti. Zero sbatti.</p></article>
+    <article class="review"><strong>Giulia</strong><span>★ ★ ★ ★ ★</span><p>Tono perfetto. Ho riacquistato.</p></article>
+    <article class="review"><strong>Daniele</strong><span>★ ★ ★ ★ ★</span><p>Pagamento lampo, consegna rapida.</p></article>
+    <article class="review"><strong>Sara</strong><span>★ ★ ★ ★ ★</span><p>Il “vocale credibile” mi ha salvata.</p></article>
+    <article class="review"><strong>Luca</strong><span>★ ★ ★ ★ ★</span><p>Deluxe inattaccabile.</p></article>
+    <article class="review"><strong>Elena</strong><span>★ ★ ★ ★ ★</span><p>Tempi reali sotto i 10m.</p></article>
+  </div>
+  <div class="case-grid">
+    <div><h3>👨‍💼 Lavoro</h3><p>Riunione “non rinviabile” + ICs.</p></div>
+    <div><h3>❤️ Relazioni</h3><p>Alibi soft-romantico con varianti.</p></div>
+    <div><h3>🗽️ Traffico</h3><p>Template local + vocale ambientale.</p></div>
+  </div>
+</section>
+
     </section>
 
     <!-- Catalogo -->
