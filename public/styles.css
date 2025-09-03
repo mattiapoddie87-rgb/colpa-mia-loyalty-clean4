@@ -178,10 +178,10 @@ body {
 
 /* --- Chatbot --- */
 .chatbot {
-  position: fixed;
-  bottom: 80px;
+  top: 50%;
   right: 20px;
-  width: 300px;
+  bottom: auto;
+  transform: translateY(-50%);
   max-height: 400px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -227,10 +227,10 @@ body {
   cursor: pointer;
 }
 .chat-toggle {
-  position: fixed;
-  bottom: 20px;
+  top: 50%;
   right: 20px;
-  padding: .7rem 1rem;
+  bottom: auto;
+  transform: translateY(-50%);
   background: var(--primary);
   color: #fff;
   border-radius: 50px;
