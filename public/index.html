@@ -23,110 +23,230 @@
       color: var(--text);
     }
 
-    .wrap { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
-    header { padding: 1rem 0; display:flex; justify-content:space-between; align-items:center;}
-    header nav a { margin-right: 1rem; color: var(--text); text-decoration:none; font-weight:600; }
-    header nav a:hover { color: var(--primary); }
+    .wrap {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 1rem;
+    }
 
-    .hero { padding: 3rem 0 2rem; text-align:center; }
-    .hero__title { font-size: 2rem; font-weight:800; margin:0; }
-    .hero__sub { margin-top: .5rem; opacity:.8; }
+    header {
+      padding: 1rem 0;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    header nav a {
+      margin-right: 1rem;
+      color: var(--text);
+      text-decoration: none;
+      font-weight: 600;
+    }
+    header nav a:hover {
+      color: var(--primary);
+    }
+
+    .hero {
+      padding: 3rem 0 2rem;
+      text-align: center;
+    }
+    .hero__title {
+      font-size: 2rem;
+      font-weight: 800;
+      margin: 0;
+    }
+    .hero__sub {
+      margin-top: .5rem;
+      opacity: .8;
+    }
 
     .btn {
-      display:inline-block;
-      padding:.6rem 1.2rem;
-      border-radius:8px;
-      text-decoration:none;
+      display: inline-block;
+      padding: .6rem 1.2rem;
+      border-radius: 8px;
+      text-decoration: none;
       background: var(--primary);
       color: #fff;
-      font-weight:700;
-      cursor:pointer;
-      border:none;
+      font-weight: 700;
+      cursor: pointer;
+      border: none;
     }
-    .btn--xl { font-size:1rem; }
-    .btn.btn--primary { background: var(--primary); color:#fff; }
+    .btn--xl {
+      font-size: 1rem;
+    }
+    .btn.btn--primary {
+      background: var(--primary);
+      color: #fff;
+    }
 
-    .section { padding:2rem 0; }
+    .section {
+      padding: 2rem 0;
+    }
 
     .badge {
-      display:inline-block;
-      padding:.2rem .6rem;
-      border-radius:999px;
-      border:1px solid var(--border);
-      font-weight:800;
-      font-size:.8rem;
+      display: inline-block;
+      padding: .2rem .6rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      font-weight: 800;
+      font-size: .8rem;
     }
     .badge--express {
       background: rgba(0,229,255,.12);
-      border-color:#26e5ff;
-      color:#bff7ff;
+      border-color: #26e5ff;
+      color: #bff7ff;
     }
 
     .cta-row {
-      display:flex;
-      gap:.8rem;
-      justify-content:center;
-      margin-top:.6rem;
-      flex-wrap:wrap;
+      display: flex;
+      gap: .8rem;
+      justify-content: center;
+      margin-top: .6rem;
+      flex-wrap: wrap;
     }
 
     .leadbox {
       background: rgba(10,14,27,.55);
-      border:1px solid var(--border);
-      border-radius:16px;
-      padding:1rem;
-      text-align:center;
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 1rem;
+      text-align: center;
     }
     .leadbox input {
-      width:100%;
-      padding:.5rem;
-      margin-bottom:.5rem;
-      border-radius:6px;
-      border:1px solid var(--border);
+      width: 100%;
+      padding: .5rem;
+      margin-bottom: .5rem;
+      border-radius: 6px;
+      border: 1px solid var(--border);
       background: var(--panel);
       color: var(--text);
     }
-    .leadbox button.btn { flex:0 0 auto; }
+    .leadbox button.btn {
+      flex: 0 0 auto;
+    }
 
     .reviews {
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:1rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
     }
-    @media (max-width:960px) { .reviews { grid-template-columns:repeat(2,1fr); } }
-    @media (max-width:680px) { .reviews { grid-template-columns:1fr; } }
+    @media (max-width: 960px) {
+      .reviews {
+        grid-template-columns: repeat(2, 1fr);
+      }
+    }
+    @media (max-width: 680px) {
+      .reviews {
+        grid-template-columns: 1fr;
+      }
+    }
     .review {
       background: linear-gradient(180deg, var(--panel), var(--panel-2));
-      border:1px solid var(--border);
-      border-radius:12px;
-      padding:1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
     }
     .review span {
-      color:#ffd76a;
-      font-weight:900;
-      margin-left:.3rem;
+      color: #ffd76a;
+      font-weight: 900;
+      margin-left: .3rem;
     }
 
     .case-grid {
-      display:grid;
-      grid-template-columns:repeat(3,1fr);
-      gap:1rem;
-      margin-top:1rem;
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-top: 1rem;
     }
-    @media (max-width:960px) { .case-grid { grid-template-columns:1fr; } }
+    @media (max-width: 960px) {
+      .case-grid {
+        grid-template-columns: 1fr;
+      }
+    }
 
     .card {
       background: var(--panel);
-      border:1px solid var(--border);
-      border-radius:12px;
-      padding:1rem;
-      margin-bottom:1rem;
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      margin-bottom: 1rem;
     }
-    .row { display:flex; justify-content:space-between; align-items:center; margin-top: .5rem; }
-    .tag { font-size:.8rem; opacity:.7; }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: .5rem;
+    }
+    .tag {
+      font-size: .8rem;
+      opacity: .7;
+    }
+
+    /* --- Chatbot: centrato verticalmente a destra --- */
+    .chatbot {
+      top: 50%;
+      right: 20px;
+      bottom: auto;
+      transform: translateY(-50%);
+      width: 300px;
+      max-height: 400px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      z-index: 9999;
+      transition: transform .3s ease;
+    }
+    .chatbot.open {
+      transform: translateY(-50%);
+    }
+    .chat-messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: .5rem;
+    }
+    .chat-messages p {
+      margin: .2rem 0;
+    }
+    .chat-messages p.user {
+      text-align: right;
+      color: var(--primary);
+    }
+    .chat-form {
+      display: flex;
+      border-top: 1px solid var(--border);
+    }
+    .chat-form input {
+      flex: 1;
+      border: none;
+      padding: .5rem;
+      background: transparent;
+      color: var(--text);
+    }
+    .chat-form button {
+      border: none;
+      background: var(--primary);
+      color: #fff;
+      padding: .5rem .8rem;
+      cursor: pointer;
+    }
+    .chat-toggle {
+      top: 50%;
+      right: 20px;
+      bottom: auto;
+      transform: translateY(-50%);
+      padding: .7rem 1rem;
+      background: var(--primary);
+      color: #fff;
+      border-radius: 50px;
+      border: none;
+      cursor: pointer;
+      z-index: 9999;
+    }
   </style>
 
-  <!-- GA4 e Meta Pixel (sostituisci con i tuoi ID) -->
+  <!-- GA4 e Meta Pixel (sostituisci con i tuoi ID reali) -->
   <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
   <script>
     window.dataLayer = window.dataLayer || [];
@@ -225,16 +345,15 @@
     </section>
 
     <!-- WALLET -->
-<section class="wrap section" id="wallet">
-  <h2>Wallet</h2>
-  <div style="margin-bottom:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
-    <input type="email" id="wallet-email" placeholder="Email usata in checkout" style="flex:1;padding:.5rem;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text)">
-    <button class="btn" id="wallet-fetch">Vedi saldo</button>
-  </div>
-  <div id="wallet-grid"></div>
-  <p id="wallet-msg"></p>
-</section>
-
+    <section class="wrap section" id="wallet">
+      <h2>Wallet</h2>
+      <div style="margin-bottom:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
+        <input type="email" id="wallet-email" placeholder="Email usata in checkout" style="flex:1;padding:.5rem;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text)">
+        <button class="btn" id="wallet-fetch">Vedi saldo</button>
+      </div>
+      <div id="wallet-grid"></div>
+      <p id="wallet-msg"></p>
+    </section>
 
     <!-- FAQ -->
     <section class="wrap section" id="faq">
@@ -253,22 +372,22 @@
       </div>
     </section>
   </main>
-  
-<!-- Chatbot -->
-<div id="chatbot-container" class="chatbot">
-  <div id="chatbot-messages" class="chat-messages"></div>
-  <form id="chatbot-form" class="chat-form">
-    <input type="text" id="chatbot-input" placeholder="Scrivi qui la tua domanda..." required />
-    <button type="submit" class="btn">Invia</button>
-  </form>
-</div>
-<button id="chatbot-toggle" class="chat-toggle">Chat</button>
+
+  <!-- Chatbot -->
+  <div id="chatbot-container" class="chatbot">
+    <div id="chatbot-messages" class="chat-messages"></div>
+    <form id="chatbot-form" class="chat-form">
+      <input type="text" id="chatbot-input" placeholder="Scrivi qui la tua domanda..." required />
+      <button type="submit" class="btn">Invia</button>
+    </form>
+  </div>
+  <button id="chatbot-toggle" class="chat-toggle">Chat</button>
 
   <!-- Scripts -->
   <script src="assets/js/bg.js" defer></script>
-<script src="wallet.js" defer></script>
-<script src="premium.js" defer></script>
-<script src="shop.js" defer></script>
-
+  <script src="wallet.js" defer></script>
+  <script src="premium.js" defer></script>
+  <script src="shop.js" defer></script>
+  <script src="chatbot.js" defer></script>
 </body>
 </html>
