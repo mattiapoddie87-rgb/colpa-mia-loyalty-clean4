@@ -1,187 +1,193 @@
-:root{
-  --bg:#06080f;
-  --panel:#0b1020;
-  --panel-2:#0a0e1b;
-  --txt:#e9eeff;
-  --muted:#9fb0d1;
-  --blue:#5aa3ff;
-  --blue-2:#8a6bff;
-  --neon:#00e5ff;
-  --border:#1a2340;
-  --shadow:0 10px 30px rgba(0,0,0,.45), inset 0 1px 0 rgba(255,255,255,.02);
-}
-*{box-sizing:border-box}
-html,body{margin:0;padding:0;background:var(--bg);color:var(--txt);font:16px/1.6 system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif}
-.wrap{width:min(1120px,92%);margin-inline:auto}
-.topbar{position:sticky;top:0;z-index:10;background:rgba(6,8,15,.55);backdrop-filter:blur(10px);
-  border-bottom:1px solid var(--border)}
-.topbar__inner{display:flex;align-items:center;justify-content:space-between;padding:.9rem 0}
-.brand{font-weight:900;letter-spacing:.06em}
-.nav{display:flex;gap:1rem}
-.nav a{color:var(--muted);text-decoration:none;font-weight:700}
-.nav a:hover{color:var(--txt)}
-
-.hero{padding:70px 0 40px;text-align:center}
-.hero__title{font-size:clamp(28px,4vw,46px);margin:0 0 .35rem;font-weight:900}
-.hero__sub{color:var(--muted);max-width:820px;margin:0 auto 1rem}
-
-.btn{display:inline-flex;align-items:center;justify-content:center;gap:.6rem;
-  padding:.8rem 1.1rem;border-radius:12px;border:0;cursor:pointer;color:#fff;
-  background:linear-gradient(135deg,var(--blue),var(--blue-2));
-  box-shadow:0 0 22px rgba(90,163,255,.35), 0 0 40px rgba(138,107,255,.18); transition:.18s ease}
-.btn:hover{transform:translateY(-1px);filter:brightness(1.06)}
-.btn--xl{font-size:1.05rem}
-
-.section{padding:28px 0}
-.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
-@media (max-width:960px){.grid{grid-template-columns:repeat(2,1fr)}}
-@media (max-width:680px){.grid{grid-template-columns:1fr}}
-
-.card{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);
-  border-radius:16px;padding:16px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:8px}
-.card h3{margin:.2rem 0 .3rem;font-weight:900}
-.card p{margin:0;color:var(--muted);min-height:44px}
-.card .price{font-weight:900;font-size:20px;margin-top:4px}
-.card .row{display:flex;justify-content:space-between;align-items:center;margin-top:10px}
-.tag{display:inline-block;background:rgba(90,163,255,.08);border:1px solid rgba(90,163,255,.25);
-  color:#bcd6ff;padding:.25rem .5rem;border-radius:8px;font-weight:700}
-
-.msg{margin-top:16px;padding:12px 14px;border-radius:10px;background:#0e1429;border:1px solid var(--border)}
-.msg.error{color:#ffdede;border-color:#ff6b6b}
-
-.footer{border-top:1px solid var(--border);margin-top:36px;background:rgba(6,8,15,.4)}
-.footer__inner{display:flex;align-items:center;justify-content:space-between;padding:18px 0;color:var(--muted)}
-.footer__inner a{color:var(--muted);text-decoration:none}
-.footer__inner a:hover{color:var(--txt)}
-
-.form{display:grid;gap:.7rem;max-width:460px}
-.form input{padding:.7rem .9rem;border-radius:10px;border:1px solid var(--border);background:#0a0e1b;color:var(--txt)}
-/* --- Background globale: canvas + righe + glow --- */
-
-/* 1) Canvas particellare pieno schermo, dietro a tutto */
-#bg{
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  z-index: -1;
-  pointer-events: none; /* non blocca i click */
-  background: #05070c;
+:root {
+  --bg: #090e20;
+  --panel: #0f1430;
+  --panel-2: #131a3d;
+  --text: #f5f5f7;
+  --border: rgba(255,255,255,0.1);
+  --primary: #00b2ff;
 }
 
-/* 2) Strisce su tutta pagina (matcha le classi dell'HTML: stripes stripes-h / stripes stripes-v) */
-.stripes{
-  position: fixed;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  opacity: .25;
-  z-index: 1; /* sopra al canvas, sotto ai contenuti */
-}
-.stripes.stripes-h{
-  background:
-    repeating-linear-gradient(0deg, rgba(0,229,255,.06) 0 1px, transparent 1px 12px),
-    linear-gradient(180deg,transparent,rgba(90,163,255,.06));
-  animation: slideH 20s linear infinite;
-}
-.stripes.stripes-v{
-  background:
-    repeating-linear-gradient(90deg, rgba(0,229,255,.05) 0 1px, transparent 1px 14px);
-  animation: slideV 30s linear infinite reverse;
-}
-@keyframes slideH { 0%{ background-position:0 0,0 0 } 100%{ background-position:0 200px,0 0 } }
-@keyframes slideV { 0%{ background-position:0 0 } 100%{ background-position:200px 0 } }
-
-/* 3) Glow morbido, fisso dietro */
-.glow{
-  position: fixed;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(800px 300px at 50% -10%, rgba(90,163,255,.22), transparent 60%),
-    radial-gradient(700px 240px at 20% 110%, rgba(138,107,255,.18), transparent 60%);
-}
-
-/* 4) Metti i contenuti sopra (header/main/footer) */
-header, main, footer {
-  position: relative;
-  z-index: 2;
-}
-/* 5) Scrolling morbido e compensazione sticky header per l’ancora */
-html { scroll-behavior: smooth; }
-#catalogo { scroll-margin-top: 72px; } /* altezza approx della topbar sticky */
-/* === HUD: mettilo dietro e alleggerisci === */
-
-/* L’HUD non deve mai bloccare i click */
-#hud, #hud * {
-  pointer-events: none !important;
-}
-
-/* HUD dietro a tutto */
-#hud {
-  position: fixed;          /* sicurezza */
-  inset: 0;
-  z-index: 0 !important;
-}
-
-/* Metti i contenuti sopra */
-.topbar, main, footer {
-  position: relative;
-  z-index: 2;
-}
-
-/* Opacità più leggera (adatta al tuo gusto) */
-#hud .hud-vignette { opacity: 0.18 !important; }   /* vignetta ai bordi */
-#hud .hud-scan, 
-#hud .hud-scanlines { opacity: 0.04 !important; }  /* righe/scansioni */
-#hud .hud-radar { opacity: 0.10 !important; }      /* cerchi radar */
-
-/* Fallback generico, nel caso i nomi layer fossero diversi */
-#hud .hud-layer { opacity: 0.10; }
-/* === HUD 2100: sempre dietro, non scurire la UI, non catturare click === */
-
-/* 1) L’HUD non deve mai bloccare gli input */
-#hud, #hud * {
-  pointer-events: none !important;
-  mix-blend-mode: normal !important;  /* evita darken/multiply che scuriscono tutto */
-  filter: none !important;
-}
-
-/* 2) Dietro a tutto */
-#hud {
-  position: fixed;
-  inset: 0;
-  z-index: 0 !important;
-}
-.topbar, main, footer {
-  position: relative;
-  z-index: 2;
-}
-
-/* 3) Cap globale dell’opacità dei layer HUD (più leggero) */
-#hud > * { opacity: .06 !important; }
-
-/* 4) Tuning mirato (matcha nomi comuni + data-attr) */
-#hud [class*="vignette"],  #hud [data-layer*="vignette"]  { opacity: .10 !important; }
-#hud [class*="scan"],      #hud [class*="line"]           { opacity: .03 !important; }
-#hud [class*="radar"],     #hud [data-layer*="radar"]     { opacity: .08 !important; }
-
-/* 5) Se lo script disegna un overlay/mask scuro, lo spengo del tutto */
-#hud .cover, #hud [class*="mask"], #hud [class*="overlay"] { display: none !important; }
-
-/* (opzionale) aumenta il contrasto di sfondo per i contenuti */
+/* Struttura di base */
 body {
-  background: radial-gradient(1000px 700px at 70% 120%, #0b1922 0%, #0b1016 60%, #0a0e13 100%) fixed;
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+}
+.wrap {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+header {
+  padding: 1rem 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+header nav a {
+  margin-right: 1rem;
+  color: var(--text);
+  text-decoration: none;
+  font-weight: 600;
+}
+header nav a:hover {
+  color: var(--primary);
 }
 
-/* --- Chatbot --- */
+/* Hero */
+.hero {
+  padding: 3rem 0 2rem;
+  text-align: center;
+}
+.hero__title {
+  font-size: 2rem;
+  font-weight: 800;
+  margin: 0;
+}
+.hero__sub {
+  margin-top: .5rem;
+  opacity: .8;
+}
+
+/* Bottoni */
+.btn {
+  display: inline-block;
+  padding: .6rem 1.2rem;
+  border-radius: 8px;
+  text-decoration: none;
+  background: var(--primary);
+  color: #fff;
+  font-weight: 700;
+  cursor: pointer;
+  border: none;
+}
+.btn--xl {
+  font-size: 1rem;
+}
+.btn.btn--primary {
+  background: var(--primary);
+  color: #fff;
+}
+
+/* Sezioni generiche */
+.section {
+  padding: 2rem 0;
+}
+
+/* Badge */
+.badge {
+  display: inline-block;
+  padding: .2rem .6rem;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-weight: 800;
+  font-size: .8rem;
+}
+.badge--express {
+  background: rgba(0,229,255,.12);
+  border-color: #26e5ff;
+  color: #bff7ff;
+}
+
+/* CTA row */
+.cta-row {
+  display: flex;
+  gap: .8rem;
+  justify-content: center;
+  margin-top: .6rem;
+  flex-wrap: wrap;
+}
+
+/* Lead magnet */
+.leadbox {
+  background: rgba(10,14,27,.55);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  padding: 1rem;
+  text-align: center;
+}
+.leadbox input {
+  width: 100%;
+  padding: .5rem;
+  margin-bottom: .5rem;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--panel);
+  color: var(--text);
+}
+.leadbox button.btn {
+  flex: 0 0 auto;
+}
+
+/* Recensioni */
+.reviews {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+@media (max-width: 960px) {
+  .reviews {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+@media (max-width: 680px) {
+  .reviews {
+    grid-template-columns: 1fr;
+  }
+}
+.review {
+  background: linear-gradient(180deg, var(--panel), var(--panel-2));
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+}
+.review span {
+  color: #ffd76a;
+  font-weight: 900;
+  margin-left: .3rem;
+}
+
+/* Case studies */
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+  margin-top: 1rem;
+}
+@media (max-width: 960px) {
+  .case-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Card generica */
+.card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+.row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: .5rem;
+}
+.tag {
+  font-size: .8rem;
+  opacity: .7;
+}
+
+/* Chatbot centrato a destra */
 .chatbot {
+  position: fixed;
   top: 50%;
   right: 20px;
   bottom: auto;
   transform: translateY(-50%);
+  width: 300px;
   max-height: 400px;
   background: var(--panel);
   border: 1px solid var(--border);
@@ -190,11 +196,10 @@ body {
   flex-direction: column;
   overflow: hidden;
   z-index: 9999;
-  transform: translateY(100%);
   transition: transform .3s ease;
 }
 .chatbot.open {
-  transform: translateY(0);
+  transform: translateY(-50%);
 }
 .chat-messages {
   flex: 1;
@@ -227,10 +232,12 @@ body {
   cursor: pointer;
 }
 .chat-toggle {
+  position: fixed;
   top: 50%;
   right: 20px;
   bottom: auto;
   transform: translateY(-50%);
+  padding: .7rem 1rem;
   background: var(--primary);
   color: #fff;
   border-radius: 50px;
@@ -238,4 +245,3 @@ body {
   cursor: pointer;
   z-index: 9999;
 }
-
