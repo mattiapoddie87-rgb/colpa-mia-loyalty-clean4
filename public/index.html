@@ -1,600 +1,258 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Colpa Mia — Scuse On-Demand</title>
-  <meta name="description" content="Scegli la scusa, ricarica i ‘Minuti di Vita’, paga in 10 secondi con Stripe. Checkout sicuro.">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Colpa Mia – Trova sempre la scusa perfetta</title>
+  <link rel="icon" type="image/png" href="assets/img/favicon.png">
 
-  <!-- I TUOI STILI -->
-  <link rel="stylesheet" href="/styles.css?v=10" />
-
-  <!-- ======= CYBERCITY BACKGROUND (CSS) ======= -->
   <style>
-    #cybercity{
-      position:fixed; inset:0; z-index:0;
-      width:100vw; height:100vh; pointer-events:none;
-      display:block;
+    :root {
+      --bg: #090e20;
+      --panel: #0f1430;
+      --panel-2: #131a3d;
+      --text: #f5f5f7;
+      --border: rgba(255,255,255,0.1);
+      --primary: #00b2ff;
     }
-    #city-overlay{
-      position:fixed; inset:0; z-index:1; pointer-events:none;
-      background:
-        radial-gradient(1200px 900px at 82% 18%, rgba(0, 255, 248, 0.12), transparent 60%),
-        radial-gradient(1000px 700px at 18% 85%, rgba(245, 20, 140, 0.10), transparent 55%),
-        linear-gradient(180deg, rgba(0,0,0,0.35), rgba(0,0,0,0.65));
-      mix-blend-mode:screen;
-    }
-    @media (prefers-reduced-motion: reduce){
-      #cybercity{ display:none; }
-      #city-overlay{ background:linear-gradient(180deg, rgba(0,0,0,.45), rgba(0,0,0,.75)); }
-    }
-    body>header, body>main, body>footer{ position:relative; z-index:2; }
-  </style>
-</    <!-- GA4 + Meta Pixel tracking -->
-    <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-    <script>
-      window.dataLayer = window.dataLayer || [];
-      function gtag(){ dataLayer.push(arguments); }
-      gtag('js', new Date());
-      gtag('config', 'G-XXXXXXXXXX');
-    </script>
-    <script>
-      !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-      n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)f._fbq=n;
-      n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-      t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
-      fbq('init','YOUR_PIXEL_ID');
-      
-        .cta-row{
-    display:flex;
-    gap:.8rem;
-    justify-content:center;
-    margin-top:.6rem;
-    flex-wrap:wrap;
-          }
-  }
-  .leadbox{
-    background:rgba(10,14,27,.55);
-    border:1px solid var(--border);
-    border-radius:16px;
-    padding:1rem;
-  }
-  .reviews{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:14px;
-  }
-  @media (max-width:960px){
-    .reviews{ grid-template-columns:repeat(2,1fr); }
-  }
-  @media (max-width:680px){
-    .reviews{ grid-template-columns:1fr; }
-  }
-  .review{
-    background:linear-gradient(180deg,var(--panel),var(--panel-2));
-    border:1px solid var(--border);
-    border-radius:12px;
-    padding:12px;
-  }
-  .review span{
-    color:#ffd76a;
-    font-weight:900;
-    margin-left:.3rem;
-  }
-  .case-grid{
-    display:grid;
-    grid-template-columns:repeat(3,1fr);
-    gap:14px;
-    margin-top:12px;
-  }
-  @media (max-width:960px){
-    .case-grid{ grid-template-columns:1fr; }
-  }
-  .badge{
-    display:inline-block;
-    padding:.2rem .5rem;
-    border-radius:999px;
-    border:1px solid var(--border);
-    font-weight:800;
-    font-size:.8rem;
-  }
-  .badge--express{
-    background:rgba(0,229,255,.12);
-    border-color:#26e5ff;
-    color:#bff7ff;
-  }fbq('track','PageView');
-    </script>
-    <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
-head>
-<body>
-  <!-- ======= CYBERCITY BACKGROUND ======= -->
-  <canvas id="cybercity"></canvas>
-  <div id="city-overlay" aria-hidden="true"></div>
 
-  <!-- Topbar -->
-  <header class="topbar">
-    <div class="wrap topbar__inner">
-      <div class="brand">COLPA MIA</div>
-      <nav class="nav">
-        <a href="#catalogo">Catalogo</a>
-        <a href="#premium">Premium</a>
-        <a href="/wallet.html">Wallet</a>
-        <a href="#faq">FAQ</a>
-      </nav>
-    </div>
+    body {
+      margin: 0;
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+    }
+
+    .wrap { max-width: 960px; margin: 0 auto; padding: 0 1rem; }
+    header { padding: 1rem 0; display:flex; justify-content:space-between; align-items:center;}
+    header nav a { margin-right: 1rem; color: var(--text); text-decoration:none; font-weight:600; }
+    header nav a:hover { color: var(--primary); }
+
+    .hero { padding: 3rem 0 2rem; text-align:center; }
+    .hero__title { font-size: 2rem; font-weight:800; margin:0; }
+    .hero__sub { margin-top: .5rem; opacity:.8; }
+
+    .btn {
+      display:inline-block;
+      padding:.6rem 1.2rem;
+      border-radius:8px;
+      text-decoration:none;
+      background: var(--primary);
+      color: #fff;
+      font-weight:700;
+      cursor:pointer;
+      border:none;
+    }
+    .btn--xl { font-size:1rem; }
+    .btn.btn--primary { background: var(--primary); color:#fff; }
+
+    .section { padding:2rem 0; }
+
+    .badge {
+      display:inline-block;
+      padding:.2rem .6rem;
+      border-radius:999px;
+      border:1px solid var(--border);
+      font-weight:800;
+      font-size:.8rem;
+    }
+    .badge--express {
+      background: rgba(0,229,255,.12);
+      border-color:#26e5ff;
+      color:#bff7ff;
+    }
+
+    .cta-row {
+      display:flex;
+      gap:.8rem;
+      justify-content:center;
+      margin-top:.6rem;
+      flex-wrap:wrap;
+    }
+
+    .leadbox {
+      background: rgba(10,14,27,.55);
+      border:1px solid var(--border);
+      border-radius:16px;
+      padding:1rem;
+      text-align:center;
+    }
+    .leadbox input {
+      width:100%;
+      padding:.5rem;
+      margin-bottom:.5rem;
+      border-radius:6px;
+      border:1px solid var(--border);
+      background: var(--panel);
+      color: var(--text);
+    }
+    .leadbox button.btn { flex:0 0 auto; }
+
+    .reviews {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:1rem;
+    }
+    @media (max-width:960px) { .reviews { grid-template-columns:repeat(2,1fr); } }
+    @media (max-width:680px) { .reviews { grid-template-columns:1fr; } }
+    .review {
+      background: linear-gradient(180deg, var(--panel), var(--panel-2));
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:1rem;
+    }
+    .review span {
+      color:#ffd76a;
+      font-weight:900;
+      margin-left:.3rem;
+    }
+
+    .case-grid {
+      display:grid;
+      grid-template-columns:repeat(3,1fr);
+      gap:1rem;
+      margin-top:1rem;
+    }
+    @media (max-width:960px) { .case-grid { grid-template-columns:1fr; } }
+
+    .card {
+      background: var(--panel);
+      border:1px solid var(--border);
+      border-radius:12px;
+      padding:1rem;
+      margin-bottom:1rem;
+    }
+    .row { display:flex; justify-content:space-between; align-items:center; margin-top: .5rem; }
+    .tag { font-size:.8rem; opacity:.7; }
+  </style>
+
+  <!-- GA4 e Meta Pixel (sostituisci con i tuoi ID) -->
+  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
+  <script>
+    window.dataLayer = window.dataLayer || [];
+    function gtag(){dataLayer.push(arguments);}
+    gtag('js', new Date());
+    gtag('config', 'G-XXXXXXXXXX');
+  </script>
+  <script>
+    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
+    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)n._fbq=n;
+    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];
+    t=b.createElement(e);t.async=!0;
+    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script',
+    'https://connect.facebook.net/en_US/fbevents.js');
+    fbq('init','YOUR_PIXEL_ID');
+    fbq('track','PageView');
+  </script>
+  <noscript>
+    <img height="1" width="1" style="display:none"
+         src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/>
+  </noscript>
+</head>
+
+<body>
+  <header class="wrap">
+    <a href="/" class="logo">Colpa Mia</a>
+    <nav>
+      <a href="#catalogo">Catalogo</a>
+      <a href="#premium">Premium</a>
+      <a href="#wallet">Wallet</a>
+      <a href="#faq">FAQ</a>
+    </nav>
   </header>
 
   <main>
-    <!-- Hero -->
- <section class="hero">
-  <div class="wrap">
-    <h1 class="hero__title">Ti serve una scusa credibile? Te la scriviamo in 30 secondi</h1>
-    <p class="hero__sub">Compra in 10 secondi con Stripe. Consegna automatica 30s–10m.</p>
-    <div class="cta-row">
-      <a class="btn btn--xl btn--primary" href="#catalogo">Compra ora</a>
-      <a class="btn btn--xl" href="#entry-offer">Prova a metà prezzo</a>
-    </div>
-  </div>
-</section>
-
-<!-- LEAD MAGNET -->
-<section class="wrap section leadbox" id="lead">
-  <h2>Quiz: che tipo di “scusatore” sei?</h2>
-  <p class="hero__sub">Ricevi il PDF <b>“7 scuse che non funzionano più”</b> e un codice sconto.</p>
-  <form class="form" method="post" action="https://YOUR-DC.list-manage.com/subscribe/post?u=YOUR_U&id=YOUR_ID">
-    <input type="email" name="EMAIL" placeholder="La tua email" required>
-    <div style="display:flex;gap:.6rem">
-      <input type="tel" name="PHONE" placeholder="WhatsApp (opzionale)" style="flex:1">
-      <button class="btn" type="submit">Scarica PDF</button>
-    </div>
-  </form>
-</section>
-
-<!-- OFFERTA D’INGRESSO -->
-<section class="wrap section" id="entry-offer">
-  <h2>Offerta d’ingresso</h2>
-  <p class="hero__sub">Prova il servizio con la <b>Prima Scusa -50%</b>. Stesse funzioni, metà prezzo.</p>
-</section>
-
-<!-- PROVA SOCIALE -->
-<section class="wrap section" id="prove">
-  <h2>Cosa dicono i clienti</h2>
-  <div class="reviews">
-    <article class="review"><strong>Marco</strong><span>★ ★ ★ ★ ★</span><p>Alibi confezionato in 2 minuti. Zero sbatti.</p></article>
-    <article class="review"><strong>Giulia</strong><span>★ ★ ★ ★ ★</span><p>Tono perfetto. Ho riacquistato.</p></article>
-    <article class="review"><strong>Daniele</strong><span>★ ★ ★ ★ ★</span><p>Pagamento lampo, consegna rapida.</p></article>
-    <article class="review"><strong>Sara</strong><span>★ ★ ★ ★ ★</span><p>Il “vocale credibile” mi ha salvata.</p></article>
-    <article class="review"><strong>Luca</strong><span>★ ★ ★ ★ ★</span><p>Deluxe inattaccabile.</p></article>
-    <article class="review"><strong>Elena</strong><span>★ ★ ★ ★ ★</span><p>Tempi reali sotto i 10m.</p></article>
-  </div>
-  <div class="case-grid">
-    <div><h3>👨‍💼 Lavoro</h3><p>Riunione “non rinviabile” + ICs.</p></div>
-    <div><h3>❤️ Relazioni</h3><p>Alibi soft-romantico con varianti.</p></div>
-    <div><h3>🗽️ Traffico</h3><p>Template local + vocale ambientale.</p></div>
-  </div>
-</section>
-
+    <!-- HERO -->
+    <section class="hero">
+      <div class="wrap">
+        <h1 class="hero__title">Ti serve una scusa credibile? Te la scriviamo in 30 secondi</h1>
+        <p class="hero__sub">Compra in 10 secondi con Stripe. Consegna automatica 30s–10m.</p>
+        <div class="cta-row">
+          <a class="btn btn--xl btn--primary" href="#catalogo">Compra ora</a>
+          <a class="btn btn--xl" href="#entry-offer">Prova a metà prezzo</a>
+        </div>
+      </div>
     </section>
 
-    <!-- Catalogo -->
-    <section class="wrap section" id="catalogo" aria-label="Pacchetti">
+    <!-- LEAD MAGNET -->
+    <section class="wrap section leadbox" id="lead">
+      <h2>Quiz: che tipo di “scusatore” sei?</h2>
+      <p class="hero__sub">Ricevi il PDF <strong>“7 scuse che non funzionano più”</strong> e un codice sconto.</p>
+      <form class="form" method="post"
+            action="https://YOUR-DC.list-manage.com/subscribe/post?u=YOUR_U&id=YOUR_ID">
+        <input type="email" name="EMAIL" placeholder="La tua email" required>
+        <input type="tel" name="PHONE" placeholder="WhatsApp (opzionale)">
+        <button class="btn" type="submit">Scarica PDF</button>
+      </form>
+    </section>
+
+    <!-- OFFERTA D’INGRESSO -->
+    <section class="wrap section" id="entry-offer">
+      <h2>Offerta d’ingresso</h2>
+      <p class="hero__sub">Prova il servizio con la <strong>Prima Scusa -50%</strong>. Stesse funzioni, metà prezzo.</p>
+    </section>
+
+    <!-- PROVA SOCIALE -->
+    <section class="wrap section" id="prove">
+      <h2>Cosa dicono i clienti</h2>
+      <div class="reviews">
+        <article class="review"><strong>Marco</strong><span>★ ★ ★ ★ ★</span><p>Alibi confezionato in 2 minuti. Zero sbatti.</p></article>
+        <article class="review"><strong>Giulia</strong><span>★ ★ ★ ★ ★</span><p>Testi credibili, tono perfetto. Ho riacquistato.</p></article>
+        <article class="review"><strong>Daniele</strong><span>★ ★ ★ ★ ★</span><p>Pagamento lampo, consegna ancora più rapida.</p></article>
+        <article class="review"><strong>Sara</strong><span>★ ★ ★ ★ ★</span><p>Il “vocale credibile” mi ha salvata. Top.</p></article>
+        <article class="review"><strong>Luca</strong><span>★ ★ ★ ★ ★</span><p>La Deluxe è inattaccabile. Consigliata.</p></article>
+        <article class="review"><strong>Elena</strong><span>★ ★ ★ ★ ★</span><p>Supporto ok, tempi reali sotto i 10m.</p></article>
+      </div>
+      <div class="case-grid">
+        <div><h3>🧑‍💼 Lavoro</h3><p>Riunione “non rinviabile” + blocco calendario.</p></div>
+        <div><h3>❤️ Relazioni</h3><p>Alibi soft-romantico con varianti.</p></div>
+        <div><h3>🏙️ Traffico</h3><p>Template localizzato + vocale ambientale.</p></div>
+      </div>
+    </section>
+
+    <!-- CATALOGO -->
+    <section class="wrap section" id="catalogo">
       <h2>Catalogo</h2>
-      <div id="grid" class="grid"></div>
-      <div id="msg" class="msg" hidden></div>
+      <div id="catalogo-grid"></div>
+      <p id="catalogo-msg"></p>
     </section>
 
-    <!-- Premium -->
-    <section class="wrap section" id="premium" aria-label="Prodotti Premium">
-      <h2>Prodotti Premium (solo con punti)</h2>
-      <p class="hero__sub">Sblocca contenuti speciali usando i tuoi minuti accumulati (punti).</p>
-      <div id="premium-grid" class="grid"></div>
-      <div id="premium-msg" class="msg" hidden></div>
+    <!-- PREMIUM -->
+    <section class="wrap section" id="premium">
+      <h2>Premium</h2>
+      <p id="premium-msg"></p>
+      <div id="premium-grid"></div>
+    </section>
+
+    <!-- WALLET -->
+    <section class="wrap section" id="wallet">
+      <h2>Wallet</h2>
+      <div id="wallet-grid"></div>
+      <p id="wallet-msg"></p>
     </section>
 
     <!-- FAQ -->
-    <section id="faq" class="wrap section">
+    <section class="wrap section" id="faq">
       <h2>FAQ</h2>
-
-      <details>
-        <summary>Come funziona il pagamento?</summary>
-        <p>Usiamo Stripe Checkout. Selezioni il pacchetto, inserisci carta, confermi: fatto. Torni qui alla pagina di conferma.</p>
-      </details>
-
-      <details>
-        <summary>Quando vedo i minuti e i punti?</summary>
-        <p>Subito dopo il pagamento. Vai su <a href="/wallet.html">Wallet</a>, inserisci la tua email e trovi il totale minuti acquistati e i punti.</p>
-      </details>
-
-      <details>
-        <summary>Posso usare coupon o codici promo?</summary>
-        <p>Sì, se attivi i codici in Stripe, il checkout li accetta (impostazione lato Stripe).</p>
-      </details>
+      <div class="faq-item">
+        <h3>Quanto tempo ci vuole per ricevere la scusa?</h3>
+        <p>Tra 30 secondi e 10 minuti, a seconda del pacchetto.</p>
+      </div>
+      <div class="faq-item">
+        <h3>Posso chiedere un rimborso?</h3>
+        <p>Sì, se il testo non è soddisfacente ti rimborsiamo.</p>
+      </div>
+      <div class="faq-item">
+        <h3>La mia privacy è garantita?</h3>
+        <p>Assolutamente. Le tue richieste restano anonime.</p>
+      </div>
     </section>
   </main>
 
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="wrap footer__inner">
-      <small>© <span id="year"></span> Colpa Mia — Netlify + GitHub + Stripe</small>
-      <div class="links">
-        <a href="#">Privacy</a>
-        <a href="#">Termini</a>
-      </div>
-    </div>
-  </footer>
-
-  <noscript>
-    <div style="position:fixed;bottom:0;left:0;right:0;background:#111;color:#fff;padding:.75rem 1rem;font:14px/1.4 system-ui,Segoe UI,Roboto,sans-serif;z-index:9999;">
-      Questo sito usa JavaScript per il catalogo e il fondale dinamico. Abilitalo per la migliore esperienza.
-    </div>
-  </noscript>
-
-  <!-- I TUOI SCRIPT APP -->
-  <script src="/shop.js?v=10" defer></script>
-  <script src="/premium.js?v=10" defer></script>
-
-  <!-- ======= CYBERCITY BACKGROUND (JS) ======= -->
-  <script>
-  (function(){
-    const canvas = document.getElementById('cybercity');
-    const ctx = canvas.getContext('2d', { alpha:true });
-
-    const DARK = 'rgba(8,12,20,1)';
-    const CYAN  = 'rgba(0,255,255,';
-    const MAG   = 'rgba(245,20,140,';
-    const AMBER = 'rgba(255,190,0,';
-    const WHITE = 'rgba(255,255,255,';
-
-    // Settings (puoi ritoccare)
-    const LAYERS_DEF = [
-      { depth:.15, fog:.6,  density:90,  windows:.10 },
-      { depth:.35, fog:.45, density:70,  windows:.18 },
-      { depth:.60, fog:.30, density:55,  windows:.26 },
-      { depth:.90, fog:.16, density:42,  windows:.34 } // foreground (tetti per splash)
-    ];
-    const RAIN_COUNT_BASE = 260;
-    const DRONES_COUNT    = 5;
-    const CARS_COUNT      = 8;
-    const ADS_COUNT       = 6;
-    const SPLASH_PARTICLES = 6;
-
-    // Stato canvas
-    let DPR=1, W=0, H=0;
-    let layers=[], roofSegments=[]; // tetti del layer più vicino
-    let rain=[], splashes=[], drones=[], cars=[], ads=[];
-    let reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-
-    function resize(){
-      DPR = Math.max(1, Math.min(2, window.devicePixelRatio || 1));
-      W = canvas.width  = Math.floor(window.innerWidth  * DPR);
-      H = canvas.height = Math.floor(window.innerHeight * DPR);
-      canvas.style.width  = (W/DPR) + 'px';
-      canvas.style.height = (H/DPR) + 'px';
-      ctx.setTransform(1,0,0,1,0,0);
-      buildScene();
-    }
-    window.addEventListener('resize', resize, { passive:true });
-
-    function buildScene(){
-      layers = buildLayers(LAYERS_DEF);
-      rain = buildRain(reduced ? Math.floor(RAIN_COUNT_BASE*0.5) : RAIN_COUNT_BASE);
-      splashes.length = 0;
-      drones = buildDrones(reduced ? Math.max(2, Math.floor(DRONES_COUNT*0.6)) : DRONES_COUNT);
-      cars   = buildCars(reduced ? Math.max(4, Math.floor(CARS_COUNT*0.6)) : CARS_COUNT);
-      ads    = buildAds(ADS_COUNT);
-    }
-
-    // ------------------------ Util
-    const rand=(a,b)=>Math.random()*(b-a)+a;
-    const clamp=(v,a,b)=>v<a?a:(v>b?b:v);
-
-    // ------------------------ Layers skyline + tetti
-    function buildLayers(defs){
-      roofSegments = [];
-      return defs.map((set, idx)=>{
-        const c = document.createElement('canvas');
-        c.width = W; c.height = H;
-        const g = c.getContext('2d');
-        const ground = H * (0.55 + (1 - set.depth) * 0.15);
-
-        const n = Math.floor((W/28) * set.density/100);
-        const localRoofs = [];
-        for(let i=0;i<n;i++){
-          const w = rand(18,60)*set.depth*DPR;
-          const h = rand(H*.12, H*.45)*set.depth;
-          const x = rand(-50, W+50);
-          const y = ground - h;
-
-          // shape
-          g.fillStyle = 'rgba(12,16,26,'+(0.55+0.35*set.depth)+')';
-          g.fillRect(x,y,w,h);
-
-          // dettaglio verticale
-          g.fillStyle = 'rgba(30,36,56,'+(0.2+0.2*set.depth)+')';
-          for(let k=0;k<rand(1,4);k++){
-            const vx = x + rand(3, w-6);
-            g.fillRect(vx, y+4, 2*DPR, h-8);
-          }
-
-          // finestre
-          const stepX = 6*DPR, stepY = 6*DPR;
-          for(let yy=y+8; yy<y+h-8; yy+=stepY){
-            for(let xx=x+4; xx<x+w-4; xx+=stepX){
-              if(Math.random() < set.windows){
-                const tint = Math.random()<0.6 ? AMBER : (Math.random()<0.5 ? CYAN : MAG);
-                g.fillStyle = tint + (0.18 + 0.35*Math.random()) + ')';
-                g.fillRect(xx, yy, 3*DPR, 2.5*DPR);
-              }
-            }
-          }
-
-          // registra tetti solo sul layer più vicino
-          if(idx === defs.length-1) localRoofs.push({x, y: y-1*DPR, w});
-        }
-
-        // foschia
-        const fog = g.createLinearGradient(0,0,0,H);
-        fog.addColorStop(0,    'rgba(10,14,24,' + (0.15*set.fog) + ')');
-        fog.addColorStop(0.45, 'rgba(10,14,24,' + (0.10*set.fog) + ')');
-        fog.addColorStop(1,    'rgba(10,14,24,' + (0.40*set.fog) + ')');
-        g.fillStyle=fog; g.fillRect(0,0,W,H);
-
-        if(localRoofs.length) roofSegments = localRoofs;
-        return { canvas:c, depth:set.depth };
-      });
-    }
-
-    // ------------------------ Ads con testo scorrevole
-    const SLOGANS = [
-      'COLPA MIA // SCUSE ON-DEMAND',
-      'LA SCUSA PERFETTA IN 10 SECONDI',
-      'WALLET + PUNTI = POTERI SPECIALI',
-      'NEON // PRIVACY // STRIPE SECURE',
-      'JUSTIFY ANY LATE.™',
-    ];
-    function buildAds(n){
-      const arr=[];
-      for(let i=0;i<n;i++){
-        arr.push({
-          x: rand(0, W), y: rand(H*.15, H*.55),
-          w: rand(110,220)*DPR, h: rand(70,160)*DPR,
-          hue: [CYAN,MAG,AMBER][(Math.random()*3)|0],
-          alpha: rand(0.12, 0.24),
-          flicker: rand(0.015, 0.045),
-          text: SLOGANS[(Math.random()*SLOGANS.length)|0],
-          scroll: rand(0, 400)*DPR, speed: rand(24, 48)*DPR,
-          beam: Math.random()<0.7
-        });
-      }
-      return arr;
-    }
-    function drawAds(t){
-      ctx.save(); ctx.globalCompositeOperation='screen';
-      for(const ad of ads){
-        const A = ad.alpha + Math.sin(t*ad.flicker)*0.06;
-        ctx.fillStyle = ad.hue + clamp(A, 0, 0.45) + ')';
-        ctx.fillRect(ad.x, ad.y, ad.w, ad.h);
-
-        // scanlines
-        ctx.fillStyle = WHITE + '0.06)';
-        for(let y=ad.y; y<ad.y+ad.h; y+=6*DPR) ctx.fillRect(ad.x, y, ad.w, 1*DPR);
-
-        // testo scorrevole dentro il pannello
-        ctx.save();
-        ctx.beginPath(); ctx.rect(ad.x, ad.y, ad.w, ad.h); ctx.clip();
-        ctx.font = `${12*DPR}px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace`;
-        ctx.fillStyle = WHITE + '0.8)';
-        ctx.shadowColor = WHITE + '0.45)'; ctx.shadowBlur = 6*DPR;
-        ad.scroll -= ad.speed * 0.016; // ~60fps
-        const tw = ctx.measureText(ad.text).width + 40*DPR;
-        let sx = ad.x + (ad.scroll % tw);
-        for(; sx < ad.x + ad.w + tw; sx += tw){
-          ctx.fillText(ad.text, sx, ad.y + ad.h/2 + 4*DPR);
-        }
-        ctx.restore();
-
-        // fascio verticale
-        if(ad.beam){
-          const g = ctx.createLinearGradient(ad.x+ad.w/2, ad.y+ad.h, ad.x+ad.w/2, H);
-          g.addColorStop(0, ad.hue + '0.20)');
-          g.addColorStop(1, 'rgba(0,0,0,0)');
-          ctx.fillStyle = g;
-          ctx.fillRect(ad.x+ad.w/2 - 2*DPR, ad.y+ad.h, 4*DPR, H);
-        }
-      }
-      ctx.restore();
-    }
-
-    // ------------------------ Pioggia + splash sui tetti
-    function buildRain(n){
-      const arr = new Array(n);
-      for(let i=0;i<n;i++){
-        const d={}; resetDrop(d); d.y=Math.random()*H; arr[i]=d;
-      }
-      return arr;
-    }
-    function resetDrop(d){
-      d.x = Math.random()*W; d.y = -rand(0,H);
-      const s = rand(.65,1.35);
-      d.vx = -120*s*DPR; d.vy = 480*s*DPR;
-      d.len = rand(12,22)*s*DPR;
-    }
-    function drawRain(dt){
-      ctx.save(); ctx.globalCompositeOperation='screen';
-      ctx.strokeStyle = WHITE+'0.25)'; ctx.lineWidth = DPR;
-      ctx.beginPath();
-      for(const d of rain){
-        const ox=d.x, oy=d.y;
-        d.x += d.vx*dt; d.y += d.vy*dt;
-
-        // Collisione con tetti front layer?
-        // (test semplice: se supera y del tetto e x nel range)
-        for(const r of roofSegments){
-          if(d.y >= r.y && d.x >= r.x && d.x <= r.x + r.w){
-            spawnSplash(d.x, r.y);
-            resetDrop(d);
-            break;
-          }
-        }
-
-        const x2 = d.x - d.vx * .035, y2 = d.y - d.vy * .035;
-        ctx.moveTo(d.x, d.y); ctx.lineTo(x2, y2);
-
-        if(d.y>H || d.x<-50) resetDrop(d);
-      }
-      ctx.stroke(); ctx.restore();
-
-      // splashes
-      for(let i=splashes.length-1; i>=0; i--){
-        const s = splashes[i];
-        s.vy += 980*DPR*dt*0.4; // gravità attenuata
-        s.x += s.vx*dt; s.y += s.vy*dt; s.life -= dt;
-        const a = clamp(s.life/s.max, 0, 1)*.8;
-        ctx.fillStyle = WHITE + a + ')';
-        ctx.fillRect(s.x, s.y, 2*DPR, 2*DPR);
-        if(s.life<=0) splashes.splice(i,1);
-      }
-    }
-    function spawnSplash(x,y){
-      for(let i=0;i<SPLASH_PARTICLES;i++){
-        const a = rand(-Math.PI*.9, -Math.PI*.2);
-        const sp = rand(90, 220)*DPR;
-        splashes.push({
-          x, y: y-1*DPR,
-          vx: Math.cos(a)*sp, vy: Math.sin(a)*sp,
-          max: rand(.15,.30), life: rand(.15,.30)
-        });
-      }
-    }
-
-    // ------------------------ Droni con fari di ricerca
-    function buildDrones(n){
-      const arr=[];
-      for(let i=0;i<n;i++){
-        arr.push({
-          x: rand(0,W), y: rand(H*.18,H*.48),
-          vx: rand(-80,80)*DPR, vy: rand(-30,30)*DPR,
-          beamDir: rand(-.7,.7), beamRotSpeed: rand(.2,.6),
-          hue: Math.random()<.5 ? CYAN : MAG, phase: Math.random()*1000
-        });
-      }
-      return arr;
-    }
-    function drawDrones(t, dt){
-      ctx.save();
-      for(const d of drones){
-        // small wander
-        d.x += d.vx*dt; d.y += d.vy*dt;
-        if(d.x<40*DPR||d.x>W-40*DPR) d.vx*=-1;
-        if(d.y<H*.18||d.y>H*.6)     d.vy*=-1;
-
-        // beam oscillante
-        d.beamDir += Math.sin((t+d.phase)*0.001)*0.002*d.beamRotSpeed;
-        const B = 120*DPR;
-        const dx = Math.cos(d.beamDir)*B, dy = Math.sin(d.beamDir)*B;
-        const gx = ctx.createLinearGradient(d.x, d.y, d.x+dx, d.y+dy);
-        gx.addColorStop(0, d.hue+'0.28)');
-        gx.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.globalCompositeOperation='screen';
-        ctx.fillStyle=gx;
-        ctx.beginPath();
-        ctx.moveTo(d.x-3*DPR, d.y);
-        ctx.lineTo(d.x+3*DPR, d.y);
-        ctx.lineTo(d.x+dx, d.y+dy);
-        ctx.closePath(); ctx.fill();
-
-        // corpo drone
-        ctx.globalCompositeOperation='lighter';
-        ctx.fillStyle='rgba(26,32,50,.95)';
-        ctx.beginPath(); ctx.arc(d.x, d.y, 6*DPR, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle=WHITE+'0.8)'; ctx.fillRect(d.x-3*DPR, d.y-2*DPR, 6*DPR, 4*DPR);
-
-        // rotori (anelli)
-        ctx.strokeStyle=d.hue+'0.7)'; ctx.lineWidth=1.5*DPR;
-        ctx.beginPath(); ctx.arc(d.x-8*DPR, d.y-6*DPR, 3*DPR, 0, Math.PI*2); ctx.stroke();
-        ctx.beginPath(); ctx.arc(d.x+8*DPR, d.y-6*DPR, 3*DPR, 0, Math.PI*2); ctx.stroke();
-      }
-      ctx.restore();
-    }
-
-    // ------------------------ Auto volanti (come prima)
-    function buildCars(n){ const arr=[]; for(let i=0;i<n;i++) arr.push(makeCar()); return arr; }
-    function makeCar(){
-      const side = Math.random()<.5 ? -1 : 1;
-      const y = rand(H*.25,H*.55);
-      const speed = rand(110,220)*DPR*(side<0?1:-1);
-      return { x: side<0 ? -80*DPR : W+80*DPR, y, vx:speed, wob: rand(.8,1.8), t0: Math.random()*1000, hue: Math.random()<.5?CYAN:MAG };
-    }
-    function drawCars(t, dt){
-      for(const c of cars){
-        const wob = Math.sin((t + c.t0)*0.002*c.wob)*6*DPR;
-        const x=c.x, y=c.y+wob; c.x += c.vx*dt;
-
-        // scia
-        ctx.globalCompositeOperation='screen';
-        const grad = ctx.createLinearGradient(x, y, x - Math.sign(c.vx)*90*DPR, y+wob*.1);
-        grad.addColorStop(0, c.hue+'0.55)'); grad.addColorStop(1, 'rgba(0,0,0,0)');
-        ctx.fillStyle=grad;
-        ctx.fillRect(x - Math.sign(c.vx)*80*DPR, y-2*DPR, Math.sign(c.vx)*80*DPR, 4*DPR);
-
-        // scafo
-        ctx.globalCompositeOperation='lighter';
-        ctx.fillStyle='rgba(28,34,52,.9)';
-        ctx.beginPath(); ctx.ellipse(x,y,14*DPR,7.5*DPR,0,0,Math.PI*2); ctx.fill();
-
-        ctx.fillStyle=WHITE+'0.75)'; ctx.fillRect(x-4*DPR,y-2*DPR,8*DPR,4*DPR);
-        ctx.fillStyle=MAG+'0.85)';   ctx.fillRect(x-12*DPR,y-1.5*DPR,3*DPR,3*DPR);
-        ctx.fillStyle=CYAN+'0.85)';  ctx.fillRect(x+9*DPR,y-1.5*DPR,3*DPR,3*DPR);
-
-        if((c.vx<0 && c.x<-120*DPR) || (c.vx>0 && c.x>W+120*DPR)){
-          const i=cars.indexOf(c); cars[i]=makeCar();
-        }
-      }
-    }
-
-    // ------------------------ Lampi sporadici
-    let flash=0;
-    function maybeLightning(){
-      if(Math.random()<.003) flash=1;
-      if(flash>0){ ctx.fillStyle = WHITE + (.12*flash) + ')'; ctx.fillRect(0,0,W,H); flash*=.88; }
-    }
-
-    // ------------------------ Loop
-    let last=performance.now();
-    function frame(now){
-      const dt = Math.min(.034,(now-last)/1000); last=now;
-
-      // sfondo base
-      ctx.globalCompositeOperation='source-over';
-      ctx.fillStyle=DARK; ctx.fillRect(0,0,W,H);
-
-      // parallax layers
-      for(const L of layers){
-        const par = (now*0.00003)*L.depth*W;
-        const x = -(par % W);
-        ctx.drawImage(L.canvas, x, 0);
-        ctx.drawImage(L.canvas, x+W, 0);
-      }
-
-      drawAds(now);
-      drawRain(dt);
-      drawDrones(now, dt);
-      drawCars(now, dt);
-      maybeLightning();
-
-      requestAnimationFrame(frame);
-    }
-
-    // init
-    resize(); requestAnimationFrame(frame);
-    document.addEventListener('visibilitychange', ()=>{ if(document.hidden) last=performance.now(); });
-  })();
-  </script>
-
-  <script>
-    // Footer + smooth scroll
-    document.getElementById('year').textContent = new Date().getFullYear();
-    document.documentElement.style.scrollBehavior = 'smooth';
-  </script>
+  <!-- Scripts -->
+  <script src="assets/js/bg.js" defer></script>
+  <script src="public/wallet.js" defer></script>
+  <script src="public/premium.js" defer></script>
+  <script src="public/shop.js" defer></script>
 </body>
 </html>
