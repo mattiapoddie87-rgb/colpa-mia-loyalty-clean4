@@ -44,7 +44,65 @@
       n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
       t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window, document,'script','https://connect.facebook.net/en_US/fbevents.js');
       fbq('init','YOUR_PIXEL_ID');
-      fbq('track','PageView');
+      
+        .cta-row{
+    display:flex;
+    gap:.8rem;
+    justify-content:center;
+    margin-top:.6rem;
+    flex-wrap:wrap;
+          }
+  }
+  .leadbox{
+    background:rgba(10,14,27,.55);
+    border:1px solid var(--border);
+    border-radius:16px;
+    padding:1rem;
+  }
+  .reviews{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+  }
+  @media (max-width:960px){
+    .reviews{ grid-template-columns:repeat(2,1fr); }
+  }
+  @media (max-width:680px){
+    .reviews{ grid-template-columns:1fr; }
+  }
+  .review{
+    background:linear-gradient(180deg,var(--panel),var(--panel-2));
+    border:1px solid var(--border);
+    border-radius:12px;
+    padding:12px;
+  }
+  .review span{
+    color:#ffd76a;
+    font-weight:900;
+    margin-left:.3rem;
+  }
+  .case-grid{
+    display:grid;
+    grid-template-columns:repeat(3,1fr);
+    gap:14px;
+    margin-top:12px;
+  }
+  @media (max-width:960px){
+    .case-grid{ grid-template-columns:1fr; }
+  }
+  .badge{
+    display:inline-block;
+    padding:.2rem .5rem;
+    border-radius:999px;
+    border:1px solid var(--border);
+    font-weight:800;
+    font-size:.8rem;
+  }
+  .badge--express{
+    background:rgba(0,229,255,.12);
+    border-color:#26e5ff;
+    color:#bff7ff;
+  }fbq('track','PageView');
     </script>
     <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
 head>
