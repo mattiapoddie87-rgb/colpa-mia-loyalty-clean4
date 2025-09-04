@@ -86,6 +86,12 @@ exports.handler = async (event) => {
 
       // raccoglie il TELEFONO nativamente: disponibile poi in session.customer_details.phone
       phone_number_collection: { enabled: true },
+custom_fields: [{
+  key: 'need',
+  label: { type: 'custom', custom: 'Contesto (facoltativo)' },
+  type: 'text',
+  optional: true,
+}],
 
       // campo contesto facoltativo
       custom_fields: [{
