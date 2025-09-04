@@ -1,46 +1,59 @@
-// public/chatbot.js
-document.addEventListener('DOMContentLoaded', () => {
-  const toggle = document.getElementById('chatbot-toggle');
-  const container = document.getElementById('chatbot-container');
-  const messagesEl = document.getElementById('chatbot-messages');
-  const form = document.getElementById('chatbot-form');
-  const input = document.getElementById('chatbot-input');
-  let history = [];
+const fetch = require('node-fetch');
 
-  // apre/chiude la finestra
-  toggle.addEventListener('click', () => {
-    container.classList.toggle('open');
-  });
+// Funzione serverless: chatbot AI per Colpa Mia
+exports.handler = async (event) => {
+  try {
+    const body = JSON.parse(event.body || '{}');
+    const history = Array.isArray(body.history) ? body.history : [];
 
-  // invia il messaggio
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const userMsg = input.value.trim();
-    if (!userMsg) return;
-    appendMessage('user', userMsg);
-    input.value = '';
-    history.push({ role: 'user', content: userMsg });
-    try {
-      const resp = await fetch('/.netlify/functions/chatbot', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ history }),
-      });
-      const data = await resp.json();
-      const aiMsg = data.reply || data.error || '…';
-      appendMessage('ai', aiMsg);
-      history.push({ role: 'assistant', content: aiMsg });
-    } catch (err) {
-      console.error(err);
-      appendMessage('ai', 'Errore nella risposta. Riprova più tardi.');
+    // Taglia la cronologia alle ultime 6 interazioni per ridurre l’uso di token
+    const trimmedHistory = history.slice(-6);
+
+    // Messaggio di sistema per contestualizzare il bot
+    const messages = [
+      {
+        role: 'system',
+        content:
+          'Sei l’assistente di Colpa Mia. Guida i clienti a scegliere il pacchetto più adatto, spiega le differenze tra i servizi e rispondi con tono diretto e professionale.',
+      },
+      ...trimmedHistory,
+    ];
+
+    // Modello da usare: legge la variabile OPENAI_MODEL o cade su gpt-4o
+    const model = process.env.OPENAI_MODEL || 'gpt-4o';
+
+    const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${process.env.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages,
+        max_tokens: 200,
+        temperature: 0.7,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error('Errore OpenAI ' + response.status);
     }
-  });
 
-  function appendMessage(sender, text) {
-    const p = document.createElement('p');
-    p.className = sender === 'user' ? 'user' : 'ai';
-    p.textContent = text;
-    messagesEl.appendChild(p);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
+    const data = await response.json();
+    const reply = data.choices?.[0]?.message?.content?.trim() || '';
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reply }),
+    };
+  } catch (e) {
+    // Restituisce l’errore al client: verrà mostrato dallo script del chatbot
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: e.message || 'Errore interno' }),
+    };
   }
-});
+};
