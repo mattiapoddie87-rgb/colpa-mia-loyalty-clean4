@@ -13,12 +13,12 @@ const CORS = {
 const PRICE_BY_SKU = {
   SCUSA_ENTRY:  'price_1S3O3BAuMAjkbPdH40irfbqa', // 0,50 € (già fornito)
   // Sostituisci gli XXXXX con i tuoi price reali:
-  SCUSA_BASE:   'price_XXXXXXXXXXXXXX',            // 1,00 €
-  SCUSA_TRIPLA: 'price_XXXXXXXXXXXXXX',            // 2,50 €
-  SCUSA_DELUXE: 'price_XXXXXXXXXXXXXX',            // 4,50 €
-  RIUNIONE:     'price_XXXXXXXXXXXXXX',            // 2,00 €
-  TRAFFICO:     'price_XXXXXXXXXXXXXX',            // 2,00 €
-  CONN_KO:      'price_1Sw4RAuMAjkbPdHLFPElLnX',   // dal tuo screenshot
+  SCUSA_BASE:   'price_1S1vuQAuMAjkbPdHnq3JIDQZ',            // 1,00 €
+  SCUSA_TRIPLA: 'price_1S1vuUAuMAjkbPdHNPjekZHq',            // 2,50 €
+  SCUSA_DELUXE: 'price_1S1vuXAuMAjkbPdHmgyfY8Bj',            // 4,50 €
+  RIUNIONE:     'price_1S1wdXAuMAjkbPdHfqU3fnwq',            // 2,00 €
+  TRAFFICO:     'price_1S1wdaAuMAjkbPdH8We1FVEy',            // 2,00 €
+  CONN_KO:      'price_1S1w4RAuMAjkbPdHLfPElLnX',   // dal tuo screenshot
 };
 
 const j = (s, b) => ({
