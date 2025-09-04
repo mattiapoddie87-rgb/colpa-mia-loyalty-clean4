@@ -19,7 +19,7 @@ const PRICE_MAP = {
 // ⬇️ Mappa esplicita SKU → Price ID (metti qui il price della “Prima Scusa -50%”)
 const PRICE_BY_SKU = {
   // Esempio (0,50 €): SOSTITUISCI con il tuo price_ reale
-  SCUSA_ENTRY: 'price_xxxxxxxxxxxxxxxxxxxxx',
+  SCUSA_ENTRY: 'price_1S3O3BAuMAjkbPdH40irfbqa',
   // opzionale: mappa anche gli altri se vuoi evitare la ricerca per metadata
   // SCUSA_BASE:   'price_1S1vuQAuMAjkbPdHnq3JIDQZ',
   // SCUSA_TRIPLA: 'price_1S1vuUAuMAjkbPdHNPjekZHq',
