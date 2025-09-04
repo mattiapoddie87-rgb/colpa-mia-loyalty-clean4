@@ -50,6 +50,6 @@ const RESPONSABILITA = [
       );
     // manda mail al tuo indirizzo commerciale
     window.location.href =
-      'mailto:info@colpamia.com?subject=' + subject + '&body=' + body;
+      'mailto:colpamiaconsulenze@proton.me?subject=' + subject + '&body=' + body;
   });
 })();
