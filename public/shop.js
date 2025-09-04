@@ -35,25 +35,28 @@ document.addEventListener('click', async (e) => {
   if (!btn) return;
   const sku = btn.getAttribute('data-sku');
   if (!sku) return;
+
   try {
     const r = await fetch('/.netlify/functions/create-checkout-session', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku }),
-      redirect: 'manual'
+      body: JSON.stringify({ sku })
     });
 
-    if (r.status === 303) {
-      const loc = r.headers.get('Location');
-      if (loc) { location.href = loc; return; }
+    // se errore backend, mostrane il motivo
+    if (!r.ok) {
+      let msg = `HTTP ${r.status}`;
+      try { const err = await r.json(); if (err?.error) msg += ` - ${err.error}`; } catch {}
+      alert(`Errore checkout: ${msg}`);
+      return;
     }
 
-    const data = await r.json().catch(() => ({}));
+    const data = await r.json();
     if (data?.url) { location.href = data.url; return; }
-
-    alert(data?.error || 'Si è verificato un errore durante il checkout.');
+    alert('Errore: URL checkout assente.');
   } catch (err) {
     console.error(err);
     alert('Si è verificato un errore durante il checkout.');
   }
 });
+
