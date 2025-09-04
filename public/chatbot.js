@@ -27,7 +27,7 @@ document.addEventListener('DOMContentLoaded', () => {
         body: JSON.stringify({ history }),
       });
       const data = await resp.json();
-      const aiMsg = data.reply || '…';
+      const aiMsg = data.reply || data.error || '…';
       appendMessage('ai', aiMsg);
       history.push({ role: 'assistant', content: aiMsg });
     } catch (err) {
