@@ -1,5 +1,4 @@
-// Catalogo e Checkout (tutti via Netlify function)
-
+// public/shop.js
 const CATALOG = [
   { sku: 'SCUSA_ENTRY',  title: 'Prima Scusa -50%', desc: 'Testa il servizio a metà prezzo.', eur: 50,  minutes: 10, badge: "Offerta d’ingresso" },
   { sku: 'SCUSA_BASE',   title: 'Scusa Base',       desc: 'La più usata, funziona sempre.', eur: 100, minutes: 10 },
@@ -15,13 +14,13 @@ const CATALOG = [
   if (!grid) return;
   grid.innerHTML = '';
   for (const it of CATALOG) {
-    const badge = it.badge ? `<span class="badge">${it.badge}</span>` : '';
     const el = document.createElement('article');
     el.className = 'card';
+    const badge = it.badge ? `<span class="badge">${it.badge}</span>` : '';
     el.innerHTML = `
       <h3>${it.title} ${badge}</h3>
       <p>${it.desc}</p>
-      <div class="price">€ ${(it.eur/100).toFixed(2)}</div>
+      <div class="price">€ ${(it.eur / 100).toFixed(2)}</div>
       <div class="row">
         <span class="tag">Credito: ${it.minutes} min</span>
         <button class="btn" data-sku="${it.sku}">Acquista</button>
@@ -37,13 +36,12 @@ document.addEventListener('click', async (e) => {
   if (!sku) return;
 
   try {
-    const r = await fetch('/.netlify/functions/create-checkout-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku })
+    // GET semplifica il debug: puoi aprire direttamente l'URL nel browser
+    const r = await fetch(`/.netlify/functions/create-checkout-session?sku=${encodeURIComponent(sku)}`, {
+      method: 'GET',
+      headers: { 'Cache-Control': 'no-cache' },
     });
 
-    // se errore backend, mostrane il motivo
     if (!r.ok) {
       let msg = `HTTP ${r.status}`;
       try { const err = await r.json(); if (err?.error) msg += ` - ${err.error}`; } catch {}
@@ -52,11 +50,20 @@ document.addEventListener('click', async (e) => {
     }
 
     const data = await r.json();
-    if (data?.url) { location.href = data.url; return; }
+    if (data?.url) { window.location.href = data.url; return; }
     alert('Errore: URL checkout assente.');
   } catch (err) {
-    console.error(err);
+    console.error('Checkout fetch error', err);
     alert('Si è verificato un errore durante il checkout.');
   }
 });
 
+// Isola script terzi (pixel/chatbot) per evitare che blocchino il resto
+window.addEventListener('error', (ev) => {
+  const src = ev?.filename || '';
+  if (src.includes('pixel') || src.includes('chatbot')) {
+    // non propagare
+    ev.preventDefault?.();
+    return false;
+  }
+}, true);
