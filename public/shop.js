@@ -36,10 +36,10 @@ document.addEventListener('click', async (e) => {
   if (!sku) return;
 
   try {
-    // GET semplifica il debug: puoi aprire direttamente l'URL nel browser
-    const r = await fetch(`/.netlify/functions/create-checkout-session?sku=${encodeURIComponent(sku)}`, {
-      method: 'GET',
-      headers: { 'Cache-Control': 'no-cache' },
+    const r = await fetch('/.netlify/functions/create-checkout-session', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sku })
     });
 
     if (!r.ok) {
@@ -50,13 +50,14 @@ document.addEventListener('click', async (e) => {
     }
 
     const data = await r.json();
-    if (data?.url) { window.location.href = data.url; return; }
+    if (data?.url) { location.href = data.url; return; }
     alert('Errore: URL checkout assente.');
   } catch (err) {
-    console.error('Checkout fetch error', err);
+    console.error(err);
     alert('Si è verificato un errore durante il checkout.');
   }
 });
+
 
 // Isola script terzi (pixel/chatbot) per evitare che blocchino il resto
 window.addEventListener('error', (ev) => {
