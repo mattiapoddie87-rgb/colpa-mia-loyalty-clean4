@@ -21,12 +21,12 @@ const PRICE_BY_SKU = {
   // Esempio (0,50 €): SOSTITUISCI con il tuo price_ reale
   SCUSA_ENTRY: 'price_xxxxxxxxxxxxxxxxxxxxx',
   // opzionale: mappa anche gli altri se vuoi evitare la ricerca per metadata
-  // SCUSA_BASE:   'price_...',
-  // SCUSA_TRIPLA: 'price_...',
-  // SCUSA_DELUXE: 'price_...',
-  // RIUNIONE:     'price_...',
-  // TRAFFICO:     'price_...',
-  // CONN_KO:      'price_...',
+  // SCUSA_BASE:   'price_1S1vuQAuMAjkbPdHnq3JIDQZ',
+  // SCUSA_TRIPLA: 'price_1S1vuUAuMAjkbPdHNPjekZHq',
+  // SCUSA_DELUXE: 'price_1S1vuXAuMAjkbPdHmgyfY8Bj',
+  // RIUNIONE:     'price_1S1wdXAuMAjkbPdHfqU3fnwq',
+  // TRAFFICO:     'price_1S1wdaAuMAjkbPdH8We1FVEy',
+  // CONN_KO:      'price_1S1w4RAuMAjkbPdHLfPElLnX',
 };
 
 function json(status, body) {
