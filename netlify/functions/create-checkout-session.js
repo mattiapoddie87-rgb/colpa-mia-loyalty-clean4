@@ -17,12 +17,12 @@ const PRICE_MAP = {
 // 🔴 COMPILA TUTTI gli SKU con i tuoi price_… reali da Stripe
 const PRICE_BY_SKU = {
   SCUSA_ENTRY:  'price_1S3O3BAuMAjkbPdH40irfbqa', // 0,50 €
-  SCUSA_BASE:   'price_XXXXXXXXXXXXXXXXXXXXXXX',   // 1,00 €
-  SCUSA_TRIPLA: 'price_XXXXXXXXXXXXXXXXXXXXXXX',   // 2,50 €
-  SCUSA_DELUXE: 'price_XXXXXXXXXXXXXXXXXXXXXXX',   // 4,50 €
-  RIUNIONE:     'price_XXXXXXXXXXXXXXXXXXXXXXX',   // 2,00 €
-  TRAFFICO:     'price_XXXXXXXXXXXXXXXXXXXXXXX',   // 2,00 €
-  CONN_KO:      'price_XXXXXXXXXXXXXXXXXXXXXXX',   // 2,00 €
+  SCUSA_BASE:   'price_1S1vuQAuMAjkbPdHnq3JIDQZ',   // 1,00 €
+  SCUSA_TRIPLA: 'price_1S1vuUAuMAjkbPdHNPjekZHq',   // 2,50 €
+  SCUSA_DELUXE: 'price_1S1vuXAuMAjkbPdHmgyfY8Bj',   // 4,50 €
+  RIUNIONE:     'price_1S1wdXAuMAjkbPdHfqU3fnwq',   // 2,00 €
+  TRAFFICO:     'price_1S1wdaAuMAjkbPdH8We1FVEy',   // 2,00 €
+  CONN_KO:      'price_1S1w4RAuMAjkbPdHLfPElLnX',   // 2,00 €
 };
 
 const j = (s,b)=>({ statusCode:s, headers:{...CORS,'Content-Type':'application/json'}, body:JSON.stringify(b) });
