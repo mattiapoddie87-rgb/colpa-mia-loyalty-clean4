@@ -1,6 +1,6 @@
 // netlify/functions/create-checkout-session.js
-// Crea una Stripe Checkout Session.
-// Supporta: priceId diretto, sku (lookup tra prezzi attivi), e una mappa PRICE_MAP per "responsabile".
+// Crea una Stripe Checkout Session (payment o subscription in base al price).
+// Supporta: priceId diretto, sku (lookup), mappa RESPONSABILE_*.
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -12,17 +12,10 @@ const cors = {
 };
 
 function resp(status, body) {
-  return {
-    statusCode: status,
-    headers: { ...cors, 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-  };
+  return { statusCode: status, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(body) };
 }
 
-/**
- * Mappa "commerciale" → Stripe Price ID
- * Sostituisci i placeholder con i tuoi price_... reali.
- */
+// Mappa commerciale → Price ID (assicurati che siano nello stesso ambiente della chiave!).
 const PRICE_MAP = {
   RESPONSABILE_AZIENDA:    'price_1S3f7eAuMAjkbPdHwbD8XqtV',
   RESPONSABILE_INFLUENCER: 'price_1S3fhAAuMAjkbPdHVRWBXJt5',
@@ -31,9 +24,7 @@ const PRICE_MAP = {
 
 exports.handler = async (event) => {
   try {
-    if (event.httpMethod === 'OPTIONS') {
-      return { statusCode: 204, headers: cors };
-    }
+    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
 
     // ---- input
     let body = {};
@@ -55,32 +46,37 @@ exports.handler = async (event) => {
     const email        = String(body.email || '').trim().toLowerCase();
     const priceIdIn    = String(body.priceId || '').trim();
     const skuIn        = String(body.sku || '').trim();
-    const responsabile = String(body.responsabile || '').trim();  // NEW
+    const responsabile = String(body.responsabile || '').trim();
     const qty          = Math.max(1, parseInt(body.qty || '1', 10) || 1);
 
     // ---- risolvi il Price
     let price = null;
 
-    // 1) Se passano già il priceId, lo usiamo
-    if (!price && priceIdIn) {
-      const p = await stripe.prices.retrieve(priceIdIn);
-      if (!p?.active) throw new Error('PRICE_NOT_ACTIVE');
-      price = p;
-    }
-
-    // 2) Se passano "responsabile" e c'è in mappa → risolviamo a priceId
-    if (!price && responsabile) {
-      const key = responsabile.toUpperCase(); // es. RESPONSABILE_AZIENDA
-      const mappedPriceId = PRICE_MAP[key];
-      if (!mappedPriceId) {
-        return resp(400, { error: 'RESPONSABILE_NOT_MAPPED', detail: { responsabile: key } });
+    async function getPriceById(id) {
+      try {
+        const p = await stripe.prices.retrieve(id);
+        if (!p?.active) throw new Error('PRICE_NOT_ACTIVE');
+        return p;
+      } catch (err) {
+        // errore tipico: price non esiste nell’ambiente corrente (test vs live)
+        throw new Error(`PRICE_RETRIEVE_FAILED: ${err?.message || 'unknown'}`);
       }
-      const p = await stripe.prices.retrieve(mappedPriceId);
-      if (!p?.active) throw new Error('PRICE_NOT_ACTIVE');
-      price = p;
     }
 
-    // 3) Fallback: se passano uno "sku", cerchiamo tra i prezzi attivi
+    // 1) priceId diretto
+    if (!price && priceIdIn) {
+      price = await getPriceById(priceIdIn);
+    }
+
+    // 2) mappa RESPONSABILE_*
+    if (!price && responsabile) {
+      const key = responsabile.toUpperCase();
+      const mappedId = PRICE_MAP[key];
+      if (!mappedId) return resp(400, { error: 'RESPONSABILE_NOT_MAPPED', detail: { responsabile: key } });
+      price = await getPriceById(mappedId);
+    }
+
+    // 3) lookup per sku su prezzi attivi
     if (!price && skuIn) {
       const list = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
       price = list.data.find(p =>
@@ -90,6 +86,10 @@ exports.handler = async (event) => {
     }
 
     if (!price) return resp(400, { error: 'PRICE_NOT_FOUND' });
+
+    // ---- determina mode in base al price
+    const isRecurring = !!price.recurring;   // se c'è p.recurring è un abbonamento
+    const mode = isRecurring ? 'subscription' : 'payment';
 
     // ---- riuso cliente se esiste
     let existingCustomer = null;
@@ -106,13 +106,11 @@ exports.handler = async (event) => {
     // ---- URLs base
     const site =
       process.env.SITE_URL ||
-      (event.headers && event.headers.origin && /^https?:\/\//.test(event.headers.origin)
-        ? event.headers.origin
-        : 'https://colpamia.com');
+      (event.headers?.origin && /^https?:\/\//.test(event.headers.origin) ? event.headers.origin : 'https://colpamia.com');
 
-    // ---- parametri sessione (puliti)
+    // ---- parametri sessione
     const params = {
-      mode: 'payment',
+      mode,
       line_items: [{ price: price.id, quantity: qty }],
       success_url: `${site}/success?session_id={CHECKOUT_SESSION_ID}`,
       cancel_url:  `${site}/cancel`,
@@ -122,6 +120,11 @@ exports.handler = async (event) => {
         type: 'text',
         optional: true,
       }],
+      // facoltativi
+      // allow_promotion_codes: true,
+      // billing_address_collection: 'auto',
+      // phone_number_collection: { enabled: true },
+      metadata: { origin: 'colpamia', responsabile }, // utile per debug
     };
 
     if (existingCustomer) {
@@ -131,13 +134,12 @@ exports.handler = async (event) => {
       params.customer_creation = 'if_required';
     }
 
-    // se vuoi i codici promo:
-    // params.allow_promotion_codes = true;
-
     const session = await stripe.checkout.sessions.create(params);
-    return resp(200, { url: session.url, id: session.id });
+    return resp(200, { url: session.url, id: session.id, mode });
 
   } catch (e) {
-    return resp(500, { error: e.message || 'INTERNAL_ERROR' });
+    console.error('CHECKOUT_ERROR', e);
+    // Rimanda info utili al frontend per capire il motivo
+    return resp(500, { error: e?.message || 'INTERNAL_ERROR' });
   }
 };
