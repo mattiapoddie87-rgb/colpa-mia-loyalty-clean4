@@ -115,14 +115,22 @@
 
     <!-- LEAD MAGNET -->
     <section class="wrap section leadbox" id="lead">
-      <h2>Quiz: che tipo di “scusatore” sei?</h2>
-      <p class="hero__sub">Ricevi il PDF <strong>“7 scuse che non funzionano più”</strong> e un codice sconto.</p>
-      <form class="form" method="post" action="https://YOUR-DC.list-manage.com/subscribe/post?u=YOUR_U&id=YOUR_ID">
-        <input type="email" name="EMAIL" placeholder="La tua email" required/>
-        <input type="tel" name="PHONE" placeholder="WhatsApp (opzionale)"/>
-        <button class="btn" type="submit">Scarica PDF</button>
-      </form>
-    </section>
+  <h2>Quiz: che tipo di “scusatore” sei?</h2>
+  <p class="hero__sub">Ricevi il PDF <strong>“7 scuse che non funzionano più”</strong> e un codice sconto.</p>
+
+  <form id="lead-form" class="form" novalidate>
+    <input type="email" name="email" id="lead-email" placeholder="La tua email" required>
+    <input type="tel"   name="phone" id="lead-phone" placeholder="WhatsApp (opzionale)">
+    <!-- honeypot anti-bot -->
+    <input type="text" name="website" id="hp" style="display:none">
+    <button class="btn" id="lead-submit" type="submit">Scarica PDF</button>
+    <p id="lead-msg" style="margin:.5rem 0 0;opacity:.9"></p>
+  </form>
+</section>
+
+<!-- aggiungi dopo gli altri script -->
+<script src="lead.js?v=1" defer></script>
+
 
     <!-- OFFERTA D’INGRESSO -->
     <section class="wrap section" id="entry-offer">
