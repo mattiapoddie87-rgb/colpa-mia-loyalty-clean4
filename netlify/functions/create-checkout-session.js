@@ -8,33 +8,21 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-// === Mappa fissa SKU -> price_ (Strada A) ===
-// COMPILA con i tuoi price_ corretti (stesso ambiente della chiave: test vs live)
 const PRICE_BY_SKU = {
-  SCUSA_ENTRY:  'price_1S3O3BAuMAjkbPdH40irfbqa', // 0,50 € (già fornito)
-  // Sostituisci gli XXXXX con i tuoi price reali:
-  SCUSA_BASE:   'price_1S1vuQAuMAjkbPdHnq3JIDQZ',            // 1,00 €
-  SCUSA_TRIPLA: 'price_1S1vuUAuMAjkbPdHNPjekZHq',            // 2,50 €
-  SCUSA_DELUXE: 'price_1S1vuXAuMAjkbPdHmgyfY8Bj',            // 4,50 €
-  RIUNIONE:     'price_1S1wdXAuMAjkbPdHfqU3fnwq',            // 2,00 €
-  TRAFFICO:     'price_1S1wdaAuMAjkbPdH8We1FVEy',            // 2,00 €
-  CONN_KO:      'price_1S1w4RAuMAjkbPdHLfPElLnX',   // dal tuo screenshot
+  // Mappa solo ciò che sei sicuro sia corretto (live!).
+  SCUSA_ENTRY: 'price_1S3O3BAuMAjkbPdH40irfbqa',
+  // Se vuoi, aggiungi gli altri SOLO quando verifichi l’ID live in Stripe.
 };
 
-const j = (s, b) => ({
-  statusCode: s,
-  headers: { ...CORS, 'Content-Type': 'application/json' },
-  body: JSON.stringify(b),
-});
+const j = (s, b) => ({ statusCode: s, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
 
 exports.handler = async (event) => {
   try {
     if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS };
 
-    // ---- parse input (POST o GET)
     let body = {};
     if (event.httpMethod === 'POST') {
-      try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
+      try { body = JSON.parse(event.body || '{}'); } catch {}
     } else if (event.httpMethod === 'GET') {
       const q = new URLSearchParams(event.queryStringParameters || {});
       body = { sku: q.get('sku'), email: q.get('email'), qty: q.get('qty') };
@@ -42,43 +30,36 @@ exports.handler = async (event) => {
       return j(405, { error: 'METHOD_NOT_ALLOWED' });
     }
 
-    const sku  = String(body.sku || '').trim().toUpperCase();
+    const sku   = String(body.sku || '').trim().toUpperCase();
     const email = String(body.email || '').trim().toLowerCase();
     const qty   = Math.max(1, parseInt(body.qty || '1', 10) || 1);
-
     if (!sku) return j(400, { error: 'SKU_REQUIRED' });
 
-    // ---- risoluzione price
     let priceId = PRICE_BY_SKU[sku];
-    let price = null;
+    let price   = null;
 
+    // 1) Prova mapping, MA se fallisce passa al fallback
     if (priceId) {
       try {
         price = await stripe.prices.retrieve(priceId);
         if (!price?.active) throw new Error('PRICE_NOT_ACTIVE');
       } catch (e) {
-        console.error('PRICE_BY_SKU retrieve failed', { sku, priceId, msg: e?.message });
-        return j(400, { error: 'PRICE_RETRIEVE_FAILED', detail: { sku, priceId, message: e?.message } });
-      }
-    } else {
-      // Fallback: cerca per metadata.sku su price o product (così non si blocca se hai dimenticato la mappa)
-      try {
-        const list = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
-        price = list.data.find(p =>
-          (p.metadata?.sku && String(p.metadata.sku).toUpperCase() === sku) ||
-          (p.product?.metadata?.sku && String(p.product.metadata.sku).toUpperCase() === sku)
-        ) || null;
-        if (!price) {
-          return j(400, { error: 'PRICE_NOT_MAPPED', detail: { sku, hint: 'Aggiungi lo SKU a PRICE_BY_SKU o imposta metadata.sku in Stripe' } });
-        }
-        priceId = price.id;
-      } catch (e) {
-        console.error('prices.list failed', e?.message);
-        return j(500, { error: 'PRICE_LOOKUP_FAILED', detail: { sku, message: e?.message } });
+        priceId = null; // forza fallback su metadata.sku
       }
     }
 
-    // ---- riuso cliente (opzionale)
+    // 2) Fallback: cerca per metadata.sku (price o product)
+    if (!priceId) {
+      const list = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
+      price = list.data.find(p =>
+        (p.metadata?.sku && String(p.metadata.sku).toUpperCase() === sku) ||
+        (p.product?.metadata?.sku && String(p.product.metadata.sku).toUpperCase() === sku)
+      ) || null;
+      if (!price) return j(400, { error: 'PRICE_NOT_FOUND', detail: { sku, hint: 'imposta metadata.sku in Stripe o compila PRICE_BY_SKU' } });
+      priceId = price.id;
+    }
+
+    // customer reuse (facoltativo)
     let customer = null;
     if (email) {
       try {
@@ -90,17 +71,14 @@ exports.handler = async (event) => {
       }
     }
 
-    // ---- URL sito
-    const site =
-      process.env.SITE_URL ||
+    const site = process.env.SITE_URL ||
       (/^https?:\/\//.test(event.headers?.origin || '') ? event.headers.origin : 'https://colpamia.com');
 
-    // ---- crea sessione
     const params = {
       mode: 'payment',
       line_items: [{ price: priceId, quantity: qty }],
       success_url: `${site}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url: `${site}/cancel`,
+      cancel_url:  `${site}/cancel`,
       custom_fields: [{
         key: 'need',
         label: { type: 'custom', custom: 'Esigenza (facoltativa)' },
@@ -113,9 +91,7 @@ exports.handler = async (event) => {
 
     const session = await stripe.checkout.sessions.create(params);
     return j(200, { url: session.url, id: session.id });
-
   } catch (e) {
-    console.error('create-checkout-session fatal:', e);
     return j(500, { error: e?.message || 'INTERNAL_ERROR' });
   }
 };
