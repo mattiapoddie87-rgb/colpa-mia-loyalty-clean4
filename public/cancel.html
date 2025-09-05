@@ -4,17 +4,66 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Pagamento annullato — Colpa Mia</title>
-  <link rel="stylesheet" href="/styles.css"/>
+  <style>
+    :root{ --bg:#090e20; --panel:#0f1430; --text:#f5f5f7; --border:rgba(255,255,255,.12); --primary:#00b2ff; }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+    /* Metti il background dietro */
+    #bg,.stripes,.glow{position:fixed; inset:0; z-index:0; pointer-events:none}
+    /* Contenuto sopra */
+    main{position:relative; z-index:1; min-height:60vh; display:grid; place-items:center; padding:24px}
+    .wrap{max-width:740px; text-align:center}
+    h1{margin:0 0 8px}
+    p{opacity:.9}
+    .actions{margin-top:18px; display:flex; gap:10px; justify-content:center; flex-wrap:wrap}
+    .btn{padding:.6rem 1.1rem; border-radius:10px; border:1px solid var(--border); background:var(--panel); color:#fff; cursor:pointer}
+    .btn--primary{background:var(--primary); border-color:transparent}
+    .hint{opacity:.7; font-size:.9rem; margin-top:6px}
+  </style>
 </head>
 <body>
-  <canvas id="bg"></canvas><div class="stripes stripes--h"></div><div class="stripes stripes--v"></div><div class="glow"></div>
-  <main class="wrap section" style="min-height:60vh;display:grid;place-items:center">
-    <div style="text-align:center;max-width:720px">
-      <h1>🛑 Pagamento annullato</h1>
-      <p class="msg">Nessun addebito effettuato. Puoi riprovare quando vuoi.</p>
-      <p><a class="btn" href="/">Torna al catalogo</a></p>
+  <!-- background opzionale -->
+  <canvas id="bg"></canvas>
+  <div class="stripes stripes--h"></div>
+  <div class="stripes stripes--v"></div>
+  <div class="glow"></div>
+
+  <main>
+    <div class="wrap">
+      <h1>Pagamento annullato</h1>
+      <p>Nessun addebito è stato effettuato.</p>
+      <div id="sku-name" class="hint"></div>
+      <div class="actions">
+        <a class="btn" href="/#catalogo">Torna al catalogo</a>
+        <button id="retry" class="btn btn--primary">Riprova acquisto</button>
+      </div>
     </div>
   </main>
-  <script src="/bg.js"></script>
+
+  <!-- usa il path giusto del tuo bg -->
+  <script src="/assets/js/bg.js" defer></script>
+  <script>
+    const params = new URLSearchParams(location.search);
+    const sku = params.get('sku') || '';
+    const NAMES = {
+      SCUSA_ENTRY:'Prima Scusa -50%', SCUSA_BASE:'Scusa Base', SCUSA_TRIPLA:'Scusa Tripla',
+      SCUSA_DELUXE:'Scusa Deluxe', CONS_KO:'Connessione KO', RIUNIONE:'Riunione improvvisa', TRAFFICO:'Traffico assurdo'
+    };
+    if (sku && NAMES[sku]) document.getElementById('sku-name').textContent = `Prodotto: ${NAMES[sku]}`;
+
+    document.getElementById('retry').addEventListener('click', async () => {
+      try {
+        const r = await fetch('/.netlify/functions/create-checkout-session', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ sku: sku || 'SCUSA_BASE' })
+        });
+        const data = await r.json().catch(()=> ({}));
+        if (r.ok && data?.url) { location.href = data.url; return; }
+      } catch {}
+      location.href = '/#catalogo';
+    });
+  </script>
 </body>
 </html>
