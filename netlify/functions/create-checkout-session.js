@@ -4,94 +4,71 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-const PRICE_BY_SKU = {
-  // Mappa solo ciò che sei sicuro sia corretto (live!).
-  SCUSA_ENTRY: 'price_1S3O3BAuMAjkbPdH40irfbqa',
-  // Se vuoi, aggiungi gli altri SOLO quando verifichi l’ID live in Stripe.
-};
+function resp(status, body, extra = {}) {
+  return {
+    statusCode: status,
+    headers: { 'Content-Type': 'application/json', ...CORS, ...extra },
+    body: JSON.stringify(body),
+  };
+}
 
-const j = (s, b) => ({ statusCode: s, headers: { ...CORS, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+function getOrigin(event) {
+  const h = event.headers || {};
+  const xfHost = h['x-forwarded-host'] || h['X-Forwarded-Host'];
+  const host = xfHost || h.host || h.Host;
+  const proto = (h['x-forwarded-proto'] || 'https');
+  return process.env.SITE_URL || `${proto}://${host}`;
+}
 
 exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return resp(204, {});
+  if (event.httpMethod !== 'POST') return resp(405, { error: 'method_not_allowed' });
+
+  let body = {};
+  try { body = JSON.parse(event.body || '{}'); } catch { return resp(400, { error: 'bad_json' }); }
+
+  const sku = String(body.sku || '').trim();
+  if (!sku) return resp(400, { error: 'missing_sku' });
+
+  // 1) prova da ENV (JSON: {"SCUSA_ENTRY":"price_...","SCUSA_BASE":"price_..."})
+  let map = {};
+  try { map = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}'); } catch { map = {}; }
+  let priceId = map[sku];
+
+  // 2) fallback: lookup_key in Stripe = SKU
+  if (!priceId) {
+    try {
+      const list = await stripe.prices.list({ lookup_keys: [sku], active: true, limit: 1 });
+      priceId = list?.data?.[0]?.id || null;
+    } catch (_) {}
+  }
+
+  if (!priceId) return resp(400, { error: `price_not_found_for_sku:${sku}` });
+
+  const origin = getOrigin(event);
+
   try {
-    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS };
-
-    let body = {};
-    if (event.httpMethod === 'POST') {
-      try { body = JSON.parse(event.body || '{}'); } catch {}
-    } else if (event.httpMethod === 'GET') {
-      const q = new URLSearchParams(event.queryStringParameters || {});
-      body = { sku: q.get('sku'), email: q.get('email'), qty: q.get('qty') };
-    } else {
-      return j(405, { error: 'METHOD_NOT_ALLOWED' });
-    }
-
-    const sku   = String(body.sku || '').trim().toUpperCase();
-    const email = String(body.email || '').trim().toLowerCase();
-    const qty   = Math.max(1, parseInt(body.qty || '1', 10) || 1);
-    if (!sku) return j(400, { error: 'SKU_REQUIRED' });
-
-    let priceId = PRICE_BY_SKU[sku];
-    let price   = null;
-
-    // 1) Prova mapping, MA se fallisce passa al fallback
-    if (priceId) {
-      try {
-        price = await stripe.prices.retrieve(priceId);
-        if (!price?.active) throw new Error('PRICE_NOT_ACTIVE');
-      } catch (e) {
-        priceId = null; // forza fallback su metadata.sku
-      }
-    }
-
-    // 2) Fallback: cerca per metadata.sku (price o product)
-    if (!priceId) {
-      const list = await stripe.prices.list({ active: true, limit: 100, expand: ['data.product'] });
-      price = list.data.find(p =>
-        (p.metadata?.sku && String(p.metadata.sku).toUpperCase() === sku) ||
-        (p.product?.metadata?.sku && String(p.product.metadata.sku).toUpperCase() === sku)
-      ) || null;
-      if (!price) return j(400, { error: 'PRICE_NOT_FOUND', detail: { sku, hint: 'imposta metadata.sku in Stripe o compila PRICE_BY_SKU' } });
-      priceId = price.id;
-    }
-
-    // customer reuse (facoltativo)
-    let customer = null;
-    if (email) {
-      try {
-        const r = await stripe.customers.search({ query: `email:"${email}"`, limit: 1 });
-        customer = r.data[0] || null;
-      } catch {
-        const r2 = await stripe.customers.list({ email, limit: 1 });
-        customer = r2.data[0] || null;
-      }
-    }
-
-    const site = process.env.SITE_URL ||
-      (/^https?:\/\//.test(event.headers?.origin || '') ? event.headers.origin : 'https://colpamia.com');
-
-    const params = {
+    const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      line_items: [{ price: priceId, quantity: qty }],
-      success_url: `${site}/success?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${site}/cancel`,
-      custom_fields: [{
-        key: 'need',
-        label: { type: 'custom', custom: 'Esigenza (facoltativa)' },
-        type: 'text',
-        optional: true,
-      }],
-    };
-    if (customer) params.customer = customer.id;
-    else if (email) { params.customer_email = email; params.customer_creation = 'if_required'; }
+      line_items: [{ price: priceId, quantity: 1 }],
+      success_url: `${origin}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${origin}/cancel.html`,
+      allow_promotion_codes: false,
+      customer_creation: 'always',
+      phone_number_collection: { enabled: true },
+      custom_fields: [
+        { key: 'phone', label: { type: 'custom', custom: 'Telefono WhatsApp (opz.)' }, type: 'text', optional: true },
+        { key: 'need',  label: { type: 'custom', custom: 'Contesto (opz.)' },            type: 'text', optional: true },
+      ],
+      metadata: { sku }
+    });
 
-    const session = await stripe.checkout.sessions.create(params);
-    return j(200, { url: session.url, id: session.id });
-  } catch (e) {
-    return j(500, { error: e?.message || 'INTERNAL_ERROR' });
+    return resp(200, { url: session.url });
+  } catch (err) {
+    return resp(500, { error: String(err?.message || 'stripe_error') });
   }
 };
