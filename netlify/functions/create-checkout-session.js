@@ -33,20 +33,20 @@ exports.handler = async (event) => {
 
   try{
     const s = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin(event)}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${origin(event)}/cancel.html?sku=${encodeURIComponent(sku)}`,
+  mode: 'payment',
+  line_items: [{ price: priceId, quantity: 1 }],
+  success_url: `${origin(event)}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+  cancel_url: `${origin(event)}/cancel.html?sku=${encodeURIComponent(sku)}`,
+  allow_promotion_codes: false,
+  customer_creation: 'always',
+  phone_number_collection: { enabled: true },
+  custom_fields: [
+    { key:'phone', label:{type:'custom',custom:'Telefono WhatsApp (opz.)'}, type:'text', optional:true },
+    { key:'need',  label:{type:'custom',custom:'Contesto (opz.)'},        type:'text', optional:true },
+  ],
+  metadata: { sku }
+});
 
-      allow_promotion_codes: false,
-      customer_creation: 'always',
-      phone_number_collection: { enabled: true },
-      custom_fields: [
-        { key:'phone', label:{type:'custom',custom:'Telefono WhatsApp (opz.)'}, type:'text', optional:true },
-        { key:'need',  label:{type:'custom',custom:'Contesto (opz.)'},        type:'text', optional:true },
-      ],
-      metadata: { sku }
-    });
     return j(200,{ url: s.url });
   }catch(err){
     return j(500,{ error:String(err?.message||'stripe_error') });
