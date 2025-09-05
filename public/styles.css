@@ -181,67 +181,7 @@ header nav a:hover {
 }
 
 /* Chatbot centrato a destra */
-.chatbot {
-  position: fixed;
-  top: 50%;
-  right: 20px;
-  bottom: auto;
-  transform: translateY(-50%);
-  width: 300px;
-  max-height: 400px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-  z-index: 9999;
-  transition: transform .3s ease;
-}
-.chatbot.open {
-  transform: translateY(-50%);
-}
-.chat-messages {
-  flex: 1;
-  overflow-y: auto;
-  padding: .5rem;
-}
-.chat-messages p {
-  margin: .2rem 0;
-}
-.chat-messages p.user {
-  text-align: right;
-  color: var(--primary);
-}
-.chat-form {
-  display: flex;
-  border-top: 1px solid var(--border);
-}
-.chat-form input {
-  flex: 1;
-  border: none;
-  padding: .5rem;
-  background: transparent;
-  color: var(--text);
-}
-.chat-form button {
-  border: none;
-  background: var(--primary);
-  color: #fff;
-  padding: .5rem .8rem;
-  cursor: pointer;
-}
-.chat-toggle {
-  position: fixed;
-  top: 50%;
-  right: 20px;
-  bottom: auto;
-  transform: translateY(-50%);
-  padding: .7rem 1rem;
-  background: var(--primary);
-  color: #fff;
-  border-radius: 50px;
-  border: none;
-  cursor: pointer;
-  z-index: 9999;
-}
+.chatbot{position:fixed;top:16px;right:16px;width:300px;max-height:420px;background:var(--panel);
+border:1px solid var(--border);border-radius:8px;display:flex;flex-direction:column;overflow:hidden;z-index:9999}
+.chat-toggle{position:fixed;top:16px;right:16px;padding:.7rem 1rem;background:var(--primary);color:#fff;border-radius:50px;border:none;cursor:pointer;z-index:10000}
+
