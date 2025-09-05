@@ -101,6 +101,7 @@
   </header>
 
   <main>
+    <!-- HERO -->
     <section class="hero">
       <div class="wrap">
         <h1 class="hero__title">Ti serve una scusa credibile? Te la scriviamo in 30 secondi</h1>
@@ -112,6 +113,7 @@
       </div>
     </section>
 
+    <!-- LEAD MAGNET -->
     <section class="wrap section leadbox" id="lead">
       <h2>Quiz: che tipo di “scusatore” sei?</h2>
       <p class="hero__sub">Ricevi il PDF <strong>“7 scuse che non funzionano più”</strong> e un codice sconto.</p>
@@ -122,11 +124,13 @@
       </form>
     </section>
 
+    <!-- OFFERTA D’INGRESSO -->
     <section class="wrap section" id="entry-offer">
       <h2>Offerta d’ingresso</h2>
       <p class="hero__sub">Prova il servizio con la <strong>Prima Scusa -50%</strong>. Stesse funzioni, metà prezzo.</p>
     </section>
 
+    <!-- PROVA SOCIALE -->
     <section class="wrap section" id="prove">
       <h2>Cosa dicono i clienti</h2>
       <div class="reviews">
@@ -144,18 +148,21 @@
       </div>
     </section>
 
+    <!-- CATALOGO -->
     <section class="wrap section" id="catalogo">
       <h2>Catalogo</h2>
       <div id="catalogo-grid"></div>
       <p id="catalogo-msg"></p>
     </section>
 
+    <!-- PREMIUM -->
     <section class="wrap section" id="premium">
       <h2>Premium</h2>
       <p id="premium-msg"></p>
       <div id="premium-grid"></div>
     </section>
 
+    <!-- RESPONSABILITÀ -->
     <section class="wrap section" id="responsabilita">
       <h2>Mi prendo io la responsabilità</h2>
       <p class="hero__sub">Per progetti complessi e situazioni critiche: affidaci la gestione completa delle scuse e della reputazione.</p>
@@ -163,6 +170,7 @@
       <p id="responsabilita-msg"></p>
     </section>
 
+    <!-- WALLET -->
     <section class="wrap section" id="wallet">
       <h2>Wallet</h2>
       <div style="margin-bottom:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
@@ -173,6 +181,7 @@
       <p id="wallet-msg"></p>
     </section>
 
+    <!-- FAQ -->
     <section class="wrap section" id="faq">
       <h2>FAQ</h2>
       <div class="faq-item"><h3>Quanto tempo ci vuole per ricevere la scusa?</h3><p>Tra 30 secondi e 10 minuti, a seconda del pacchetto.</p></div>
@@ -200,54 +209,14 @@
   <button id="chatbot-toggle" class="chat-toggle">Chat</button>
 
   <!-- Scripts -->
-  <script src="assets/js/bg.js" defer></script>
+  <script src="/bg.js" defer></script>
   <script src="wallet.js" defer></script>
   <script src="premium.js" defer></script>
   <script src="shop.js" defer></script>
   <script src="responsabilita.js" defer></script>
 
-  <!-- Chatbot client (locale + toggle) -->
-  <script>
-    (()=>{
-      const box=document.getElementById('chatbot-container'),tog=document.getElementById('chatbot-toggle'),
-            msgs=document.getElementById('chatbot-messages'),form=document.getElementById('chatbot-form'),
-            inp=document.getElementById('chatbot-input'),clearBtn=document.getElementById('cm-clear'),
-            quick=document.querySelector('.quick');
-      if(!box||!tog||!msgs||!form||!inp) return;
-
-      const historyKey='cm_chat';
-      const save=()=>localStorage.setItem(historyKey,JSON.stringify(h));
-      const load=()=>{try{return JSON.parse(localStorage.getItem(historyKey)||'[]')}catch{return[]}};
-      const h=load();
-
-      function line(t,cls){const d=document.createElement('div');d.className='msg '+cls;d.textContent=t;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight}
-      function bot(t){line(t,'bot');h.push({r:'bot',c:t});if(h.length>50)h.shift();save()}
-      function user(t){line(t,'user');h.push({r:'user',c:t});if(h.length>50)h.shift();save()}
-      msgs.innerHTML='';h.forEach(m=>line(m.c,m.r)); if(!h.length) bot('Ciao! Posso aiutarti con prezzi, tempi, rimborsi e scelta pacchetto.');
-
-      box.style.display='none';
-      tog.addEventListener('click',()=>{const open=box.style.display==='none';box.style.display=open?'flex':'none';box.classList.toggle('open',open); if(open) inp.focus()});
-      clearBtn.addEventListener('click',()=>{localStorage.removeItem(historyKey);msgs.innerHTML='';bot('Ok, ripartiamo da zero. Hai una domanda?')});
-      quick.addEventListener('click',e=>{const b=e.target.closest('button[data-q]');if(!b)return; send(b.getAttribute('data-q'))});
-
-      form.addEventListener('submit',e=>{e.preventDefault();const q=inp.value.trim();if(!q)return; send(q)});
-
-      function send(q){
-        user(q); inp.value='';
-        const s=q.toLowerCase();
-        const intents=[
-          {re:/(prezzi?|costa|quanto|listino)/,a:'Prezzi e pacchetti sono nel Catalogo. Paghi con Stripe in 10s.'},
-          {re:/(tempo|quando|consegna|quanto ci mette|rapid)/,a:'Consegna automatica tra 30s e 10m in base al pacchetto.'},
-          {re:/(rimborso|refund|soddisfatto)/,a:'Se il testo non ti soddisfa, rimborsiamo.'},
-          {re:/(privacy|anonim|dati|gdpr)/,a:'Richiediamo solo i dati minimi. Le richieste restano anonime.'},
-          {re:/(come (si )?acquista|comprare|checkout)/,a:'Vai su “Catalogo”, scegli un pacchetto e clicca “Acquista”. Paghi con Stripe.'},
-          {re:/(whatsapp|telefono|numero)/,a:'Puoi lasciare il numero in checkout: inviamo anche via WhatsApp (se configurato).'}
-        ];
-        const hit=intents.find(i=>i.re.test(s));
-        bot(hit?hit.a:'Scrivimi cosa ti serve (contesto e urgenza). Ti indico il pacchetto giusto o preparo una bozza.');
-      }
-    })();
-  <script src="chatbot.js?v=20250905-1" defer></script>
-
+  <!-- Chatbot (solo file esterno) -->
+  <script src="chatbot.js?v=20250905-4" defer></script>
 </body>
 </html>
+
