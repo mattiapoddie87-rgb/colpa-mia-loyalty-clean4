@@ -1,70 +1,52 @@
-// public/shop.js
+// SKU NORMALIZZATI: usa *esattamente* questi anche in PRICE_BY_SKU_JSON o come lookup_key su Stripe.
 const CATALOG = [
-  { sku: 'SCUSA_ENTRY',  title: 'Prima Scusa -50%', desc: 'Testa il servizio a metà prezzo.', eur: 50,  minutes: 10, badge: "Offerta d’ingresso" },
-  { sku: 'SCUSA_BASE',   title: 'Scusa Base',       desc: 'La più usata, funziona sempre.', eur: 100, minutes: 10 },
-  { sku: 'SCUSA_TRIPLA', title: 'Scusa Tripla',     desc: 'Tre scuse in un solo pacchetto.', eur: 250, minutes: 30 },
-  { sku: 'SCUSA_DELUXE', title: 'Scusa Deluxe',     desc: 'Perfetta, elegante, inattaccabile.', eur: 450, minutes: 60 },
-  { sku: 'RIUNIONE',     title: 'Riunione improvvisa', desc: 'Alibi perfetto in orario d’ufficio.', eur: 200, minutes: 20 },
-  { sku: 'TRAFFICO',     title: 'Traffico assurdo', desc: 'Sempreverde, valido ovunque.', eur: 200, minutes: 20 },
-  { sku: 'CONN_KO',      title: 'Connessione KO',   desc: 'Speciale smartworking edition.', eur: 200, minutes: 20 },
+  { sku:'SCUSA_ENTRY',  name:'Prima Scusa -50%', price:0.50, minutes:10 },
+  { sku:'SCUSA_BASE',   name:'Scusa Base',      price:1.00, minutes:10 },
+  { sku:'SCUSA_TRIPLA', name:'Scusa Tripla',    price:2.50, minutes:30 },
+  { sku:'SCUSA_DELUXE', name:'Scusa Deluxe',    price:4.50, minutes:60 },
+  { sku:'CONS_KO',      name:'Connessione KO',  price:?,    minutes:30 },
+  { sku:'RIUNIONE',     name:'Riunione improvvisa', price:?, minutes:15 },
+  { sku:'TRAFFICO',     name:'Traffico assurdo',    price:?, minutes:20 },
 ];
 
-(function render() {
-  const grid = document.getElementById('catalogo-grid') || document.getElementById('shop-grid');
-  if (!grid) return;
+const grid = document.getElementById('catalogo-grid');
+const msg  = document.getElementById('catalogo-msg');
+
+(function render(){
   grid.innerHTML = '';
-  for (const it of CATALOG) {
+  CATALOG.forEach(p=>{
     const el = document.createElement('article');
-    el.className = 'card';
-    const badge = it.badge ? `<span class="badge">${it.badge}</span>` : '';
+    el.className='card';
     el.innerHTML = `
-      <h3>${it.title} ${badge}</h3>
-      <p>${it.desc}</p>
-      <div class="price">€ ${(it.eur / 100).toFixed(2)}</div>
-      <div class="row">
-        <span class="tag">Credito: ${it.minutes} min</span>
-        <button class="btn" data-sku="${it.sku}">Acquista</button>
-      </div>`;
+      <div class="row"><b>${p.name}</b><span class="tag">${p.minutes} min</span></div>
+      <div class="row"><span>€ ${(p.price||0).toFixed(2)}</span>
+      <button class="btn" data-sku="${p.sku}">Acquista</button></div>`;
     grid.appendChild(el);
-  }
+  });
 })();
 
-document.addEventListener('click', async (e) => {
-  const btn = e.target.closest('button.btn');
-  if (!btn) return;
-  const sku = btn.getAttribute('data-sku');
-  if (!sku) return;
+document.addEventListener('click', async (e)=>{
+  const b = e.target.closest('button[data-sku]'); if(!b) return;
+  b.disabled = true; msg.textContent = '';
+  const sku = b.getAttribute('data-sku');
 
-  try {
-    const r = await fetch('/.netlify/functions/create-checkout-session', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sku })
+  let res,data;
+  try{
+    res = await fetch('/.netlify/functions/create-checkout-session', {
+      method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({ sku })
     });
-
-    if (!r.ok) {
-      let msg = `HTTP ${r.status}`;
-      try { const err = await r.json(); if (err?.error) msg += ` - ${err.error}`; } catch {}
-      alert(`Errore checkout: ${msg}`);
-      return;
-    }
-
-    const data = await r.json();
-    if (data?.url) { location.href = data.url; return; }
-    alert('Errore: URL checkout assente.');
-  } catch (err) {
-    console.error(err);
-    alert('Si è verificato un errore durante il checkout.');
+    data = await res.json().catch(()=> ({}));
+  }catch{
+    b.disabled=false; msg.textContent='Errore di rete.';
+    alert('Checkout KO: rete'); return;
   }
+
+  if(!res.ok || !data?.url){
+    const m = data?.error || `HTTP ${res.status}`;
+    console.error('Checkout error:', m);
+    msg.textContent = `Errore checkout: ${m}`;
+    alert(`Checkout KO: ${m}`);
+    b.disabled=false; return;
+  }
+  window.location.href = data.url;
 });
-
-
-// Isola script terzi (pixel/chatbot) per evitare che blocchino il resto
-window.addEventListener('error', (ev) => {
-  const src = ev?.filename || '';
-  if (src.includes('pixel') || src.includes('chatbot')) {
-    // non propagare
-    ev.preventDefault?.();
-    return false;
-  }
-}, true);
