@@ -1,24 +1,11 @@
 // netlify/functions/lead-pdf.js
 const { Resend } = require('resend');
 
-const ORIGIN = process.env.SITE_URL || 'https://colpamia.com';
-const CORS = {
-  'Access-Control-Allow-Origin': ORIGIN,
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-const j = (s,b)=>({ statusCode:s, headers:{'Content-Type':'application/json', ...CORS}, body:JSON.stringify(b) });
+const ORIGIN = (process.env.SITE_URL || 'https://colpamia.com').replace(/\/+$/,'');
+...
+const pdfReq = String(body.pdf||'/assets/lead.pdf');
+const pdfUrl = /^https?:\/\//i.test(pdfReq) ? pdfReq : `${ORIGIN}${pdfReq.startsWith('/')? pdfReq : '/'+pdfReq}`;
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return j(204,{});
-  if (event.httpMethod !== 'POST')   return j(405,{ error:'method_not_allowed' });
-
-  let body={};
-  try { body = JSON.parse(event.body||'{}'); } catch { return j(400,{ error:'bad_json' }); }
-
-  const email = String(body.email||'').trim().toLowerCase();
-  const phone = String(body.phone||'').trim();
-  const pdf   = String(body.pdf||'/assets/lead.pdf');
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j(400,{ error:'invalid_email' });
 
   let emailSent = false, reason = null;
