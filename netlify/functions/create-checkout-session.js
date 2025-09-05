@@ -36,7 +36,8 @@ exports.handler = async (event) => {
       mode: 'payment',
       line_items: [{ price: priceId, quantity: 1 }],
       success_url: `${origin(event)}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-      cancel_url:  `${origin(event)}/cancel.html`,
+      cancel_url:  `${origin(event)}/cancel.html?sku=${encodeURIComponent(sku)}`,
+
       allow_promotion_codes: false,
       customer_creation: 'always',
       phone_number_collection: { enabled: true },
