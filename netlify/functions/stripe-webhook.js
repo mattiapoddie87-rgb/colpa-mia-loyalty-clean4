@@ -1,32 +1,56 @@
+```js
 // netlify/functions/stripe-webhook.js
-// Stripe webhook: accredita minuti, invia email e (se disponibile) WhatsApp.
-// Migliorato: recupero telefono anche dal Customer; scrittura stato WA nei metadati.
+// Webhook Stripe: accredita minuti, invia email e (se disponibile) WhatsApp.
+// Con AI per generare 3 varianti di scuse, timeout, e guard-rail di sicurezza.
+
 async function generateExcusesAI(context, productTag){
   const apiKey = process.env.OPENAI_API_KEY || '';
   if (!/^sk-/.test(apiKey)) {
-    // fallback se manca la chiave: testo di emergenza
-    return { short: `Imprevisto ora, riorganizzo e ti aggiorno a breve.`, variants:[
-      `Imprevisto ora, riorganizzo e ti aggiorno a breve.`,
-      `È saltata fuori una cosa urgente: ti scrivo entro poco con un orario chiaro.`,
-      `Sto gestendo un imprevisto, preferisco non promettere tempi: ti aggiorno entro sera.`
-    ]};
+    // Fallback se manca la chiave OpenAI
+    return {
+      short: 'Imprevisto ora, riorganizzo e ti aggiorno a breve.',
+      variants: [
+        'Imprevisto ora, riorganizzo e ti aggiorno a breve.',
+        'È saltata fuori una cosa urgente: ti scrivo entro poco con un orario chiaro.',
+        'Sto gestendo un imprevisto, preferisco non promettere tempi: ti aggiorno entro sera.'
+      ]
+    };
   }
 
-  const payload = { need: context || productTag || 'ritardo', style:'neutro', persona:productTag||'generico', locale:'it-IT', maxLen:300 };
+  const payload = {
+    need: context || productTag || 'ritardo',
+    style: 'neutro',
+    persona: productTag || 'generico',
+    locale: 'it-IT',
+    maxLen: 300
+  };
+
   try{
+    const ctrl = new AbortController();
+    const to = setTimeout(()=>ctrl.abort(), 4500); // hard cap 4.5s
     const r = await fetch(`${process.env.SITE_URL || 'https://colpamia.com'}/.netlify/functions/ai-excuse`, {
-      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal
     });
+    clearTimeout(to);
     const data = await r.json().catch(()=> ({}));
-    const v = (data?.variants || []).map(x => String(x?.whatsapp_text || x?.sms || '').trim()).filter(Boolean);
+    const v = (data?.variants || [])
+      .map(x => String(x?.whatsapp_text || x?.sms || '').trim())
+      .filter(Boolean);
     if (v.length) return { short: v[0], variants: v.slice(0,3) };
-  }catch{}
-  // fallback duro se l’http fallisce
-  return { short: `Imprevisto ora, riorganizzo e ti aggiorno a breve.`, variants:[
-    `Imprevisto ora, riorganizzo e ti aggiorno a breve.`,
-    `È saltata fuori una cosa urgente: ti scrivo entro poco con un orario chiaro.`,
-    `Sto gestendo un imprevisto, preferisco non promettere tempi: ti aggiorno entro sera.`
-  ]};
+  }catch{/* noop */}
+
+  // Fallback duro se l’HTTP fallisce o timeout
+  return {
+    short: 'Imprevisto ora, riorganizzo e ti aggiorno a breve.',
+    variants: [
+      'Imprevisto ora, riorganizzo e ti aggiorno a breve.',
+      'È saltata fuori una cosa urgente: ti scrivo entro poco con un orario chiaro.',
+      'Sto gestendo un imprevisto, preferisco non promettere tempi: ti aggiorno entro sera.'
+    ]
+  };
 }
 
 const Stripe = require('stripe');
@@ -42,15 +66,15 @@ const twilioFromWa = process.env.TWILIO_FROM_WA || ''; // es. whatsapp:+14155238
 const defaultCC = (process.env.DEFAULT_COUNTRY_CODE || '+39').trim();
 const twilio = (twilioSid && twilioToken ? require('twilio')(twilioSid, twilioToken) : null);
 
-function readJsonEnv(key){ try{return JSON.parse(process.env[key]||'{}');}catch{ return {};}}
+function readJsonEnv(key){ try{ return JSON.parse(process.env[key]||'{}'); }catch{ return {}; } }
 const PRICE_RULES = readJsonEnv('PRICE_RULES_JSON'); // { price_xxx: { minutes, excuse } }
 
-function httpResp(s,b){ return {statusCode:s, headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)}}
-function pick(x,k,d=null){ try{ return k.split('.').reduce((a,c)=>(a&&a[c]!=null?a[c]:null),x) ?? d; }catch{ return d; }}
+function httpResp(s,b){ return { statusCode:s, headers:{'Content-Type':'application/json'}, body:JSON.stringify(b) }; }
+function pick(x,k,d=null){ try{ return k.split('.').reduce((a,c)=>(a&&a[c]!=null?a[c]:null),x) ?? d; }catch{ return d; } }
 
 // -------- phone helpers
-function onlyDigits(s){ return String(s||'').replace(/[^\d]/g,'');}
-function isE164(s){ return /^(\+)\d{6,15}$/.test(String(s||''));}
+function onlyDigits(s){ return String(s||'').replace(/[^\d]/g,''); }
+function isE164(s){ return /^(\+)\d{6,15}$/.test(String(s||'')); }
 function asWhatsApp(toRaw){
   let to = String(toRaw||'').trim();
   if (/^whatsapp:\+\d{6,15}$/.test(to)) return to;
@@ -62,7 +86,7 @@ function asWhatsApp(toRaw){
   return `whatsapp:+${d}`;
 }
 
-// Recupera possibili telefoni da Session/PI e, **nuovo**, dal Customer
+// Recupera possibili telefoni da Session/PI e dal Customer
 async function getPhoneCandidates(session, paymentIntent){
   const out = new Set();
 
@@ -83,35 +107,10 @@ async function getPhoneCandidates(session, paymentIntent){
     try{
       const customer = await stripe.customers.retrieve(customerId);
       if (customer?.phone) out.add(customer.phone);
-      // eventuale telefono salvato in metadata
       if (customer?.metadata?.phone) out.add(customer.metadata.phone);
-    }catch{}
+    }catch{/* noop */}
   }
   return Array.from(out);
-}
-
-// ------ excuses (testo naturale)
-function buildExcuses(context, productTag){
-  const c = String(context||'').trim();
-  const tag = String(productTag||'').toLowerCase();
-
-  const base = [
-    () => `Ho avuto un imprevisto serio e sto riorganizzando al volo. Arrivo più tardi del previsto; ti aggiorno tra poco.`,
-    () => `È saltata fuori una cosa urgente che non posso rimandare. Sto sistemando e ti scrivo appena ho chiaro l’orario.`,
-    () => `Situazione imprevista che mi blocca un attimo. Non voglio darti buca: mi prendo qualche minuto e ti aggiorno a breve.`
-  ];
-
-  function specialize(fn){
-    if (tag.includes('riunione')) return () => `Mi è entrata una riunione inattesa che sta sforando. Chiudo il prima possibile e ti aggiorno a breve.`;
-    if (tag.includes('connessione') || tag.includes('ko')) return () => `Connessione/linea K.O. proprio ora: sto risolvendo e ti aggiorno appena riparte.`;
-    if (tag.includes('deluxe') || tag.includes('executive')) return () => `È sopraggiunto un imprevisto prioritario: sto riorganizzando per ridurre il ritardo. Ti mando a breve un nuovo orario.`;
-    return fn;
-  }
-
-  const v1 = specialize(base[0])(c);
-  const v2 = specialize(base[1])(c);
-  const v3 = specialize(base[2])(c);
-  return { short: v1, variants: [v1, v2, v3] };
 }
 
 // ------ email
@@ -142,7 +141,7 @@ async function sendWhatsApp(toRaw, message, paymentIntentId){
           colpamiaWaError: String(err?.message || err?.code || 'wa_error')
         }
       });
-    }catch{}
+    }catch{/* noop */}
     return { ok:false, reason: err?.message || 'wa_error' };
   }
 }
@@ -153,59 +152,74 @@ async function creditMinutes(email, minutes){ return true; }
 // ------ handler
 exports.handler = async (event)=>{
   try{
+    // Guard-rail env
+    if (!/^whsec_/.test(process.env.STRIPE_WEBHOOK_SECRET||'')) {
+      return httpResp(500,{ error:'server_misconfigured: STRIPE_WEBHOOK_SECRET invalid' });
+    }
+    if (!/^sk_(live|test)_/.test(process.env.STRIPE_SECRET_KEY||'')) {
+      return httpResp(500,{ error:'server_misconfigured: STRIPE_SECRET_KEY invalid' });
+    }
+
     const sig = event.headers['stripe-signature'] || event.headers['Stripe-Signature'];
-    if (!sig) return httpResp(400,{error:'missing signature'});
+    if (!sig) return httpResp(400,{ error:'missing signature' });
+
     const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
     const stripeEvent = stripe.webhooks.constructEvent(event.body, sig, whSecret);
 
-    if (stripeEvent.type!=='checkout.session.completed')
-      return httpResp(200,{received:true, ignored: stripeEvent.type});
+    if (stripeEvent.type !== 'checkout.session.completed')
+      return httpResp(200,{ received:true, ignored: stripeEvent.type });
 
     const session = stripeEvent.data.object;
-    if (session.mode!=='payment') return httpResp(200,{received:true,ignored:'not_payment'});
+    if (session.mode !== 'payment') return httpResp(200,{ received:true, ignored:'not_payment' });
 
     const piId = String(session.payment_intent||'');
-    if (!piId) return httpResp(400,{error:'missing payment_intent'});
+    if (!piId) return httpResp(400,{ error:'missing payment_intent' });
 
     let pi = await stripe.paymentIntents.retrieve(piId);
-    if (pi.metadata?.colpamiaCredited==='true') return httpResp(200,{ok:true,already:true});
+    if (pi.metadata?.colpamiaCredited === 'true') return httpResp(200,{ ok:true, already:true });
 
     const email = (session.customer_details?.email || session.customer_email || '').toLowerCase();
-    if (!email) return httpResp(400,{error:'missing email'});
+    if (!email) return httpResp(400,{ error:'missing email' });
 
-    const items = await stripe.checkout.sessions.listLineItems(session.id,{limit:100, expand:['data.price.product']});
+    const items = await stripe.checkout.sessions.listLineItems(session.id,{ limit:100, expand:['data.price.product'] });
     let minutes = 0; let productTag = '';
     for (const li of items.data){
       const rule = PRICE_RULES[li?.price?.id] || {};
       minutes += (Number(rule.minutes||0) * (li.quantity||1)) || 0;
       if (!productTag && rule.excuse) productTag = rule.excuse;
     }
-    if (minutes<=0) return httpResp(200,{ok:true,ignored:'no_minutes'});
+    if (minutes <= 0) return httpResp(200,{ ok:true, ignored:'no_minutes' });
 
+    // Contesto da custom fields
     let context = '';
     const cfs = Array.isArray(session?.custom_fields)? session.custom_fields : [];
-    for (const cf of cfs){ if (cf?.key?.toLowerCase()==='need' && cf?.text?.value) context = String(cf.text.value||'').trim(); }
+    for (const cf of cfs){
+      if (cf?.key?.toLowerCase() === 'need' && cf?.text?.value) context = String(cf.text.value||'').trim();
+    }
 
+    // Genera scuse via AI (con timeout/fallback)
     const excuses = await generateExcusesAI(context, productTag);
 
+    // Accredito + comunicazioni
     await creditMinutes(email, minutes);
     await sendEmail(email, minutes, excuses);
 
-    // --- WhatsApp: ora cerchiamo anche nel Customer
+    // WhatsApp
     const phoneCandidates = await getPhoneCandidates(session, pi);
     let waStatus = 'no_phone';
 
     if (phoneCandidates.length){
       const waText = [
-  'La tua Scusa (3 varianti):',
-  ...excuses.variants.map((v, i) => `${i + 1}) ${v}`),
-  '',
-  `(+${minutes} min accreditati su COLPA MIA)`
-].join('\n');
+        'La tua Scusa (3 varianti):',
+        ...excuses.variants.map((v, i) => `${i + 1}) ${v}`),
+        '',
+        `(+${minutes} min accreditati su COLPA MIA)`
+      ].join('\n');
+
       for (const raw of phoneCandidates){
         const res = await sendWhatsApp(raw, waText, piId);
         if (res.ok){ waStatus = 'sent'; break; }
-        else { waStatus = `error`; } // dettaglio in colpamiaWaError
+        else { waStatus = 'error'; } // dettaglio in colpamiaWaError sui metadata del PI
       }
     }
 
@@ -222,8 +236,9 @@ exports.handler = async (event)=>{
       }
     });
 
-    return httpResp(200,{ok:true, minutes, email, waStatus});
+    return httpResp(200,{ ok:true, minutes, email, waStatus });
   }catch(err){
-    return httpResp(500,{error: err?.message || 'webhook_error'});
+    return httpResp(500,{ error: err?.message || 'webhook_error' });
   }
 };
+```
