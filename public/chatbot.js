@@ -1,3 +1,19 @@
+// Dentro il submit handler, PRIMA di chiamare /ai-chat:
+const lower = q.toLowerCase();
+const wantsExcuse = /(scusa|alibi|giustifica|copertura|inventami|preparami).*|mi serve.*scusa/.test(lower);
+if (wantsExcuse) {
+  try{
+    const r = await fetch('/.netlify/functions/ai-excuse', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ need: q, style:'neutro', persona:'generico', locale:'it-IT', maxLen:300 })
+    });
+    const data = await r.json().catch(()=> ({}));
+    const v = (data?.variants||[])[0];
+    if (v) { bot(v.whatsapp_text || v.sms || 'Ok.'); return; }
+  }catch{}
+  bot('Posso preparare una scusa, ma c’è stato un errore temporaneo. Riprova.');
+  return;
+}
 // chatbot.js — chiama l'AI via Netlify function
 (() => {
   const box=document.getElementById('chatbot-container');
