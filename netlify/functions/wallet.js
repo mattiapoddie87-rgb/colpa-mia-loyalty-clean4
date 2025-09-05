@@ -1,28 +1,28 @@
-// netlify/functions/wallet.js
-const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
-function http(s,b){ return {statusCode:s, headers:{'Content-Type':'application/json'}, body:JSON.stringify(b)} }
+// public/wallet.js
+(()=> {
+  const emailI = document.getElementById('wallet-email');
+  const btn    = document.getElementById('wallet-fetch');
+  const grid   = document.getElementById('wallet-grid');
+  const msg    = document.getElementById('wallet-msg');
 
-exports.handler = async (event)=>{
-  try{
-    const email = (event.queryStringParameters?.email || '').toLowerCase().trim();
-    if (!email) return http(400,{error:'missing_email'});
-
-    // Cerca PIs live con metadato impostato dal webhook
-    const q = `status:'succeeded' AND metadata['colpamiaEmail']:'${email.replace(/'/g,"\\'")}'`;
-    let next = null, minutes = 0;
-
-    do {
-      const r = await stripe.paymentIntents.search({ query: q, limit: 100, page: next || undefined });
-      for (const pi of r.data) {
-        const m = Number(pi.metadata?.minutesCredited || 0);
-        if (!Number.isNaN(m)) minutes += m;
-      }
-      next = r.next_page;
-    } while (next);
-
-    return http(200,{ ok:true, email, minutes, points: minutes, level: (minutes>=120?'Deluxe':minutes>=60?'Plus':'None') });
-  }catch(e){
-    return http(500,{error:String(e?.message||'wallet_error')});
+  async function load(){
+    const email = (emailI?.value||'').trim();
+    msg.textContent=''; grid.innerHTML='';
+    if(!email){ msg.textContent='Inserisci una email.'; return; }
+    btn.disabled = true;
+    try{
+      const r = await fetch('/.netlify/functions/balance', {
+        method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ email })
+      });
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error||'errore');
+      grid.innerHTML = `
+        <p>Minuti disponibili: <b>${data.minutes}</b></p>
+        <p>Punti: <b>${data.points}</b></p>
+        <p>Livello: <b>${data.level}</b></p>`;
+    }catch(e){ msg.textContent = 'Errore: ' + e.message; }
+    finally{ btn.disabled=false; }
   }
-};
+  btn?.addEventListener('click', load);
+})();
