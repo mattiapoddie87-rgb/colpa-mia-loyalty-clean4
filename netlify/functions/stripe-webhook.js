@@ -1,6 +1,33 @@
 // netlify/functions/stripe-webhook.js
 // Stripe webhook: accredita minuti, invia email e (se disponibile) WhatsApp.
 // Migliorato: recupero telefono anche dal Customer; scrittura stato WA nei metadati.
+async function generateExcusesAI(context, productTag){
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!/^sk-/.test(apiKey)) {
+    // fallback se manca la chiave: testo di emergenza
+    return { short: `Imprevisto ora, riorganizzo e ti aggiorno a breve.`, variants:[
+      `Imprevisto ora, riorganizzo e ti aggiorno a breve.`,
+      `È saltata fuori una cosa urgente: ti scrivo entro poco con un orario chiaro.`,
+      `Sto gestendo un imprevisto, preferisco non promettere tempi: ti aggiorno entro sera.`
+    ]};
+  }
+
+  const payload = { need: context || productTag || 'ritardo', style:'neutro', persona:productTag||'generico', locale:'it-IT', maxLen:300 };
+  try{
+    const r = await fetch(`${process.env.SITE_URL || 'https://colpamia.com'}/.netlify/functions/ai-excuse`, {
+      method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+    });
+    const data = await r.json().catch(()=> ({}));
+    const v = (data?.variants || []).map(x => String(x?.whatsapp_text || x?.sms || '').trim()).filter(Boolean);
+    if (v.length) return { short: v[0], variants: v.slice(0,3) };
+  }catch{}
+  // fallback duro se l’http fallisce
+  return { short: `Imprevisto ora, riorganizzo e ti aggiorno a breve.`, variants:[
+    `Imprevisto ora, riorganizzo e ti aggiorno a breve.`,
+    `È saltata fuori una cosa urgente: ti scrivo entro poco con un orario chiaro.`,
+    `Sto gestendo un imprevisto, preferisco non promettere tempi: ti aggiorno entro sera.`
+  ]};
+}
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
@@ -159,7 +186,7 @@ exports.handler = async (event)=>{
     const cfs = Array.isArray(session?.custom_fields)? session.custom_fields : [];
     for (const cf of cfs){ if (cf?.key?.toLowerCase()==='need' && cf?.text?.value) context = String(cf.text.value||'').trim(); }
 
-    const excuses = buildExcuses(context, productTag);
+    const excuses = await generateExcusesAI(context, productTag);
 
     await creditMinutes(email, minutes);
     await sendEmail(email, minutes, excuses);
