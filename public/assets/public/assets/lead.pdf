@@ -1,5 +1,0 @@
-mkdir -p public/assets
-# copia il file qui -> public/assets/lead.pdf
-git add public/assets/lead.pdf
-git commit -m "Add lead magnet PDF"
-git push
