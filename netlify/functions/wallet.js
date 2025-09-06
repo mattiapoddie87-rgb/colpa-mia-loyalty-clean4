@@ -1,4 +1,5 @@
-// netlify/functions/wallet.js
+// Ritorna minuti totali per un'email, sommando su tutti i Customer con quell'email.
+// Richiede: STRIPE_SECRET_KEY
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
@@ -7,51 +8,34 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
-const j = (s, b) => ({
-  statusCode: s,
-  headers: { 'Content-Type': 'application/json', ...CORS },
-  body: JSON.stringify(b),
-});
+const j = (s,b)=>({statusCode:s,headers:{'Content-Type':'application/json',...CORS},body:JSON.stringify(b)});
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return j(204, {});
-  if (event.httpMethod !== 'GET')   return j(405, { error: 'method_not_allowed' });
+  if (event.httpMethod === 'OPTIONS') return j(204,{});
+  if (event.httpMethod !== 'GET') return j(405,{error:'method_not_allowed'});
 
-  const email = String((event.queryStringParameters || {}).email || '').trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j(400, { error: 'invalid_email' });
+  const email = String(event.queryStringParameters?.email || '').trim().toLowerCase();
+  if (!email) return j(400,{error:'missing_email'});
 
   try {
-    let customers = [];
+    let total = 0;
+    let hasAny = false;
 
-    // 1) Prova Customer Search (supporta query per email)
-    try {
-      const res = await stripe.customers.search({
-        query: `email:"${email}"`,
-        limit: 100,
-      });
-      customers = res.data || [];
-    } catch (e) {
-      // 2) Fallback: customers.list(email)
-      let starting_after = null;
-      do {
-        const page = await stripe.customers.list({ email, limit: 100, starting_after });
-        customers = customers.concat(page.data || []);
-        starting_after = page.has_more ? page.data[page.data.length - 1].id : null;
-      } while (starting_after);
+    let res = await stripe.customers.search({ query: `email:"${email}"`, limit: 100 });
+    while (true) {
+      for (const c of res.data) {
+        hasAny = true;
+        const m = Number(c?.metadata?.cm_minutes || 0) || 0;
+        total += m;
+      }
+      if (!res.has_more) break;
+      res = await stripe.customers.search({ query: `email:"${email}"`, limit: 100, page: res.next_page });
     }
 
-    // Aggrega i meta di tutti i customer omonimi
-    let minutes = 0, points = 0, orders = 0, last = null;
-    for (const c of customers) {
-      const m = c.metadata || {};
-      minutes += Number(m.cm_minutes || 0) || 0;
-      points  += Number(m.cm_points  || 0) || 0;
-      orders  += Number(m.cm_orders  || 0) || 0;
-      if (m.cm_last_at && (!last || m.cm_last_at > last)) last = m.cm_last_at;
-    }
+    // Semplice livello
+    const level = total >= 150 ? 'Gold' : total >= 80 ? 'Silver' : 'Base';
 
-    const level = points >= 200 ? 'Gold' : points >= 80 ? 'Silver' : 'Base';
-    return j(200, { ok: true, email, minutes, points, orders, level, last });
+    return j(200, { ok:true, email, minutes: total, points: total, level, hasCustomer: hasAny });
   } catch (err) {
     return j(500, { error: String(err?.message || 'wallet_error') });
   }
