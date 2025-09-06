@@ -1,117 +1,170 @@
 // netlify/functions/claim-purchase.js
 const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const { Resend } = require('resend');
 
-const cors = {
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const resend = new Resend(process.env.RESEND_API_KEY || '');
+const MAIL_FROM = process.env.RESEND_FROM || 'COLPA MIA <onboarding@resend.dev>';
+
+const twilioSid = process.env.TWILIO_ACCOUNT_SID || '';
+const twilioToken = process.env.TWILIO_AUTH_TOKEN || '';
+const twilioFromWa = process.env.TWILIO_FROM_WA || ''; // es. whatsapp:+14155238886
+const twilio = (twilioSid && twilioToken) ? require('twilio')(twilioSid, twilioToken) : null;
+
+const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
+const j = (s,b)=>({statusCode:s, headers:{'Content-Type':'application/json', ...CORS}, body:JSON.stringify(b)});
 
-const ok  = (b) => ({ statusCode: 200, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
-const err = (c, m) => ({ statusCode: c, headers: { ...cors, 'Content-Type': 'application/json' }, body: JSON.stringify({ error: m }) });
-const isEmail = x => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(x||''));
-const norm = s => String(s||'').trim().toLowerCase();
-const safeRequire = p => { try { return require(p); } catch { return null; } };
+function readJsonEnv(k){ try{ return JSON.parse(process.env[k]||'{}'); }catch{ return {}; } }
+const PRICE_RULES = readJsonEnv('PRICE_RULES_JSON'); // { price_xxx: { minutes, excuse } }
+const MAP_BY_SKU   = readJsonEnv('PRICE_RULES_BY_SKU_JSON') || readJsonEnv('SKU_RULES_JSON') || {}; // opzionale
 
-function getField(s, key){
-  const f = (Array.isArray(s.custom_fields) ? s.custom_fields : []).find(x => x?.key === key);
-  return (f && f.text && f.text.value) ? String(f.text.value).trim() : '';
+const onlyDigits = s => String(s||'').replace(/[^\d]/g,'');
+const isE164 = s => /^\+\d{6,15}$/.test(String(s||''));
+function asWhatsApp(toRaw){
+  let s = String(toRaw||'').trim();
+  if (/^whatsapp:\+\d{6,15}$/.test(s)) return s;
+  if (isE164(s)) return `whatsapp:${s}`;
+  let d = onlyDigits(s);
+  if (d.startsWith('00')) d = d.slice(2);
+  const cc = (process.env.DEFAULT_COUNTRY_CODE || '+39').replace('+','');
+  if (!d.startsWith(cc)) d = cc + d;
+  return `whatsapp:+${d}`;
 }
 
-function signalsFromSession(s, email){
-  return {
-    first_name: (s.customer_details?.name || email.split('@')[0] || 'Ciao').split(' ')[0],
-    recipient:  getField(s, 'recipient'),
-    tone:       getField(s, 'tone'),
-    need:       getField(s, 'need'),
-    delay:      getField(s, 'delay')
-  };
+async function generateExcusesAI(context, productTag){
+  const apiKey = process.env.OPENAI_API_KEY || '';
+  if (!/^sk-/.test(apiKey)) {
+    const v = [
+      `Mi è entrato un imprevisto serio, sto riorganizzando e ti aggiorno entro sera.`,
+      `È saltata fuori una cosa urgente: sistemo e ti scrivo appena ho un orario affidabile.`,
+      `Situazione imprevista, non voglio lasciarti in sospeso: ti mando un nuovo ETA tra poco.`
+    ];
+    return { variants: v.map(t=>({sms:t, whatsapp_text:t, email_subject:'Aggiornamento', email_body:t})) };
+  }
+  try{
+    const r = await fetch(`${process.env.SITE_URL || 'https://colpamia.com'}/.netlify/functions/ai-excuse`, {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ need:context||productTag||'ritardo', style:'neutro', persona:productTag||'generico', locale:'it-IT', maxLen:300 })
+    });
+    const data = await r.json().catch(()=> ({}));
+    if (Array.isArray(data?.variants) && data.variants.length) return data;
+  }catch{}
+  return { variants: [
+    { sms:`Imprevisto ora, ti aggiorno entro sera.`, whatsapp_text:`Imprevisto ora, ti aggiorno entro sera.`, email_subject:`Aggiornamento`, email_body:`Imprevisto ora, ti aggiorno entro sera.` }
+  ]};
 }
 
-function renderEmail({ firstName, excuses, minutes }) {
-  const blocks = (excuses||[]).map((e,i)=> `<div style="margin:10px 0;padding:12px;border:1px solid #eee;border-radius:10px">${e}</div>`).join('');
-  const accredito = minutes>0 ? `<p style="margin-top:12px">Accreditati <b>${minutes} minuti</b> sul tuo wallet.</p>` : '';
-  return `
+async function sendEmail(to, minutes, variants){
+  if (!resend || !to) return;
+  const html = `
     <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;color:#111">
-      <p>Ciao ${firstName || 'Ciao'},</p>
-      <h2 style="margin:0 0 8px 0;">La tua scusa</h2>
-      ${blocks || '<p>Nessuna scusa generata.</p>'}
-      ${accredito}
-      <p style="margin-top:20px;font-size:12px;color:#666">Suggerimento: copia la variante che preferisci e incollala nel canale giusto.</p>
-    </div>
-  `;
+      <h2 style="margin:0 0 12px">La tua scusa</h2>
+      ${variants.map(v=>`<p style="margin:10px 0; padding:12px; background:#f6f7fb; border-radius:10px;">${v.whatsapp_text||v.sms||v.email_body||''}</p>`).join('')}
+      <p style="margin-top:16px">Accreditati <b>${minutes} minuti</b> sul tuo wallet.</p>
+    </div>`;
+  try{
+    await resend.emails.send({ from: MAIL_FROM, to, subject: 'La tua scusa è pronta ✅', html });
+  }catch{}
 }
 
-exports.handler = async (event) => {
-  try {
-    if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: cors };
-    if (event.httpMethod !== 'POST') return err(405, 'Method Not Allowed');
+async function sendWhatsApp(toRaw, text){
+  if (!twilio || !twilioFromWa || !toRaw) return { ok:false, reason:'twilio_not_configured' };
+  try{
+    await twilio.messages.create({ from: twilioFromWa, to: asWhatsApp(toRaw), body: text });
+    return { ok:true };
+  }catch(e){ return { ok:false, reason: e?.message || 'wa_error' }; }
+}
 
-    let body = {}; try { body = JSON.parse(event.body || '{}'); } catch {}
-    let { session_id, email_fallback, phone } = body;
-    session_id = String(session_id||'').replace(/\s/g,'');
+exports.handler = async (event)=>{
+  if (event.httpMethod === 'OPTIONS') return j(204,{});
+  if (event.httpMethod !== 'POST')   return j(405,{error:'method_not_allowed'});
 
-    if (!/^cs_(live|test)_[A-Za-z0-9]+$/.test(session_id)) return err(400,'Session ID non valido');
-    if (session_id.startsWith('cs_live_') !== String(process.env.STRIPE_SECRET_KEY||'').startsWith('sk_live_')) return err(400,'Mismatch Live/Test');
+  let body={}; try{ body = JSON.parse(event.body||'{}'); }catch{ return j(400,{error:'bad_json'}); }
+  const sessionId = String(body.session_id||body.sessionId||'').trim();
+  const emailFallback = String(body.email||'').trim();
+  const phoneFallback = String(body.phone||'').trim();
+  if (!sessionId) return j(400,{error:'missing_session_id'});
 
-    const s  = await stripe.checkout.sessions.retrieve(session_id);
-    if (s.mode !== 'payment') return err(400,'Sessione non di pagamento');
-    if (s.payment_status !== 'paid') return err(409,'Pagamento non acquisito');
-
-    const piId = String(s.payment_intent||''); if (!piId) return err(400,'Payment Intent assente');
-    const pi   = await stripe.paymentIntents.retrieve(piId);
-    if (pi.metadata?.colpamiaCredited === 'true') return ok({ ok:true, credited:false, reason:'già accreditato' });
-
-    const emailSess = s.customer_details?.email || s.customer_email || null;
-    const email = norm(emailSess || (isEmail(email_fallback) ? email_fallback : ''));
-    if (!email) return err(400,'Email assente/illeggibile');
-
-    const items = await stripe.checkout.sessions.listLineItems(session_id, { limit:100, expand:['data.price.product'] });
-
-    const { processLineItems } = safeRequire('./fulfillment') || {};
-    let minutes = 0, excuses = [];
-    if (typeof processLineItems === 'function') {
-      const sig = signalsFromSession(s, email);
-      const out = await processLineItems(items.data, sig);
-      minutes = Number(out.minutes||0);
-      excuses = Array.isArray(out.excuses) ? out.excuses : [];
-    }
-
-    // accredito
-    if (minutes > 0) {
-      try {
-        const wallet = safeRequire('./wallet');
-        if (wallet?.creditMinutes) await wallet.creditMinutes(email, minutes, { phone, session_id, piId });
-      } catch {}
-    }
-
-    // email
-    let emailSent = false;
-    try {
-      const sender = safeRequire('./send-utils');
-      if (sender?.sendEmail) {
-        const firstName = (s.customer_details?.name || email.split('@')[0] || 'Ciao').split(' ')[0];
-        const html = renderEmail({ firstName, excuses, minutes });
-        const subject = excuses.length ? 'La tua scusa è pronta' : 'Accredito minuti confermato';
-        const res = await sender.sendEmail(email, subject, html);
-        emailSent = !!res.sent;
-      }
-    } catch {}
-
-    // idempotenza
-    await stripe.paymentIntents.update(piId, {
-      metadata: {
-        ...(pi.metadata || {}),
-        colpamiaCredited: 'true',
-        minutesCredited: String(minutes||0),
-        excusesCount: String(excuses.length||0),
-        colpamiaEmailSent: emailSent ? 'true' : 'false'
-      }
+  try{
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['line_items.data.price.product','customer']
     });
 
-    return ok({ ok:true, credited: minutes>0, email, minutes, excuses, emailSent });
-  } catch (e) {
-    return err(500, e.message || 'Errore interno');
+    // email
+    const email = (session.customer_details?.email || session.customer_email || emailFallback || '').toLowerCase();
+    if (!email) return j(400,{error:'missing_email'});
+
+    // minuti dai line items
+    const items = session?.line_items?.data || [];
+    let minutes = 0, productTag='';
+    for (const li of items){
+      const priceId = li?.price?.id;
+      const rule = PRICE_RULES[priceId] || {};
+      minutes += (Number(rule.minutes||0) * (li.quantity||1)) || 0;
+      if (!productTag && rule.excuse) productTag = rule.excuse;
+      // opzionale via SKU
+      const sku = li?.price?.lookup_key;
+      if (!rule && sku && MAP_BY_SKU[sku]) {
+        minutes += (Number(MAP_BY_SKU[sku].minutes||0) * (li.quantity||1)) || 0;
+        if (!productTag && MAP_BY_SKU[sku].excuse) productTag = MAP_BY_SKU[sku].excuse;
+      }
+    }
+
+    // contesto da custom_fields
+    let context = '';
+    const cfs = Array.isArray(session?.custom_fields)? session.custom_fields : [];
+    for (const cf of cfs) if ((cf.key||'').toLowerCase()==='need' && cf?.text?.value) context = String(cf.text.value||'').trim();
+
+    // genera scuse
+    const ai = await generateExcusesAI(context, productTag);
+    const variants = Array.isArray(ai?.variants)? ai.variants.slice(0,3) : [];
+
+    // invia email
+    await sendEmail(email, minutes, variants);
+
+    // tenta WhatsApp
+    const phoneCandidates = [
+      session.customer_details?.phone,
+      phoneFallback,
+      ...cfs.filter(x=>(x.key||'').toLowerCase()==='phone' && x?.text?.value).map(x=>x.text.value)
+    ].filter(Boolean);
+
+    let waStatus = 'no_phone';
+    if (phoneCandidates.length){
+      const text = [
+        'La tua Scusa (3 varianti):',
+        ...variants.map((v,i)=>`${i+1}) ${v.whatsapp_text || v.sms || v.email_body || ''}`),
+        '',
+        `(+${minutes} min accreditati su COLPA MIA)`
+      ].join('\n');
+      for (const p of phoneCandidates){
+        const r = await sendWhatsApp(p, text);
+        if (r.ok){ waStatus='sent'; break; } else waStatus='error';
+      }
+    }
+
+    // aggiorna saldo su Customer
+    const customerId = session.customer;
+    if (customerId && minutes>0){
+      let cur=0;
+      try{
+        const cust = await stripe.customers.retrieve(customerId);
+        cur = Number(cust?.metadata?.cm_minutes_total||0);
+      }catch{}
+      try{
+        await stripe.customers.update(customerId, {
+          metadata: { cm_minutes_total: String(cur + minutes), cm_last_session: session.id }
+        });
+      }catch{}
+    }
+
+    return j(200,{ ok:true, minutes, email, waStatus, zeroAmount: session.amount_total===0 });
+
+  }catch(err){
+    return j(400,{ error: String(err?.message||'claim_error') });
   }
 };
