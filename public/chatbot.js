@@ -1,55 +1,87 @@
-// public/chatbot.js — IA unificata (scuse + chat)
+// public/chatbot.js
 (() => {
-  const box=document.getElementById('chatbot-container');
-  const tog=document.getElementById('chatbot-toggle');
-  const msgs=document.getElementById('chatbot-messages');
-  const form=document.getElementById('chatbot-form');
-  const inp=document.getElementById('chatbot-input');
-  if(!box||!tog||!msgs||!form||!inp) return;
+  const $id = (x) => document.getElementById(x);
 
-  const MAXH=10, KEY='cm_chat_ai';
-  const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'[]')}catch{return[]}};
-  const save=h=>{try{localStorage.setItem(KEY,JSON.stringify(h.slice(-MAXH)))}catch{}};
-  let hist=load();
+  const box   = $id('chatbot-container');
+  const toggle= $id('chatbot-toggle');
+  const msgs  = $id('chatbot-messages');
+  const form  = $id('chatbot-form');
+  const input = $id('chatbot-input');
+  const clear = $id('cm-clear');
 
-  const line=(t,who)=>{const d=document.createElement('div');d.className='msg '+who;d.textContent=t;msgs.appendChild(d);msgs.scrollTop=msgs.scrollHeight};
-  const bot =t=>{line(t,'bot');  hist.push({role:'assistant',content:t}); save(hist);};
-  const user=t=>{line(t,'user'); hist.push({role:'user',content:t});      save(hist);};
+  let history = [];
+  try { history = JSON.parse(localStorage.getItem('cmHistory') || '[]'); } catch {}
 
-  box.style.display='none';
-  tog.addEventListener('click',()=>{const open=box.style.display==='none';box.style.display=open?'flex':'none';box.classList.toggle('open',open); if(open) inp.focus()});
-  if(!hist.length) bot('Ciao! Chiedimi pure: prezzi, tempi, rimborsi, pacchetti.');
+  function add(role, text){
+    const el = document.createElement('div');
+    el.className = 'msg ' + (role === 'assistant' || role === 'bot' ? 'bot' : 'user');
+    el.textContent = text;
+    msgs.appendChild(el);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+  function save(){ localStorage.setItem('cmHistory', JSON.stringify(history.slice(-8))); }
 
-  form.addEventListener('submit', async e=>{
-    e.preventDefault();
-    const q=(inp.value||'').trim(); if(!q) return;
-    user(q); inp.value='';
+  async function send(text){
+    if(!text || !text.trim()) return;
+    add('user', text);
+    input.value = '';
+    input.disabled = true;
+    form.querySelector('button[type=submit]').disabled = true;
 
-    // saluto specifico
-    if(/^\s*(ciao|hey|ehi|buongiorno|buonasera)[\s!,.\-]*?(?:come\s+stai|come\s+va)\s*\??\s*$/i.test(q)){
-      bot('Ciao, tutto bene.'); return;
-    }
-
-    // intent "scusa"
-    const lower=q.toLowerCase();
-    const wantsExcuse=/\b(scusa|alibi|giustifica(?:mi)?|copertura|inventami|preparami|giustificazione)\b/i.test(lower)
-                    || /\bmi\s+serve\b.*\bscusa\b/i.test(lower)
-                    || /\bprepara\b.*\bscusa\b/i.test(lower);
-    if(wantsExcuse){
-      try{
-        const r=await fetch('/.netlify/functions/ai-excuse',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({need:q,style:'neutro',persona:'generico',locale:'it-IT',maxLen:300})});
-        const data=await r.json().catch(()=>({}));
-        const v=(data?.variants||[])[0];
-        bot(v ? (v.whatsapp_text||v.sms||'Ok.') : 'Posso preparare una scusa, ma la generazione non ha restituito risultati. Riprova.');
-        return;
-      }catch{ bot('Posso preparare una scusa, ma c’è stato un errore temporaneo. Riprova.'); return; }
-    }
-
-    // chat generale
     try{
-      const r=await fetch('/.netlify/functions/ai-chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:q,history:hist.slice(-MAXH)})});
-      const data=await r.json().catch(()=>({}));
-      bot((r.ok&&data.reply)?data.reply:'Errore temporaneo. Riprova.');
-    }catch{ bot('Errore di rete. Riprova.'); }
+      const r = await fetch('/.netlify/functions/ai-chat', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ message:text, history })
+      });
+      const out = await r.json().catch(()=> ({}));
+      const reply = String(out.reply || 'Ok.').trim();
+      add('bot', reply);
+      history = [...history, {role:'user', content:text}, {role:'assistant', content:reply}].slice(-8);
+      save();
+    }catch{
+      add('bot', 'Ops, non riesco a collegarmi. Riprova tra poco.');
+    }finally{
+      input.disabled = false;
+      form.querySelector('button[type=submit]').disabled = false;
+      input.focus();
+    }
+  }
+
+  // ripristina chat precedente
+  history.forEach(m => add(m.role, m.content));
+
+  // toggle finestra
+  toggle.addEventListener('click', ()=>{
+    box.classList.toggle('open');
+    if (box.classList.contains('open')) setTimeout(()=>input.focus(), 50);
   });
+
+  // invio da form
+  form.addEventListener('submit', (e)=>{
+    e.preventDefault();
+    send(input.value);
+  });
+
+  // pulisci chat
+  clear.addEventListener('click', ()=>{
+    history = [];
+    save();
+    msgs.innerHTML = '';
+  });
+
+  // ✅ Bottoni rapidi (funzionano ovunque grazie a event delegation)
+  document.addEventListener('click', (e)=>{
+    const btn = e.target.closest('.quick button');
+    if (!btn) return;
+    e.preventDefault();
+    const q = btn.dataset.q || btn.textContent.trim();
+    send(q);
+  });
+
+  // apri da #chat
+  if (location.hash === '#chat') {
+    box.classList.add('open');
+    setTimeout(()=>input.focus(), 50);
+  }
 })();
