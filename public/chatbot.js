@@ -1,87 +1,98 @@
-// public/chatbot.js
+// public/chatbot.js — fix “Ok.” + quick buttons
 (() => {
-  const $id = (x) => document.getElementById(x);
+  const box   = document.getElementById('chatbot-container');
+  const toggle= document.getElementById('chatbot-toggle');
+  const form  = document.getElementById('chatbot-form');
+  const input = document.getElementById('chatbot-input');
+  const msgs  = document.getElementById('chatbot-messages');
+  const clear = document.getElementById('cm-clear');
 
-  const box   = $id('chatbot-container');
-  const toggle= $id('chatbot-toggle');
-  const msgs  = $id('chatbot-messages');
-  const form  = $id('chatbot-form');
-  const input = $id('chatbot-input');
-  const clear = $id('cm-clear');
+  const quickWrap = document.querySelector('.quick');
+  const QUICK = ['Prezzi','Tempi','Rimborso','Privacy','Come acquistare'];
 
-  let history = [];
-  try { history = JSON.parse(localStorage.getItem('cmHistory') || '[]'); } catch {}
+  let history = []; // {role:'user'|'assistant', content:string}
 
-  function add(role, text){
-    const el = document.createElement('div');
-    el.className = 'msg ' + (role === 'assistant' || role === 'bot' ? 'bot' : 'user');
-    el.textContent = text;
-    msgs.appendChild(el);
+  function addMsg(text, who='bot'){
+    const div = document.createElement('div');
+    div.className = 'msg ' + (who==='user' ? 'user' : 'bot');
+    div.textContent = text;
+    msgs.appendChild(div);
     msgs.scrollTop = msgs.scrollHeight;
   }
-  function save(){ localStorage.setItem('cmHistory', JSON.stringify(history.slice(-8))); }
 
-  async function send(text){
-    if(!text || !text.trim()) return;
-    add('user', text);
-    input.value = '';
-    input.disabled = true;
-    form.querySelector('button[type=submit]').disabled = true;
+  function setTyping(on){
+    if(on){
+      addMsg('…', 'bot');
+      typingEl = msgs.lastElementChild;
+      typingEl.classList.add('typing');
+    }else if(typingEl){
+      typingEl.remove();
+      typingEl = null;
+    }
+  }
+  let typingEl = null;
+
+  async function ask(message){
+    // UI
+    addMsg(message, 'user');
+    setTyping(true);
 
     try{
       const r = await fetch('/.netlify/functions/ai-chat', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ message:text, history })
+        method: 'POST',
+        headers: {'Content-Type':'application/json'},
+        body: JSON.stringify({ message, history })
       });
-      const out = await r.json().catch(()=> ({}));
-      const reply = String(out.reply || 'Ok.').trim();
-      add('bot', reply);
-      history = [...history, {role:'user', content:text}, {role:'assistant', content:reply}].slice(-8);
-      save();
-    }catch{
-      add('bot', 'Ops, non riesco a collegarmi. Riprova tra poco.');
-    }finally{
-      input.disabled = false;
-      form.querySelector('button[type=submit]').disabled = false;
-      input.focus();
+      const data = await r.json().catch(()=> ({}));
+
+      // accetta diversi campi possibili
+      const reply =
+        (data && (data.reply || data.text || data.output_text)) ||
+        (data?.choices?.[0]?.message?.content) ||
+        '';
+
+      setTyping(false);
+
+      if (!r.ok || !reply.trim()) {
+        addMsg('Ops, non ho ricevuto la risposta. Riprova o chiedimi “Prezzi”, “Tempi”, “Rimborso”, “Privacy”, “Come acquistare”.');
+        return;
+      }
+
+      addMsg(reply.trim(), 'bot');
+
+      // aggiorna history (max 8)
+      history.push({ role:'user', content: message });
+      history.push({ role:'assistant', content: reply.trim() });
+      history = history.slice(-8);
+    }catch(e){
+      setTyping(false);
+      addMsg('Errore di rete. Riprova tra poco.');
     }
   }
 
-  // ripristina chat precedente
-  history.forEach(m => add(m.role, m.content));
-
-  // toggle finestra
-  toggle.addEventListener('click', ()=>{
-    box.classList.toggle('open');
-    if (box.classList.contains('open')) setTimeout(()=>input.focus(), 50);
+  // quick buttons
+  if (quickWrap && !quickWrap.children.length){
+    quickWrap.innerHTML = QUICK.map(q => `<button type="button" data-q="${q}">${q}</button>`).join('');
+  }
+  quickWrap?.addEventListener('click', (e)=>{
+    const b = e.target.closest('button[data-q]');
+    if(!b) return;
+    ask(b.getAttribute('data-q'));
   });
 
-  // invio da form
-  form.addEventListener('submit', (e)=>{
+  // form
+  form?.addEventListener('submit', (e)=>{
     e.preventDefault();
-    send(input.value);
+    const text = (input.value || '').trim();
+    if(!text) return;
+    input.value = '';
+    ask(text);
   });
 
-  // pulisci chat
-  clear.addEventListener('click', ()=>{
+  // toggle + clear
+  toggle?.addEventListener('click', ()=> box.classList.toggle('open'));
+  clear?.addEventListener('click', ()=>{
     history = [];
-    save();
     msgs.innerHTML = '';
   });
-
-  // ✅ Bottoni rapidi (funzionano ovunque grazie a event delegation)
-  document.addEventListener('click', (e)=>{
-    const btn = e.target.closest('.quick button');
-    if (!btn) return;
-    e.preventDefault();
-    const q = btn.dataset.q || btn.textContent.trim();
-    send(q);
-  });
-
-  // apri da #chat
-  if (location.hash === '#chat') {
-    box.classList.add('open');
-    setTimeout(()=>input.focus(), 50);
-  }
 })();
