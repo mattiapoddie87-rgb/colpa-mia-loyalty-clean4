@@ -1,3 +1,4 @@
+// netlify/functions/wallet.js
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion:'2024-06-20' });
 
@@ -20,42 +21,51 @@ async function minutesFromLineItems(session){
   return sum;
 }
 
-async function sessionEmail(s){
-  if (pick(s,'customer_details.email','')) return String(s.customer_details.email).toLowerCase();
-  if (s.customer){ try{ const c=await stripe.customers.retrieve(s.customer); if (c?.email) return String(c.email).toLowerCase(); }catch{} }
-  return (s.customer_email||'').toLowerCase();
-}
-
 exports.handler = async (event)=>{
   if (event.httpMethod==='OPTIONS') return j(204,{});
   const email = String((event.queryStringParameters||{}).email||'').trim().toLowerCase();
   if (!email) return j(400,{error:'missing_email'});
 
-  const sess = await stripe.checkout.sessions.list({limit:100}).catch(()=>({data:[]}));
-  let minutes=0, orders=0;
-
-  for (const s of (sess.data||[])){
-    const sEmail = await sessionEmail(s);
-    const statusOk = (s.status==='complete') && (s.payment_status==='paid' || s.payment_status==='no_payment_required');
-    if (!statusOk || sEmail!==email) continue;
-
-    let add = 0;
-    const piId = String(s.payment_intent||'');
-    if (piId){
-      try{
-        const pi = await stripe.paymentIntents.retrieve(piId);
-        add = Number(pi?.metadata?.minutesCredited||0) || 0;
-        if (!add) add = await minutesFromLineItems(s);
-      }catch{
-        add = await minutesFromLineItems(s);
-      }
-    }else{
-      add = await minutesFromLineItems(s);
-    }
-    minutes += add;
-    orders += 1;
+  // 1) Trova/crea il Customer per email
+  let customer=null;
+  try{
+    const res = await stripe.customers.search({ query: `email:"${email}"`, limit:1 });
+    customer = res?.data?.[0] || null;
+  }catch{}
+  if (!customer){
+    // nessun customer → niente acquisti tracciati
+    return j(200,{ ok:true, email, minutes:0, orders:0, level:'Base' });
   }
 
+  // 2) Se c'è il contatore persistito, usalo
+  const persisted = Number(customer?.metadata?.wallet_minutes||0) || 0;
+
+  // 3) Fallback: ricalcola dai Checkout Sessions del customer (promo code compresi)
+  let recomputed = 0, orders = 0;
+  try{
+    const list = await stripe.checkout.sessions.list({ limit: 100, customer: customer.id });
+    for (const s of (list.data||[])){
+      const ok = (s.status==='complete') && (s.payment_status==='paid' || s.payment_status==='no_payment_required');
+      if (!ok) continue;
+      let add = 0;
+      const piId = String(s.payment_intent||'');
+      if (piId){
+        try{
+          const pi = await stripe.paymentIntents.retrieve(piId);
+          add = Number(pi?.metadata?.minutesCredited||0) || 0;
+          if (!add) add = await minutesFromLineItems(s);
+        }catch{
+          add = await minutesFromLineItems(s);
+        }
+      }else{
+        add = await minutesFromLineItems(s);
+      }
+      recomputed += add;
+      orders += 1;
+    }
+  }catch{}
+
+  const minutes = Math.max(persisted, recomputed); // most reliable
   const level = minutes>=180 ? 'Gold' : minutes>=60 ? 'Silver' : 'Base';
   return j(200,{ ok:true, email, minutes, orders, level });
 };
