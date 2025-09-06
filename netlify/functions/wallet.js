@@ -1,44 +1,45 @@
 // netlify/functions/wallet.js
+// Restituisce saldo aggregato su TUTTI i Customer con la stessa email.
+
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-const j = (s,b) => ({ statusCode:s, headers:{'Content-Type':'application/json', ...CORS}, body:JSON.stringify(b) });
+function r(s, b) { return { statusCode: s, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }; }
+function n(v, d = 0) { const x = Number(v); return Number.isFinite(x) ? x : d; }
+function levelFromPoints(p) {
+  if (p >= 300) return 'Platinum';
+  if (p >= 150) return 'Gold';
+  if (p >= 80)  return 'Silver';
+  return 'Base';
+}
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return j(204,{});
-  if (event.httpMethod !== 'GET')     return j(405,{ error:'method_not_allowed' });
-
-  const q = event.queryStringParameters || {};
-  const email = String(q.email || '').trim().toLowerCase();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j(400,{ error:'invalid_email' });
-
   try {
-    const list = await stripe.customers.list({ email, limit: 5 });
-    const customer =
-      list.data.find(c => (c.email||'').toLowerCase() === email) ||
-      list.data[0] || null;
+    const email = (event.queryStringParameters?.email || '').trim().toLowerCase();
+    if (!email) return r(400, { error: 'missing_email' });
 
-    if (!customer) {
-      return j(200, { ok:true, email, minutes:0, points:0, level:'Base' });
+    // Trova tutti i customers per email
+    const customers = await stripe.customers.list({ email, limit: 100 });
+
+    let minutes = 0, points = 0;
+    let level = 'Base';
+    const collectors = [];
+
+    for (const c of customers.data) {
+      const m = c.metadata || {};
+      const cm = n(m.cm_minutes, 0);
+      const cp = n(m.cm_points,  0);
+      minutes += cm;
+      points  += cp;
+      collectors.push({ id: c.id, cm_minutes: cm, cm_points: cp, cm_level: m.cm_level || '' });
     }
 
-    const md = customer.metadata || {};
-    const minutes = parseInt(md.cm_minutes || '0', 10) || 0;
-    const points  = parseInt(md.cm_points  || '0', 10) || 0;
+    // livello aggregato
+    const aggLevel = levelFromPoints(points);
+    level = aggLevel;
 
-    // Livello semplice sui punti
-    let level = 'Base';
-    if (points >= 300) level = 'Elite';
-    else if (points >= 150) level = 'Pro';
-    else if (points >= 60)  level = 'Plus';
-
-    return j(200, { ok:true, email, minutes, points, level });
-  } catch (err) {
-    return j(500, { error:String(err?.message || 'wallet_error') });
+    return r(200, { email, minutes, points, level, collectors });
+  } catch (e) {
+    return r(500, { error: String(e?.message || e) });
   }
 };
