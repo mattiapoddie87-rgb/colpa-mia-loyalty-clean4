@@ -1,74 +1,72 @@
 // netlify/functions/ai-chat.js
-// Proxy sicuro verso OpenAI (Chat Completions) — risolve il problema del "Ok."
-// Risponde in italiano, tono semplice. Nessun fallback svuotato.
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST,OPTIONS',
   'Access-Control-Allow-Headers': 'Content-Type',
 };
-const j = (statusCode, body) => ({
-  statusCode,
+const j = (s, b) => ({
+  statusCode: s,
   headers: { 'Content-Type': 'application/json', ...CORS },
-  body: JSON.stringify(body),
+  body: JSON.stringify(b),
 });
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return j(204, {});
   if (event.httpMethod !== 'POST')   return j(405, { error: 'method_not_allowed' });
 
-  const apiKey = (process.env.OPENAI_API_KEY || '').trim();
-  const model  = (process.env.OPENAI_MODEL_ || 'gpt-4o-mini').trim();
-  if (!apiKey) return j(500, { error: 'missing_OPENAI_API_KEY' });
-
-  // ---- parse body
   let body = {};
-  try { body = JSON.parse(event.body || '{}'); }
-  catch { return j(400, { error: 'bad_json' }); }
+  try { body = JSON.parse(event.body || '{}'); } catch { return j(400, { error: 'bad_json' }); }
 
-  const userMsg = String(body.message || '').slice(0, 2000).trim();
-  const history = Array.isArray(body.history) ? body.history.slice(-8) : [];
-  if (!userMsg) return j(400, { error: 'missing_message' });
+  const message = String(body.message || '').trim();
+  let history   = Array.isArray(body.history) ? body.history.slice(-8) : [];
+  if (!message) return j(200, { reply: 'Dimmi pure: “Prezzi”, “Tempi”, “Rimborso”, “Privacy” o “Come acquistare”.' });
 
-  // ---- build messages (chat format)
-  const system =
-    'Sei l’assistente di COLPA MIA. Rispondi in italiano con tono diretto e chiaro. ' +
-    'Dai risposte utili e concise (1–3 frasi). Evita fronzoli, emoji e scuse generiche.';
+  // Quick intents (per bottoni)
+  const QUICK = {
+    'prezzi': 'Vedi il Catalogo: pacchetti Base (10 min), Tripla (30), Deluxe (60). Paghi con Stripe; i codici promo sono accettati in cassa.',
+    'tempi': 'Consegna 30s–10m dopo il pagamento. WhatsApp immediato, email di backup se inserita.',
+    'rimborso': 'Se il testo non è ok ti rimborsiamo: rispondi all’email di consegna o contattaci dal sito.',
+    'privacy': 'Usiamo solo i dati necessari alla consegna. Niente condivisioni con terzi. Puoi chiedere cancellazione in ogni momento.',
+    'come acquistare': 'Scegli il pacchetto, completa il checkout Stripe, inserisci WhatsApp/email. Ricevi 1–3 varianti e minuti accreditati nel wallet.',
+  };
+  const low = message.toLowerCase();
+  for (const k of Object.keys(QUICK)) {
+    if (low.includes(k)) return j(200, { reply: QUICK[k] });
+  }
 
+  const apiKey = (process.env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) {
+    return j(200, { reply: 'Ciao! Posso aiutarti su prezzi, tempi, rimborsi, privacy o su come acquistare. (AI offline ora).' });
+  }
+
+  const model = (process.env.OPENAI_MODEL_ || 'gpt-4o-mini').trim();
   const messages = [
-    { role: 'system', content: system },
-    ...history.map(h => ({
-      role: h.role === 'assistant' ? 'assistant' : 'user',
-      content: String(h.content || '').slice(0, 2000),
-    })),
-    { role: 'user', content: userMsg },
+    { role: 'system',
+      content: 'Sei assistente di COLPA MIA. Rispondi in italiano, chiaro e conciso. Dai info pratiche su prezzi, tempi, rimborsi, privacy e come acquistare.' },
+    ...history.map(h => ({ role: h.role === 'assistant' ? 'assistant' : 'user', content: String(h.content||'').slice(0,2000) })),
+    { role: 'user', content: message.slice(0,2000) }
   ];
 
   try {
+    // Chat Completions (più semplice da parsare del Responses)
     const r = await fetch('https://api.openai.com/v1/chat/completions', {
       method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.6,
-        max_tokens: 300,
-        presence_penalty: 0.2,
-        frequency_penalty: 0.2,
-      }),
+      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ model, messages, temperature: 0.5 })
     });
+    const data = await r.json().catch(() => ({}));
 
-    const out = await r.json().catch(() => ({}));
-    if (!r.ok) {
-      return j(r.status, { error: out?.error?.message || 'openai_error' });
-    }
+    let reply =
+      data?.choices?.[0]?.message?.content ||
+      data?.output_text ||
+      (Array.isArray(data?.output) && data.output[0]?.content?.[0]?.text?.value) || '';
 
-    const reply = (out?.choices?.[0]?.message?.content || '').trim();
-    return j(200, { reply: reply || 'Non ho capito bene. Vuoi info su prezzi, tempi, rimborso, privacy o come acquistare?' });
-  } catch (err) {
-    return j(502, { error: 'gateway_error', detail: String(err?.message || err) });
+    reply = String(reply || '').trim();
+    if (!r.ok || !reply) throw new Error('empty_reply');
+
+    // aggiorna history lato client (il client già la gestisce)
+    return j(200, { reply });
+  } catch {
+    return j(200, { reply: 'Posso aiutarti con prezzi, tempi, rimborsi, privacy o ordine. Chiedimi pure!' });
   }
 };
