@@ -1,7 +1,6 @@
 // netlify/functions/ai-excuse.js
-// 3 varianti SEMPRE. Coerenti col pacchetto. Basate su template-ancora + piccole variazioni.
-// Per RIUNIONE/TRAFFICO/CONNESSIONE ignora l’hint (il contesto è nel pacchetto).
-// Per BASE/TRIPLA/DELUXE l’hint orienta il tono, ma non viene mai copiato nel testo.
+// Sempre 3 varianti, coerenti al pacchetto. Base fissa per RIUNIONE/TRAFFICO/CONNESSIONE.
+// Se l'AI fallisce, generiamo localmente 3 parafrasi diverse delle basi.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -10,14 +9,13 @@ const CORS = {
 };
 const j = (s,b)=>({ statusCode:s, headers:{'Content-Type':'application/json', ...CORS}, body:JSON.stringify(b) });
 
-// Map SKU → kind
+// Mappa SKU → kind
 const KIND = {
   SCUSA_ENTRY:'base', SCUSA_BASE:'base', SCUSA_TRIPLA:'tripla', SCUSA_DELUXE:'deluxe',
   RIUNIONE:'riunione', TRAFFICO:'traffico', CONS_KO:'connessione', CONN_KO:'connessione'
 };
-const FIXED_KINDS = new Set(['riunione','traffico','connessione']); // non richiedono hint
 
-// === Template-ancora (come richiesto) ===
+// === Basi fisse richieste ===
 const TEMPLATES = {
   riunione: [
     'Mi è subentrata una riunione proprio ora. Appena finisco ti aggiorno.',
@@ -34,6 +32,7 @@ const TEMPLATES = {
     'Linea/VPN KO proprio ora: sto ripristinando e ti confermo tempi appena aggancio.',
     'Connessione instabile: passo in tethering e ti aggiorno appena torna stabile.'
   ],
+  // Famiglie generiche (non copiano l’hint; lo usano solo come guida mentale lato AI)
   base: [
     'È saltato un imprevisto reale: riduco l’attesa e torno con un orario affidabile.',
     'Sto chiudendo una cosa urgente: preferisco darti tempi precisi tra poco.',
@@ -48,22 +47,31 @@ const TEMPLATES = {
     'È emersa una priorità che richiede presenza: riorganizzo con criterio e ti propongo una fascia solida.',
     'Gestisco un imprevisto che merita attenzione: ottimizzo i prossimi passi e ti mando un timing chiaro.',
     'Evito promesse a vuoto: ripianifico con margine e torno con un orario affidabile.'
-  ]
+  ],
 };
 
-// Piccole varianti lessicali per rendere naturali le 3 uscite anche senza AI
-const TWISTS_A = ['Ti aggiorno a breve.', 'Appena ho un orario credibile, ti scrivo.', 'Ti tengo allineato senza far perdere tempo.'];
-const TWISTS_B = ['Riduciamo l’attesa.', 'Minimizzo il ritardo.', 'Evito di farti aspettare più del necessario.'];
+const TWISTS_A = [
+  'Ti aggiorno a breve.',
+  'Appena ho un orario credibile, ti scrivo.',
+  'Ti tengo allineato senza far perdere tempo.'
+];
+const TWISTS_B = [
+  'Riduciamo l’attesa.',
+  'Minimizzo il ritardo.',
+  'Evito di farti aspettare più del necessario.'
+];
+
+function uniq(arr){ return [...new Set(arr.map(s=>s.trim()))]; }
 
 function varyOnce(str, seedIdx){
-  // micro-varianti lessicali senza snaturare la frase
+  let out = String(str||'').trim();
   const repls = [
-    [/appena/gi, seedIdx%2 ? 'non appena' : 'appena'],
-    [/ti (aggiorno|faccio sapere)/gi, seedIdx%3 ? 'ti aggiorno' : 'ti faccio sapere'],
+    [/appena\b/gi, seedIdx%2 ? 'non appena' : 'appena'],
+    [/\bti (aggiorno|faccio sapere)\b/gi, seedIdx%3 ? 'ti aggiorno' : 'ti faccio sapere'],
     [/\bchiudo\b/gi, seedIdx%2 ? 'finisco' : 'chiudo'],
-    [/\bsubentrata\b/gi, seedIdx%2 ? 'entrata' : 'subentrata'],
+    [/\bproprio ora\b/gi, seedIdx%2 ? 'adesso' : 'proprio ora'],
+    [/\binstabile\b/gi, seedIdx%2 ? 'ballerina' : 'instabile'],
   ];
-  let out = str;
   for (const [re,to] of repls) out = out.replace(re, to);
   const tail = (seedIdx%2 ? TWISTS_A[seedIdx%TWISTS_A.length] : TWISTS_B[seedIdx%TWISTS_B.length]);
   if (!/[.!?]$/.test(out)) out += '.';
@@ -71,88 +79,88 @@ function varyOnce(str, seedIdx){
 }
 
 function localGenerate(kind, maxLen){
-  const base = TEMPLATES[kind] || TEMPLATES.base;
-  const out = [0,1,2].map(i => ({ whatsapp_text: (varyOnce(base[i%base.length], i)).slice(0, maxLen) }));
-  return out;
+  const base = (TEMPLATES[kind] || TEMPLATES.base).slice(0,3);
+  const out  = base.map((b,i)=> varyOnce(b, i)).map(t=> t.slice(0, maxLen));
+  return uniq(out).slice(0,3).map(t => ({ whatsapp_text:t }));
 }
 
-function buildSystem(){ return 'Sei un copywriter italiano. Ti verranno forniti 3 messaggi “base”. Per ciascuno, restituisci una PARAFRASI breve e naturale, 1–2 frasi, mantenendo lo stesso significato e i riferimenti impliciti (riunione/traffico/connessione ecc.). Niente emoji né dettagli rischiosi. Rispondi SOLO con JSON: {"variants":[{"whatsapp_text": "..."},{"whatsapp_text":"..."},{"whatsapp_text":"..."}]}'; }
-
-function buildUser({baseLines, maxLen, tone}){
-  return JSON.stringify({
-    instruction: `Parafrasa leggermente, tono ${tone||'neutro'}, mai teatrale, max ${maxLen} caratteri per variante.`,
+// ==== OpenAI (timeout + retry) → parafrasi delle basi ====
+async function fetchWithTimeout(url, opt={}, ms=6000){
+  const ac = new AbortController();
+  const t = setTimeout(()=>ac.abort(), ms);
+  try{ return await fetch(url, {...opt, signal:ac.signal}); }
+  finally{ clearTimeout(t); }
+}
+async function callOpenAI({apiKey, baseLines, maxLen, tone}){
+  const sys = 'Sei un copywriter italiano. Ricevi 3 frasi BASE e per ognuna generi una PARAFRASI breve e naturale (1–2 frasi), stesso significato (riunione/traffico/connessione ecc.). Niente emoji, niente dettagli medici/legali. Rispondi SOLO con JSON: {"variants":[{"whatsapp_text":"..."},...]}.';
+  const usr = JSON.stringify({
+    istruzioni: `Parafrasa leggermente, tono ${tone||'neutro'}, max ${maxLen} caratteri. Non copiare l\'hint del cliente, usalo solo come contesto mentale.`,
     base: baseLines
   });
+
+  const body = JSON.stringify({
+    model:'gpt-4o-mini',
+    input:[
+      {role:'system', content: sys},
+      {role:'user',   content: usr}
+    ],
+    temperature:0.6, top_p:0.9, presence_penalty:0.1, frequency_penalty:0.2
+  });
+
+  let lastErr=null;
+  for (let i=0;i<2;i++){
+    try{
+      const r = await fetchWithTimeout('https://api.openai.com/v1/responses', {
+        method:'POST',
+        headers:{ 'Authorization':`Bearer ${apiKey}`, 'Content-Type':'application/json' },
+        body
+      }, 7000);
+      const data = await r.json().catch(()=> ({}));
+      if (!r.ok) { lastErr = new Error(data?.error?.message || 'openai_error'); continue; }
+
+      const raw = data.output_text || '';
+      let parsed={}; try{ parsed = JSON.parse(raw); }catch{}
+      let variants = Array.isArray(parsed?.variants) ? parsed.variants : [];
+      variants = variants
+        .map(v => String(v?.whatsapp_text || v?.sms || '').trim())
+        .filter(Boolean)
+        .map(s => s.slice(0,maxLen));
+
+      variants = uniq(variants).slice(0,3);
+      if (variants.length === 3) return variants.map(s => ({ whatsapp_text:s }));
+    }catch(e){ lastErr=e; }
+  }
+  throw lastErr || new Error('openai_timeout');
 }
 
 exports.handler = async (event)=>{
   if (event.httpMethod === 'OPTIONS') return j(204,{});
   if (event.httpMethod !== 'POST')   return j(405,{error:'method_not_allowed'});
 
-  const apiKey = (process.env.OPENAI_API_KEY||'').trim();
   let body={}; try{ body=JSON.parse(event.body||'{}'); }catch{ return j(400,{error:'bad_json'}); }
 
+  const apiKey = (process.env.OPENAI_API_KEY||'').trim();
   const sku    = String(body.sku||'').toUpperCase();
-  const kindIn = String(body.kind||'').toLowerCase();
-  const kind   = KIND[sku] || kindIn || 'base';
-
-  const rawNeed= String(body.need||'').trim();
+  const kind   = KIND[sku] || String(body.kind||'base').toLowerCase();
   const tone   = String(body.tone||'neutro');
-  const locale = String(body.locale||'it-IT'); // tenuto per compatibilità futura
   const maxLen = Math.max(160, Math.min(420, Number(body.maxLen||320)));
 
-  // Se pacchetto fisso, ignoriamo l’hint; altrimenti lo usiamo SOLO per scegliere sfumature (non lo copiamo)
-  const baseLines = (() => {
-    const arr = (TEMPLATES[kind] || TEMPLATES.base).slice(0,3);
-    if (!FIXED_KINDS.has(kind) && rawNeed) {
-      // micro adattamento “mentale”: scegliamo la famiglia più adatta ma NON copiamo l’hint
-      // (qui potresti sofisticare con keyword matching; restiamo leggeri e robusti)
-      return arr;
-    }
-    return arr;
-  })();
+  const baseLines = (TEMPLATES[kind] || TEMPLATES.base).slice(0,3);
 
-  // Se manca chiave OpenAI → solo fallback locale (3 varianti assicurate)
+  // Senza chiave → solo fallback locale (ma variato)
   if (!apiKey) return j(200, { variants: localGenerate(kind, maxLen) });
 
-  // Proviamo con OpenAI: parafrasa le 3 righe base e restituisci JSON
   try{
-    const r = await fetch('https://api.openai.com/v1/responses', {
-      method:'POST',
-      headers:{ 'Authorization':`Bearer ${apiKey}`, 'Content-Type':'application/json' },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        input: [
-          { role:'system', content: buildSystem() },
-          { role:'user',   content: buildUser({ baseLines, maxLen, tone }) }
-        ],
-        temperature: 0.6, top_p: 0.9, presence_penalty: 0.1, frequency_penalty: 0.2
-      })
-    });
-    const data = await r.json();
-    if (!r.ok) throw new Error(data?.error?.message || 'openai_error');
-
-    const raw = data.output_text || '';
-    let parsed = {};
-    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
-
-    let variants = Array.isArray(parsed?.variants) ? parsed.variants : [];
-    variants = variants
-      .map(v => ({ whatsapp_text: String(v?.whatsapp_text || v?.sms || '').trim().slice(0, maxLen) }))
-      .filter(v => v.whatsapp_text);
-
-    // Se meno di 3 → riempi con fallback locale
-    if (variants.length < 3) {
+    const ai = await callOpenAI({ apiKey, baseLines, maxLen, tone });
+    // se l'AI restituisce meno di 3, completiamo con locale
+    if (ai.length < 3){
       const fill = localGenerate(kind, maxLen);
-      // completa senza dedup aggressivo (le parafrasi sono già vicine)
-      while (variants.length < 3) variants.push(fill[variants.length]);
+      const mix  = uniq([...ai.map(v=>v.whatsapp_text), ...fill.map(v=>v.whatsapp_text)])
+                   .slice(0,3).map(s=>({whatsapp_text:s}));
+      return j(200, { variants: mix });
     }
-
-    // Esattamente 3
-    return j(200, { variants: variants.slice(0,3) });
-
+    return j(200, { variants: ai });
   }catch{
-    // Fallback totale
     return j(200, { variants: localGenerate(kind, maxLen) });
   }
 };
