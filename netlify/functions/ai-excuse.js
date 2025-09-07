@@ -1,179 +1,180 @@
 // netlify/functions/ai-excuse.js
-// Motore IA stile ChatGPT-4: 3 varianti naturali, coerenti al pacchetto (SKU) e guidate dal contesto (mai copiato).
-// ENV richieste: OPENAI_API_KEY (obbl.), OPENAI_MODEL (opz., default "gpt-4o").
+// Generatore SCUSE pro: 3 varianti sempre, coerenti con il pacchetto (kind) e con l'hint utente.
+// Per RIUNIONE / TRAFFICO / CONNESSIONE: usa scenari interni (no bisogno di need).
+// Per BASE / TRIPLA / DELUXE: usa il need come "hint", non copiarlo testualmente.
 
+// CORS
 const CORS = {
-  'Access-Control-Allow-Origin':'*',
-  'Access-Control-Allow-Methods':'POST,OPTIONS',
-  'Access-Control-Allow-Headers':'Content-Type',
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
 };
-const j = (s,b)=>({ statusCode:s, headers:{'Content-Type':'application/json',...CORS}, body:JSON.stringify(b) });
+const j = (s,b)=>({ statusCode:s, headers:{'Content-Type':'application/json', ...CORS}, body:JSON.stringify(b) });
 
+// Mappa SKU → kind
 const KIND_BY_SKU = {
   SCUSA_ENTRY:'base', SCUSA_BASE:'base', SCUSA_TRIPLA:'tripla', SCUSA_DELUXE:'deluxe',
   RIUNIONE:'riunione', TRAFFICO:'traffico', CONS_KO:'connessione', CONN_KO:'connessione'
 };
-
-// questi NON chiedono contesto in checkout
 const CONTEXT_NOT_NEEDED = new Set(['riunione','traffico','connessione']);
 
-// ancore semantiche per far “sentire” il tipo al modello
-const LEX = {
-  base:['aggiornamento affidabile','ridurre il ritardo','nuova fascia'],
-  tripla:['incastri','doppio imprevisto','piano di rientro'],
-  deluxe:['ownership','priorità reale','mi prendo la responsabilità'],
-  riunione:['call','allineamento','uscire dalla riunione','slot'],
-  traffico:['coda a fisarmonica','ingorgo','ETA prudente','si sblocca'],
-  connessione:['tethering','hotspot','VPN','fallback','linea instabile']
+// Esempi-ancora (NON da copiare, servono per guidare il modello)
+const EXEMPLARS = {
+  riunione: [
+    'Mi è subentrata una riunione che non posso lasciare. Appena chiudo, ti aggiorno con un orario preciso.',
+    'La call è partita all’improvviso e sta sforando: finisco e ti confermo i tempi più corretti.',
+    'Sono stato agganciato a un punto urgente in riunione: ti scrivo appena libero.'
+  ],
+  traffico: [
+    'Il navigatore segnala un incidente e i tempi si stanno allungando. Appena si sblocca aggiorno l’ETA.',
+    'Traffico anomalo sul percorso: faccio il possibile per ridurre il ritardo e ti tengo allineato.',
+    'Coda a fisarmonica in tangenziale; procedo lento ma arrivo. Ti do un aggiornamento a breve.'
+  ],
+  connessione: [
+    'La connessione ha mollato e sto passando in tethering: recupero appena torna stabile.',
+    'Linea instabile/VPN KO proprio ora: riorganizzo e ti aggiorno quando riaggancio.',
+    'Ho esaurito i dati: riattivo il piano e ti confermo i prossimi passi.'
+  ],
+  base: [
+    'È saltato un imprevisto reale: riduco l’attesa e torno da te con un orario affidabile.',
+    'Sto chiudendo una cosa urgente: preferisco darti tempi precisi tra poco.',
+    'Piccolo intoppo organizzativo: mi rimetto in carreggiata e ti aggiorno a breve.'
+  ],
+  tripla: [
+    'Giornata a incastri (logistica + allineamenti): sto normalizzando e ti do un orario concreto.',
+    'Due sovrapposizioni inattese + un ritardo di filiera: compatto i tempi e ti aggiorno a breve.',
+    'Sto gestendo tre fronti in sequenza: riduco il ritardo e confermo quando chiudo il giro.'
+  ],
+  deluxe: [
+    'È emersa una priorità che richiede presenza: riorganizzo con criterio e ti propongo subito una fascia solida.',
+    'Gestisco un imprevisto che merita attenzione: ottimizzo le prossime tappe e ti condivido una finestra affidabile.',
+    'Preferisco non promettere a vuoto: ripianifico con margine e torno con un timing chiaro.'
+  ]
 };
 
-// fallback locali (mai copiare need)
-function fallback(kind, delay=null){
-  const d = delay ? ` (~${delay}′)` : '';
-  const pick = (arr)=>arr.slice(0,3);
-  switch(kind){
-    case 'riunione': return pick([
-      `Sono dentro una riunione che sta sforando${d}. Esco e ti propongo uno slot concreto.`,
-      `Allineamento urgente esteso oltre il previsto${d}. Appena libero ti mando un orario realistico.`,
-      `La call è andata lunga${d}. Chiudo e ti aggiorno con una finestra pulita.`
-    ]);
-    case 'traffico': return pick([
-      `Bloccato in un tratto con coda a fisarmonica${d}. Appena si muove ti do un’ETA prudente.`,
-      `Ingorgo improvviso in uscita${d}. Evito promesse: ti aggiorno appena scorre.`,
-      `Traffico fermo${d}. Appena passo il tappo ti arrivo senza altri slittamenti.`
-    ]);
-    case 'connessione': return pick([
-      `Linea instabile proprio ora${d}. Passo in tethering come fallback e ti aggiorno appena è stabile.`,
-      `VPN capricciosa${d}. Attivo hotspot e continuo così; ti tengo allineato sui tempi.`,
-      `ISP ballerino${d}. Ticket aperto; intanto lavoro in tethering e ti scrivo quando torna affidabile.`
-    ]);
-    case 'tripla': return pick([
-      `Giornata di incastri e doppio imprevisto${d}. Metto ordine e ti mando un piano di rientro con tempi veri.`,
-      `Tre fattori si sono accavallati${d}. Riduco lo slittamento e ti propongo una finestra prudente.`,
-      `Combinazione sfortunata di incastri${d}. Priorità rientro: ti arrivo con un orario sensato a breve.`
-    ]);
-    case 'deluxe': return pick([
-      `È emersa una priorità reale${d}. Mi prendo la responsabilità: rientro oggi con piano chiaro.`,
-      `Gestisco io la criticità${d}. Tra poco ti do tempistiche nette, senza sorprese.`,
-      `Ownership piena${d}. Sposto di poco e rientro in giornata con percorso pulito.`
-    ]);
-    default: return pick([
-      `È saltato un intoppo operativo${d}. Riduco il ritardo e ti scrivo un orario affidabile a breve.`,
-      `C’è stata un’urgenza${d}. Niente promesse a vuoto: ti aggiorno tra poco con tempi chiari.`,
-      `Piccolo imprevisto reale${d}. Appena stabilizzato ti propongo una nuova fascia con margine.`
-    ]);
+// Fallback locale in caso di errore OpenAI (con lieve variazione)
+function localVariants(kind, hint, maxLen){
+  const bank = EXEMPLARS[kind] || EXEMPLARS.base;
+  const twists = [
+    'Ti tengo aggiornato a breve.',
+    'Appena ho un orario credibile, ti scrivo.',
+    'Riduciamo l’attesa e sistemiamo tutto.'
+  ];
+  const out = [];
+  for (let i=0;i<3;i++){
+    const base = bank[i % bank.length];
+    const tail = twists[i % twists.length];
+    const s = (base + ' ' + tail).slice(0, maxLen);
+    out.push({ whatsapp_text: s });
   }
+  return out;
 }
 
-exports.handler = async (event)=>{
-  if(event.httpMethod==='OPTIONS') return j(204,{});
-  if(event.httpMethod!=='POST')    return j(405,{error:'method_not_allowed'});
+// Prompt builder
+function buildPrompt({kind, tone, locale, maxLen, hint}) {
+  const examples = (EXEMPLARS[kind] || EXEMPLARS.base).map((e,i)=>`${i+1}) ${e}`).join('\n');
+  const personaLine = {
+    base: 'Contesto generico, usa toni neutri e pratici.',
+    tripla: 'Contesto “giornata complicata su più fronti”: mostra organizzazione e priorità.',
+    deluxe: 'Contesto “executive”: toni professionali, zero melodramma, rassicurazione.',
+    riunione: 'Contesto “riunione che sfora”: riferisci la riunione senza dettagli sensibili.',
+    traffico: 'Contesto “traffico anomalo”: riferisci rallentamenti senza dettagli personali.',
+    connessione: 'Contesto “connessione/linea/VPN KO”: riferisci problemi di rete senza tecnicismi eccessivi.'
+  }[kind] || '';
 
-  const API = (process.env.OPENAI_API_KEY||'').trim();
-  if(!API) return j(500,{error:'missing_OPENAI_API_KEY'});
+  const hintLine = CONTEXT_NOT_NEEDED.has(kind)
+    ? 'Ignora l’eventuale hint utente: non è necessario in questo scenario.'
+    : (hint ? `Usa questo hint SOLO come traccia mentale, senza citarlo né copiarlo: «${hint.slice(0,180)}».`
+            : 'Se manca hint, inferisci un motivo plausibile e prudente.');
 
-  let body={}; try{ body=JSON.parse(event.body||'{}'); }catch{ return j(400,{error:'bad_json'}); }
+  return [
+    `Sei un copywriter italiano empatico e molto naturale.`,
+    `Obiettivo: scrivere SCUSE credibili come messaggi WhatsApp/SMS.`,
+    `Regole:`,
+    `- 3 varianti tra loro DAVVERO diverse (lessico, struttura, angolazione).`,
+    `- 1–2 frasi a variante, massimo ${maxLen} caratteri.`,
+    `- Niente emoji, niente toni teatrali, niente accuse a terzi, niente dettagli rischiosi.`,
+    `- NON copiare testualmente input/hint: usali solo per orientarti.`,
+    `- Adatta lo stile al tono: ${tone || 'neutro'}.`,
+    `- Locale: ${locale || 'it-IT'}.`,
+    personaLine,
+    hintLine,
+    ``,
+    `Esempi-ancora (da parafrasare, MAI copiare):`,
+    examples,
+    ``,
+    `RISPONDI SOLO con JSON valido (UTF-8) nel formato:`,
+    `{"variants":[{"whatsapp_text": "..."},{"whatsapp_text":"..."},{"whatsapp_text":"..."}]}`
+  ].join('\n');
+}
 
-  // ingress (dai tuoi webhook/checkout: sku, need, tone, locale, delay…)
-  const sku    = String(body.sku||body.productTag||'').toUpperCase();
-  const kind   = String(body.kind||KIND_BY_SKU[sku]||'base');
+exports.handler = async (event) => {
+  if (event.httpMethod === 'OPTIONS') return j(204,{});
+  if (event.httpMethod !== 'POST')   return j(405,{ error:'method_not_allowed' });
+
+  const apiKey = (process.env.OPENAI_API_KEY||'').trim();
+  if (!apiKey) return j(500,{ error:'missing_OPENAI_API_KEY' });
+
+  // Input
+  let body={};
+  try { body = JSON.parse(event.body||'{}'); } catch { return j(400,{ error:'bad_json' }); }
+
+  const sku    = String(body.sku||'').toUpperCase();
+  const kindIn = String(body.kind||'').toLowerCase();
+  const kind   = KIND_BY_SKU[sku] || kindIn || 'base';
+
+  const rawNeed= String(body.need||'').trim();        // hint (non verrà copiato)
+  const need   = CONTEXT_NOT_NEEDED.has(kind) ? '' : rawNeed;
+
   const tone   = String(body.tone||'neutro');
   const locale = String(body.locale||'it-IT');
-  const delay  = Number(body.delay||0)||null;
-  const recip  = String(body.recipient||'').slice(0,60);
-
-  // il contesto è solo un “hint” per guidare, MAI da citare testualmente
-  const hintRaw = CONTEXT_NOT_NEEDED.has(kind) ? '' : String(body.need||'').slice(0,600);
-  const hint    = hintRaw ? `Hint (non citare): ${hintRaw}` : 'Nessun hint';
-
   const maxLen = Math.max(180, Math.min(420, Number(body.maxLen||320)));
-  const model  = (process.env.OPENAI_MODEL||'gpt-4o').trim();
-  const anchors= LEX[kind] || LEX.base;
 
-  const system = [
-    'Sei un copywriter italiano empatico e concreto.',
-    'Obiettivo: 3 varianti WhatsApp naturali, coerenti al TIPO (kind) e al tono, senza emoji/superlativi.',
-    'Ogni variante deve avere apertura diversa, lessico e struttura diversi, e un next-step concreto.',
-    'NON citare l’hint: usalo solo per orientare la situazione.',
-    'Evita reati, diagnosi mediche, dati identificabili.',
-  ].join(' ');
+  // Prompt
+  const prompt = buildPrompt({ kind, tone, locale, maxLen, hint: need });
 
-  const user = {
-    kind, tone, locale, delay, recipient: recip,
-    anchors_for_kind: anchors,
-    angles: [
-      'riconoscimento + causa sintetica + next-step chiaro',
-      'ownership + piano di rientro con soglia temporale',
-      'empatia sobria + prudenza + piccola azione immediata'
-    ],
-    hint,
-    constraints: {
-      per_variant_anchor_required: true,
-      no_anchor_reuse_across_variants: true,
-      length_max: maxLen
-    },
-    schema: {
-      variants: [
-        { whatsapp_text:"", email_subject:"", email_body:"" },
-        { whatsapp_text:"", email_subject:"", email_body:"" },
-        { whatsapp_text:"", email_subject:"", email_body:"" }
-      ]
-    },
-    request: `Genera ESATTAMENTE 3 varianti. WhatsApp: <= ${maxLen} caratteri, 1–2 frasi, italiano naturale.`
-  };
-
+  // Call OpenAI Responses API
   try{
-    const r = await fetch('https://api.openai.com/v1/responses',{
+    const r = await fetch('https://api.openai.com/v1/responses', {
       method:'POST',
-      headers:{ 'Authorization':`Bearer ${API}`, 'Content-Type':'application/json' },
+      headers:{ 'Authorization':`Bearer ${apiKey}`, 'Content-Type':'application/json' },
       body: JSON.stringify({
-        model,
-        temperature: 1.05, top_p: 0.92, presence_penalty: 0.6, frequency_penalty: 0.45,
-        seed: (Date.now() ^ (sku?sku.length:17)) % 1000000,
+        model: 'gpt-4o-mini',
         input: [
-          { role:'system', content: system },
-          { role:'user',   content: JSON.stringify(user) }
-        ]
+          { role:'system', content:'Sei un assistente che restituisce SOLO JSON valido.' },
+          { role:'user',   content: prompt }
+        ],
+        temperature: 0.95, top_p: 0.95, presence_penalty: 0.35, frequency_penalty: 0.3
       })
     });
     const data = await r.json();
-    const raw  = String(data?.output_text||'').trim();
+    if (!r.ok) return j(r.status, { error: data?.error?.message || 'openai_error' });
 
-    let parsed=null; try{ parsed = JSON.parse(raw); }catch{}
-    let arr = Array.isArray(parsed?.variants) ? parsed.variants : [];
-    const clamp = (s,n)=>String(s||'').replace(/\s+/g,' ').trim().slice(0,n);
+    const raw = data.output_text || '';
+    let parsed = {};
+    try { parsed = JSON.parse(raw); } catch { parsed = {}; }
 
-    let out = arr.map(v=>({
-      whatsapp_text: clamp(v.whatsapp_text || v.text || '', maxLen),
-      email_subject: clamp(v.email_subject || 'La tua scusa', 80),
-      email_body:    clamp(v.email_body || v.whatsapp_text || '', Math.max(300, maxLen+120))
-    })).filter(v=>v.whatsapp_text);
+    let variants = Array.isArray(parsed?.variants) ? parsed.variants : [];
+    variants = variants
+      .map(v => ({ whatsapp_text: String(v?.whatsapp_text || v?.sms || '').trim().slice(0, maxLen) }))
+      .filter(v => v.whatsapp_text);
 
-    // dedup forte
-    const seen=new Set(), uniq=[];
-    for(const v of out){
-      const k=v.whatsapp_text.slice(0,72).toLowerCase();
-      if(seen.has(k)) continue;
-      seen.add(k); uniq.push(v);
-      if(uniq.length===3) break;
+    // dedupe semplice
+    const seen = new Set(); const uniq=[];
+    for (const v of variants){
+      const k = v.whatsapp_text.toLowerCase();
+      if (seen.has(k)) continue; seen.add(k); uniq.push(v);
+      if (uniq.length === 3) break;
     }
-    if(uniq.length===3) return j(200,{ variants: uniq });
 
-    // fallback coerente al tipo
-    const pool = fallback(kind, delay).map(t=>({
-      whatsapp_text: clamp(t,maxLen),
-      email_subject: 'La tua scusa',
-      email_body:    clamp(t, Math.max(300, maxLen+120))
-    }));
-    while(uniq.length<3) uniq.push(pool[uniq.length] || pool[0]);
-    return j(200,{ variants: uniq.slice(0,3), fallback:true });
+    if (uniq.length >= 3) return j(200, { variants: uniq.slice(0,3) });
 
+    // fallback parziale
+    const fill = localVariants(kind, need, maxLen);
+    const merged = [...uniq, ...fill].slice(0,3);
+    return j(200, { variants: merged });
   }catch{
-    const pool = fallback(kind, delay).map(t=>({
-      whatsapp_text: t.slice(0,maxLen),
-      email_subject: 'La tua scusa',
-      email_body:    t
-    }));
-    return j(200,{ variants: pool, fallback:true });
+    // fallback totale
+    return j(200, { variants: localVariants(kind, need, maxLen) });
   }
 };
