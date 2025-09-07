@@ -1,38 +1,38 @@
-// netlify/functions/stripe-webhook.js
-// - Accredita i minuti (promo code ok)
-// - Genera 3 varianti (usa ai-excuse)
-// - Invia email (Resend)
-// - Invia WhatsApp (Twilio) scegliendo il numero dal campo ufficiale **o** dai custom_fields
-// - Scrive metadati sul PaymentIntent per diagnosi
+// stripe-webhook.js — mantiene flusso attuale: accredito minuti, 3 varianti, email, WhatsApp.
+// NOVITÀ: le scuse arrivano da ai-excuse che usa i 3 modelli base.
 
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
 const fetchFn = (...a) => fetch(...a);
 
-// --- Env Twilio/Resend/Sito -------------------------------------------------
-const RESEND_KEY = (process.env.RESEND_API_KEY || '').trim();
-const SITE_URL   = (process.env.SITE_URL || '').replace(/\/+$/, '');
-const TW_SID     = (process.env.TWILIO_ACCOUNT_SID || '').trim();
-const TW_TOKEN   = (process.env.TWILIO_AUTH_TOKEN  || '').trim();
-// Per sandbox/prod usa: "whatsapp:+14155238886" o il tuo verde
-const TW_FROM_WA = (process.env.TWILIO_FROM_WA     || '').trim();
+// Env
+const RESEND_KEY  = (process.env.RESEND_API_KEY || '').trim();
+const SITE_URL    = (process.env.SITE_URL || '').replace(/\/+$/, '');
+const TW_SID      = (process.env.TWILIO_ACCOUNT_SID || '').trim();
+const TW_TOKEN    = (process.env.TWILIO_AUTH_TOKEN  || '').trim();
+const TW_FROM_WA  = (process.env.TWILIO_FROM_WA     || '').trim();
+const DEF_CC      = (process.env.DEFAULT_COUNTRY_CODE || 'IT').toUpperCase();
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
-const j = (s, b) => ({
-  statusCode: s,
-  headers: { 'Content-Type': 'application/json', ...CORS },
-  body: JSON.stringify(b)
-});
+const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
 
-// --- Utils -------------------------------------------------------------------
-const pick = (x, p, d = null) => {
-  try { return p.split('.').reduce((a, c) => (a && a[c] != null ? a[c] : null), x) ?? d; }
-  catch { return d; }
-};
+// Utils
+const pick = (x, p, d = null) => { try { return p.split('.').reduce((a, c) => (a && a[c] != null ? a[c] : null), x) ?? d; } catch { return d; } };
 function parseRules(){ try{ return JSON.parse(process.env.PRICE_RULES_JSON || '{}'); } catch{ return {}; } }
 
-// Calcola minuti considerando PRICE_RULES_JSON e metadata dei Price/Product
+// SKU -> kind per ai-excuse
+function skuToKind(sku){
+  const x = String(sku||'').toUpperCase();
+  if (x.includes('RIUNIONE')) return 'riunione';
+  if (x.includes('TRAFFICO')) return 'traffico';
+  if (x.includes('CONS') || x.includes('CONN')) return 'connessione';
+  if (x.includes('DELUXE')) return 'deluxe';
+  if (x.includes('TRIPLA')) return 'tripla';
+  return 'base';
+}
+
+// Minuti: PRICE_RULES_JSON → fallback a metadata su Price/Product
 async function minutesFromLineItems(session){
   const rules = parseRules();
   const items = await stripe.checkout.sessions
@@ -44,7 +44,7 @@ async function minutesFromLineItems(session){
     const qty = li?.quantity || 1;
     const priceId = li?.price?.id;
 
-    if (priceId && rules[priceId]){
+    if (priceId && rules[priceId]) {
       sum += Number(rules[priceId].minutes || 0) * qty;
       continue;
     }
@@ -55,48 +55,39 @@ async function minutesFromLineItems(session){
   return sum;
 }
 
-// Normalizza telefono in E.164 (accetta +39..., 0039..., 39..., solo cifre)
-// ritorna stringa tipo "+3934..." oppure "" se non valido
+// Normalizza telefono: +39…, 0039…, 39…, 347…
 function normalizePhone(raw){
   if (!raw) return '';
-  let s = String(raw).trim();
-  s = s.replace(/\s+/g, '');
-
-  // rimuovi eventuale prefisso whatsapp:
-  s = s.replace(/^whatsapp:/i, '');
-
-  // 00 -> +
+  let s = String(raw).trim().replace(/\s+/g,'').replace(/^whatsapp:/i,'');
   if (s.startsWith('00')) s = '+' + s.slice(2);
-  // se inizia con solo cifre e non con +
   if (!s.startsWith('+') && /^\d{6,15}$/.test(s)) {
-    // euristica: se inizia con 39 (Italia) aggiungi +, altrimenti fallisce
-    if (s.startsWith('39')) s = '+' + s;
+    if (DEF_CC === 'IT') {
+      if (/^3\d{8,11}$/.test(s)) s = '+39' + s;
+      else if (s.startsWith('39')) s = '+' + s;
+    }
   }
-
-  // tieni solo + e cifre
-  s = s.replace(/[^\d+]/g, '');
-
-  if (!/^\+\d{6,15}$/.test(s)) return '';
-  return s;
+  s = s.replace(/[^\d+]/g,'');
+  return /^\+\d{6,15}$/.test(s) ? s : '';
 }
 
-// Estrae possibile numero da Checkout Session: prima il campo ufficiale,
-// poi qualsiasi custom_field con key "phone" (o simili), scegliendo il primo valido
+// Estrai numero: campo ufficiale + custom_fields (phone/whatsapp/wa/telefono)
 function getWhatsAppNumber(session){
   const candidates = [];
-
   const cPhone = pick(session, 'customer_details.phone', '');
   if (cPhone) candidates.push(cPhone);
 
   const cfs = Array.isArray(session?.custom_fields) ? session.custom_fields : [];
   for (const cf of cfs){
-    const key = String(cf?.key || '').toLowerCase();
-    if (key.includes('phone') || key === 'whatsapp' || key === 'wa'){
+    const key   = String(cf?.key || '').toLowerCase();
+    const label = String(cf?.label?.custom || '').toLowerCase();
+    if (
+      key.includes('phone') || key.includes('whatsapp') || key === 'wa' ||
+      key.includes('telefono') || label.includes('whatsapp') || label.includes('telefono')
+    ){
       const val = String(cf?.text?.value || '').trim();
       if (val) candidates.push(val);
     }
   }
-  // normalizza e scegli il primo valido
   for (const raw of candidates){
     const norm = normalizePhone(raw);
     if (norm) return norm;
@@ -104,16 +95,14 @@ function getWhatsAppNumber(session){
   return '';
 }
 
-// Twilio WhatsApp
+// WhatsApp via Twilio (Body semplice, invariato)
 async function sendWhatsApp(toE164, text){
-  // Non provare se non configurato
   if (!TW_SID || !TW_TOKEN || !TW_FROM_WA) return { ok:false, reason:'no_twilio_env' };
-
   const url  = `https://api.twilio.com/2010-04-01/Accounts/${TW_SID}/Messages.json`;
   const body = new URLSearchParams({
-    From: TW_FROM_WA,                  // es. "whatsapp:+14155238886"
-    To:   `whatsapp:${toE164}`,        // es. "whatsapp:+39349..."
-    Body: text.slice(0, 1200)          // margine prudenziale
+    From: TW_FROM_WA,                // es. "whatsapp:+14155238886" o il tuo numero WA
+    To:   `whatsapp:${toE164}`,
+    Body: text.slice(0, 1200)
   }).toString();
 
   const r = await fetchFn(url, {
@@ -126,7 +115,6 @@ async function sendWhatsApp(toE164, text){
   });
 
   const data = await r.json().catch(() => ({}));
-  // r.ok = 2xx; Twilio mette error_code in data.error_code
   if (r.ok && !data.error_code) return { ok:true, sid:data.sid || null, data };
   const reason = data?.message || data?.error_message || `http_${r.status}`;
   return { ok:false, reason, data };
@@ -144,23 +132,22 @@ async function sendEmail(to, subject, html){
   return { ok:r.ok, data };
 }
 
-// Chiede 3 varianti alla function dedicata (manteniamo un solo punto di verità)
-async function getExcuses(need, persona, style, locale){
+// 3 varianti dai modelli (ai-excuse)
+async function getExcuses(kind, need, style, locale){
   const url = `${SITE_URL}/.netlify/functions/ai-excuse`;
   const r = await fetchFn(url, {
     method:'POST',
     headers:{ 'Content-Type':'application/json' },
-    body: JSON.stringify({ need, persona, style, locale, maxLen: 320 })
+    body: JSON.stringify({ kind, need, style, locale, maxLen: 320 })
   });
   const data = await r.json().catch(() => ({}));
   const arr = Array.isArray(data?.variants) ? data.variants.slice(0,3) : [];
   return arr.map(v => String(v.whatsapp_text || '').trim()).filter(Boolean);
 }
 
-// -----------------------------------------------------------------------------
-
+// Webhook
 exports.handler = async (event) => {
-  // Verifica firma webhook Stripe
+  // Firma
   const sig = event.headers['stripe-signature'];
   let type, obj;
   try{
@@ -172,46 +159,48 @@ exports.handler = async (event) => {
     return j(400, { error:'invalid_signature', detail:String(e?.message||e) });
   }
 
-  if (type !== 'checkout.session.completed') {
-    return j(200, { ok:true, ignored:true });
-  }
+  if (type !== 'checkout.session.completed') return j(200, { ok:true, ignored:true });
 
   try{
-    // Session completa
+    // Session
     const session = await stripe.checkout.sessions.retrieve(obj.id, { expand: ['total_details.breakdown'] });
 
     const email   = String(pick(session, 'customer_details.email', '') || '').toLowerCase().trim();
     const locale  = String(session?.locale || 'it-IT');
     const minutes = await minutesFromLineItems(session);
 
-    // Numero WA da campo ufficiale o da custom_fields
+    // Numero WA
     const phoneE164 = getWhatsAppNumber(session);
 
-    // 3 varianti (la function applica già le regole per pacchetto/contesto)
-    const need = 'Scusa coerente col pacchetto acquistato; tono naturale.';
-    const variants = await getExcuses(need, 'cliente', 'neutro', locale);
+    // kind da SKU (client_reference_id) + need da custom_fields
+    const kind = skuToKind(session?.client_reference_id || '');
+    let need = '';
+    for (const cf of (Array.isArray(session?.custom_fields) ? session.custom_fields : [])){
+      if (String(cf?.key||'') === 'need' && cf?.text?.value) { need = String(cf.text.value); break; }
+    }
+
+    // Varianti
+    const variants = await getExcuses(kind, need, 'neutro', locale);
     const safeVariants = variants.length ? variants : [
       'Imprevisto reale in corso; minimizzo il ritardo e ti scrivo appena ho un orario preciso.',
       'Sto chiudendo un’urgenza: preferisco darti tempi chiari tra poco.',
       'Mi riorganizzo subito: riduco l’attesa e ti tengo allineato a breve.'
     ];
 
-    // WhatsApp (se numero valido e Twilio configurato)
+    // WhatsApp
     let waStatus = 'skip:no_phone';
     if (phoneE164) {
       const waText =
         'La tua Scusa (3 varianti):\n' +
         safeVariants.map((v,i)=>`${i+1}) ${v}`).join('\n') +
         `\n\n(+${minutes} min accreditati su COLPA MIA)`;
-
       const wa = await sendWhatsApp(phoneE164, waText);
       waStatus = wa.ok ? 'sent' : `fail:${wa.reason||'unknown'}`;
     }
 
-    // Email (sempre, se presente)
+    // Email
     let emailSent = false;
     if (email) {
-      const bullet = safeVariants.map(v=>`<li>${v}</li>`).join('');
       const html = `
         <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;line-height:1.5;color:#111">
           <h2 style="margin:0 0 8px">La tua scusa (3 varianti)</h2>
@@ -222,7 +211,7 @@ exports.handler = async (event) => {
       emailSent = !!em.ok;
     }
 
-    // Scrivi metadati nel PaymentIntent per wallet & diagnosi
+    // Metadata su PaymentIntent (se esiste)
     if (session.payment_intent){
       const meta = {
         minutesCredited: String(minutes),
@@ -230,13 +219,13 @@ exports.handler = async (event) => {
         colpamiaEmailSent: emailSent ? 'true' : 'false',
         colpamiaWaStatus: waStatus,
       };
-      if (email) meta.customerEmail = email;           // <-- fondamentale per wallet
+      if (email) meta.customerEmail = email;
       if (phoneE164) meta.customerPhoneE164 = phoneE164;
 
       try { await stripe.paymentIntents.update(session.payment_intent, { metadata: meta }); } catch {}
     }
 
-    return j(200, { ok:true, minutes, emailSent, waStatus, variants: safeVariants.length });
+    return j(200, { ok:true, minutes, emailSent, waStatus, variants: safeVariants.length, kind });
   }catch(e){
     return j(500, { error:'webhook_error', detail:String(e?.message||e) });
   }
