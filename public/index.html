@@ -11,7 +11,6 @@
     .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
     .title{font-weight:700;font-size:18px}
     .price{color:#a5b4fc}
-    .row{display:flex;gap:8px;align-items:center}
     select,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
     button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
     button:disabled{opacity:.6;cursor:not-allowed}
@@ -27,7 +26,7 @@
       <!-- BASE -->
       <div class="card">
         <div class="title">SCUSA BASE</div>
-        <div class="price" id="p-base">Prezzo come da listino</div>
+        <div class="price">Prezzo come da listino</div>
         <label for="ctx-base"><small>Contesto</small></label>
         <select id="ctx-base">
           <option value="CENA">CENA</option>
@@ -40,15 +39,16 @@
           <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
           <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
         </select>
-        <button data-sku="SCUSA_BASE"
-                data-price="price_1S1vuQAuMAjkbPdHnq3JIDQZ"
-                data-context-select="#ctx-base">Acquista</button>
+        <button
+          data-sku="SCUSA_BASE"
+          data-price="price_1S1vuQAuMAjkbPdHnq3JIDQZ"
+          data-context-select="#ctx-base">Acquista</button>
       </div>
 
       <!-- DELUXE -->
       <div class="card">
         <div class="title">SCUSA DELUXE</div>
-        <div class="price" id="p-deluxe">Prezzo come da listino</div>
+        <div class="price">Prezzo come da listino</div>
         <label for="ctx-deluxe"><small>Contesto</small></label>
         <select id="ctx-deluxe">
           <option value="CENA">CENA</option>
@@ -61,42 +61,40 @@
           <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
           <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
         </select>
-        <button data-sku="SCUSA_DELUXE"
-                data-price="price_1S1vuXAuMAjkbPdHmgyfY8Bj"
-                data-context-select="#ctx-deluxe">Acquista</button>
+        <button
+          data-sku="SCUSA_DELUXE"
+          data-price="price_1S1vuXAuMAjkbPdHmgyfY8Bj"
+          data-context-select="#ctx-deluxe">Acquista</button>
       </div>
 
-      <!-- CONNESSIONE KO -->
+      <!-- CONNESSIONE KO (scenario fisso) -->
       <div class="card">
         <div class="title">CONNESSIONE KO</div>
-        <div class="price" id="p-conn">Prezzo come da listino</div>
+        <div class="price">Prezzo come da listino</div>
         <small>Scenario fisso: “connessione/linea/VPN KO”.</small>
         <button data-sku="CONNESSIONE">Acquista</button>
-                data-price="price_1S1w4RAuMAjkbPdHLfPElLnX">Acquista</button>
       </div>
 
-      <!-- TRAFFICO -->
+      <!-- TRAFFICO (scenario fisso) -->
       <div class="card">
         <div class="title">TRAFFICO</div>
-        <div class="price" id="p-traf">Prezzo come da listino</div>
+        <div class="price">Prezzo come da listino</div>
         <small>Scenario fisso: “traffico/incidente/coda”.</small>
         <button data-sku="TRAFFICO">Acquista</button>
-                data-price="price_1S1wdaAuMAjkbPdH8We1FVEy">Acquista</button>
       </div>
 
-      <!-- RIUNIONE IMPROVVISA -->
+      <!-- RIUNIONE IMPROVVISA (scenario fisso) -->
       <div class="card">
         <div class="title">RIUNIONE IMPROVVISA</div>
-        <div class="price" id="p-riun">Prezzo come da listino</div>
+        <div class="price">Prezzo come da listino</div>
         <small>Scenario fisso: “riunione/call che sfora”.</small>
         <button data-sku="RIUNIONE">Acquista</button>
-                data-price="price_1S1wdXAuMAjkbPdHfqU3fnwq">Acquista</button>
       </div>
     </div>
 
     <p style="margin-top:20px"><small>
       Al checkout potrai inserire il numero WhatsApp e specificare il contesto.
-      Se scegli BASE/DELUXE, il contesto selezionato qui compare nel campo “Contesto” per guidarti.
+      Se scegli BASE/DELUXE, il contesto selezionato qui compare nel campo “Contesto” per guidarti (puoi modificarlo).
     </small></p>
   </div>
 
@@ -105,10 +103,11 @@
     const CANCEL  = location.origin + '/cancel.html';
 
     async function startCheckout(btn){
-      const priceId = btn.dataset.price;
       const sku     = btn.dataset.sku;
-      if(!priceId || !sku) return;
+      const priceId = btn.dataset.price || null;           // può mancare per gli scenari fissi
+      if (!sku) return;
 
+      // prefill del contesto solo per Base/Deluxe
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
       if (sel && sel.value) ctx = String(sel.value).trim();
@@ -123,26 +122,28 @@
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
           body: JSON.stringify({
-            price_id: priceId,
+            price_id: priceId,        // null per CONNESSIONE/TRAFFICO/RIUNIONE
             sku,
             success_url: SUCCESS,
             cancel_url: CANCEL,
             need_label: needLabel,
-            need_default: ctx || ''   // prefill nel campo "need"
+            need_default: ctx || ''   // precompila il campo “Contesto”
           })
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error||'checkout_error');
+
         if (data.url) { location.href = data.url; return; }
+        // fallback
         location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id);
       }catch(e){
-        alert('Errore checkout: ' + (e.message||e));
+        alert('Errore checkout: ' + (e.message || e));
       }finally{
         btn.disabled = false;
       }
     }
 
-    document.querySelectorAll('button[data-price]').forEach(b=>{
+    document.querySelectorAll('button[data-sku]').forEach(b=>{
       b.addEventListener('click', ()=> startCheckout(b));
     });
   </script>
