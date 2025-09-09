@@ -1,35 +1,46 @@
 // netlify/functions/create-checkout-session.js
-// Robust: valida price_id; fallback a mappa SKU→PRICE; precompila 'need'
-
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
 const CORS = { 'Access-Control-Allow-Origin': '*' };
 const j = (s,b)=>({ statusCode:s, headers:{'Content-Type':'application/json', ...CORS}, body:JSON.stringify(b) });
 
-// Mappa centrale (prende da ENV se presenti, altrimenti usa i tuoi ID)
+// Mappa LIVE (metti queste 3 env su Netlify se puoi: più sicuro)
 const PRICE_MAP = {
-  SCUSA_BASE:     (process.env.PRICE_BASE_ID     || 'price_1S1vuQAuMAjkbPdHnq3JIDQZ'),
-  SCUSA_DELUXE:   (process.env.PRICE_DELUXE_ID   || 'price_1S1vuXAuMAjkbPdHmgyfY8Bj'),
-  CONNESSIONE:    (process.env.PRICE_CONN_ID     || 'price_1S1w4RAuMAjkbPdHLfPElLnX'),
-  TRAFFICO:       (process.env.PRICE_TRAFF_ID    || 'price_1S1wdaAuMAjkbPdH8We1FVEy'),
-  RIUNIONE:       (process.env.PRICE_RIUN_ID     || 'price_1S1wdXAuMAjkbPdHfqU3fnwq'),
+  SCUSA_BASE:   process.env.PRICE_BASE_ID   || 'price_1S1vuQAuMAjkbPdHnq3JIDQZ',
+  SCUSA_DELUXE: process.env.PRICE_DELUXE_ID || 'price_1S1vuXAuMAjkbPdHmgyfY8Bj',
+  CONNESSIONE:  process.env.PRICE_CONN_ID   || 'price_1S1w4RAuMAjkbPdHLfPElLnX',
+  TRAFFICO:     process.env.PRICE_TRAFF_ID  || 'price_1S1wdaAuMAjkbPdH8We1FVEy',
+  RIUNIONE:     process.env.PRICE_RIUN_ID   || 'price_1S1wdXAuMAjkbPdHfqU3fnwq',
 };
 
+// Questi 3 ignorano sempre l'ID dal front: uso SOLO la mappa server
+const FORCE_SKU_MAP = new Set(['CONNESSIONE','TRAFFICO','RIUNIONE']);
+
 async function resolvePriceId(inputPriceId, sku){
-  // 1) Se arriva un price_id, verifica che esista
-  if (inputPriceId) {
-    try {
-      const p = await stripe.prices.retrieve(inputPriceId);
-      if (p && p.active) return p.id; // ok
-    } catch (_) { /* cade al fallback */ }
+  const upper = String(sku||'').toUpperCase();
+
+  if (FORCE_SKU_MAP.has(upper)) {
+    const mapped = PRICE_MAP[upper];
+    if (!mapped) throw new Error('price_not_mapped_for_sku');
+    const p = await stripe.prices.retrieve(mapped);
+    if (!p?.active) throw new Error('mapped_price_inactive_or_missing');
+    return p.id;
   }
-  // 2) Fallback su mappa per SKU
-  const pid = PRICE_MAP[sku];
-  if (!pid) throw new Error('price_not_found_for_sku');
-  // verifica anche il fallback
-  const p2 = await stripe.prices.retrieve(pid);
-  if (!p2 || !p2.active) throw new Error('mapped_price_inactive_or_missing');
+
+  // Per BASE/DELUXE: se arriva dal front lo valido, altrimenti mappa
+  let candidate = inputPriceId || PRICE_MAP[upper];
+  if (!candidate) throw new Error('price_not_found_for_sku');
+
+  try {
+    const p = await stripe.prices.retrieve(candidate);
+    if (p?.active) return p.id;
+  } catch (_) { /* fallthrough */ }
+
+  const fallback = PRICE_MAP[upper];
+  if (!fallback) throw new Error('fallback_price_missing');
+  const p2 = await stripe.prices.retrieve(fallback);
+  if (!p2?.active) throw new Error('fallback_price_inactive');
   return p2.id;
 }
 
@@ -61,30 +72,20 @@ exports.handler = async (event) => {
       client_reference_id: sku,
       phone_number_collection: { enabled: true },
       custom_fields: [
-        {
-          key: 'phone',
-          label: { type:'custom', custom:'Telefono WhatsApp (opz.)' },
-          type: 'text',
-          optional: true
-        },
-        {
-          key: 'need',
-          label: { type:'custom', custom: needLabel },
-          type: 'text',
-          optional: false,
-          text: { default_value: needDefault || null, minimum_length: 4, maximum_length: 120 }
-        }
+        { key:'phone', label:{type:'custom',custom:'Telefono WhatsApp (opz.)'}, type:'text', optional:true },
+        { key:'need',  label:{type:'custom',custom:needLabel}, type:'text', optional:false,
+          text:{ default_value: needDefault || null, minimum_length:4, maximum_length:120 } }
       ],
       metadata: { sku }
     });
 
-    return j(200, { id: session.id, url: session.url || null });
+    return j(200, { id: session.id, url: session.url || null, price_id_used: price_id });
   }catch(e){
-    // Errore esplicito per debug in console
     return j(500, {
       error: 'stripe_error',
       detail: String(e?.message||e),
-      hint: 'Controlla che il PRICE appartenga allo stesso ambiente (LIVE) ed è Active.'
+      sku,
+      hint: 'Controlla che i PRICE siano LIVE e Active. Imposta PRICE_*_ID su Netlify se necessario.'
     });
   }
 };
