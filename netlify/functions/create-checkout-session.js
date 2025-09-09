@@ -5,11 +5,30 @@ const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' };
 const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type':'application/json', ...CORS }, body: JSON.stringify(b) });
 
-function priceFromEnv(sku) {
-  // mappa JSON nelle env: {"SCUSA_BASE":"price_...","SCUSA_DELUXE":"price_...","CONNESSIONE":"price_...","TRAFFICO":"price_...","RIUNIONE":"price_..."}
+// Legge mappa prezzi da JSON in env; se fallisce ritorna {}
+function mapFromJsonEnv() {
   const raw = process.env.PRICE_BY_SKU_JSON || '';
-  if (!raw) return null;
-  try { const map = JSON.parse(raw); return map[String(sku||'').toUpperCase()] || null; } catch { return null; }
+  if (!raw) return {};
+  try { return JSON.parse(raw); } catch { return {}; }
+}
+
+// Fallback su env singole (accetta più nomi “storici”)
+function fallbackSingles() {
+  const m = {};
+  if (process.env.PRICE_SCUSA_BASE_ID)    m.SCUSA_BASE   = process.env.PRICE_SCUSA_BASE_ID;
+  if (process.env.PRICE_SCUSA_DELUXE_ID)  m.SCUSA_DELUXE = process.env.PRICE_SCUSA_DELUXE_ID;
+  if (process.env.PRICE_CONN_ID)          m.CONNESSIONE  = process.env.PRICE_CONN_ID;
+  if (process.env.PRICE_TRAFF_ID)         m.TRAFFICO     = process.env.PRICE_TRAFF_ID;
+  if (process.env.PRICE_RIUN_ID)          m.RIUNIONE     = process.env.PRICE_RIUN_ID;
+  return m;
+}
+
+// Risolve price_id per SKU
+function resolvePriceId(sku, passedPrice) {
+  if (passedPrice) return passedPrice.trim();
+  const skuU = String(sku||'').toUpperCase();
+  const map = { ...mapFromJsonEnv(), ...fallbackSingles() };
+  return map[skuU] || null;
 }
 
 exports.handler = async (event) => {
@@ -26,49 +45,40 @@ exports.handler = async (event) => {
   const needLabel   = String(body.need_label  || 'Contesto (obbligatorio: 4–120 caratteri)');
   const needDefault = (body.need_default ? String(body.need_default) : '');
 
-  if (!sku)         return j(400, { error: 'missing_sku' });
-  if (!successUrl)  return j(400, { error: 'missing_success_url' });
-  if (!cancelUrl)   return j(400, { error: 'missing_cancel_url' });
+  if (!sku)        return j(400, { error: 'missing_sku' });
+  if (!successUrl) return j(400, { error: 'missing_success_url' });
+  if (!cancelUrl)  return j(400, { error: 'missing_cancel_url' });
 
-  // Se non passa price_id dal frontend, recuperalo dalla mappa ambiente
-  const priceId = passedPrice || priceFromEnv(sku);
-  if (!priceId) return j(400, { error: 'no_price_for_sku', sku });
+  const priceId = resolvePriceId(sku, passedPrice);
+  if (!priceId) {
+    return j(400, {
+      error: 'missing_price_mapping',
+      message: `Manca il price_id per SKU=${sku}.`,
+      hint: 'Imposta PRICE_BY_SKU_JSON oppure le env singole (PRICE_CONN_ID, PRICE_TRAFF_ID, PRICE_RIUN_ID, PRICE_SCUSA_BASE_ID, PRICE_SCUSA_DELUXE_ID).'
+    });
+  }
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      client_reference_id: sku,              // usato dal webhook per capire il “kind”
+      client_reference_id: sku,
       customer_creation: 'always',
       allow_promotion_codes: true,
       success_url: successUrl,
       cancel_url:  cancelUrl,
       phone_number_collection: { enabled: true },
       custom_fields: [
-        {
-          key: 'phone',
-          label: { type: 'custom', custom: 'Telefono WhatsApp (opz.)' },
-          type: 'text',
-          optional: true,
-        },
-        {
-          key: 'need',
-          label: { type: 'custom', custom: needLabel },
-          type: 'text',
-          optional: false,
-          text: {
-            value: needDefault || null,
-            minimum_length: 4,
-            maximum_length: 120
-          }
-        }
+        { key:'phone', label:{ type:'custom', custom:'Telefono WhatsApp (opz.)' }, type:'text', optional:true },
+        { key:'need',  label:{ type:'custom', custom:needLabel }, type:'text', optional:false,
+          text:{ value: needDefault || null, minimum_length:4, maximum_length:120 } }
       ],
       line_items: [{ price: priceId, quantity: 1 }],
-      // opzionale: metadata utili al webhook/debug
       metadata: { sku, source: 'site-index' }
     });
 
     return j(200, { id: session.id, url: session.url });
   } catch (err) {
+    // esempi utili: “No such price: 'price_xxx'” (mismatch live/test) ecc.
     return j(500, { error: 'stripe_error', detail: String(err?.message || err) });
   }
 };
