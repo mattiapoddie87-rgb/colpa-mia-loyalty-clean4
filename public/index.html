@@ -1,230 +1,152 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="it">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Colpa Mia – Trova sempre la scusa perfetta</title>
-  <link rel="icon" type="image/png" href="assets/img/favicon.png"/>
-
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>COLPA MIA — Catalogo</title>
   <style>
-    :root{
-      --bg:#090e20; --panel:#0f1430; --panel-2:#131a3d; --text:#f5f5f7;
-      --border:rgba(255,255,255,.1); --primary:#00b2ff;
-    }
-    *{box-sizing:border-box}
-    body{margin:0;font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--text)}
-    .wrap{max-width:960px;margin:0 auto;padding:0 1rem}
-
-    header{padding:1rem 0;display:flex;justify-content:space-between;align-items:center}
-    header nav a{margin-right:1rem;color:var(--text);text-decoration:none;font-weight:600}
-    header nav a:hover{color:var(--primary)}
-
-    .hero{padding:3rem 0 2rem;text-align:center}
-    .hero__title{font-size:2rem;font-weight:800;margin:0}
-    .hero__sub{margin-top:.5rem;opacity:.8}
-
-    .btn{display:inline-block;padding:.6rem 1.2rem;border-radius:8px;text-decoration:none;background:var(--primary);color:#fff;font-weight:700;border:none;cursor:pointer}
-    .btn--xl{font-size:1rem}
-    .section{padding:2rem 0}
-
-    .badge{display:inline-block;padding:.2rem .6rem;border-radius:999px;border:1px solid var(--border);font-weight:800;font-size:.8rem}
-    .badge--express{background:rgba(0,229,255,.12);border-color:#26e5ff;color:#bff7ff}
-    .cta-row{display:flex;gap:.8rem;justify-content:center;margin-top:.6rem;flex-wrap:wrap}
-
-    .leadbox{background:rgba(10,14,27,.55);border:1px solid var(--border);border-radius:16px;padding:1rem;text-align:center}
-    .leadbox input{width:100%;padding:.5rem;margin-bottom:.5rem;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text)}
-
-    .reviews{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem}
-    @media (max-width:960px){.reviews{grid-template-columns:repeat(2,1fr)}}
-    @media (max-width:680px){.reviews{grid-template-columns:1fr}}
-    .review{background:linear-gradient(180deg,var(--panel),var(--panel-2));border:1px solid var(--border);border-radius:12px;padding:1rem}
-    .review span{color:#ffd76a;font-weight:900;margin-left:.3rem}
-
-    .case-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1rem;margin-top:1rem}
-    @media (max-width:960px){.case-grid{grid-template-columns:1fr}}
-
-    .card{background:var(--panel);border:1px solid var(--border);border-radius:12px;padding:1rem;margin-bottom:1rem}
-    .row{display:flex;justify-content:space-between;align-items:center;margin-top:.5rem}
-    .tag{font-size:.8rem;opacity:.7}
-
-    /* === CHATBOT (alto-destra, fisso) === */
-    .chatbot{
-      position:fixed; top:16px; right:16px; width:320px; max-height:70vh;
-      display:none; background:var(--panel); border:1px solid var(--border);
-      border-radius:10px; box-shadow:0 10px 30px rgba(0,0,0,.35); z-index:9999; overflow:hidden;
-    }
-    .chatbot.open{display:flex;flex-direction:column}
-    .chat-toggle{
-      position:fixed; top:16px; right:16px; padding:.55rem .9rem; border-radius:999px;
-      border:1px solid var(--border); background:var(--primary); color:#fff; font-weight:700; cursor:pointer; z-index:10000;
-    }
-    .chat-head{display:flex;align-items:center;justify-content:space-between;padding:.6rem .8rem;border-bottom:1px solid var(--border)}
-    .chat-head b{font-size:.95rem}
-    .chat-head button{background:transparent;border:none;color:var(--text);cursor:pointer;font-size:.95rem;opacity:.8}
-    .chat-messages{flex:1;overflow-y:auto;padding:.8rem;gap:.5rem;display:flex;flex-direction:column}
-    .msg{max-width:88%;padding:.55rem .7rem;border-radius:10px;line-height:1.25;font-size:.9rem}
-    .msg.bot{background:#0e1536;border:1px solid var(--border)}
-    .msg.user{background:#0e324c;margin-left:auto;border:1px solid rgba(255,255,255,.08)}
-    .quick{padding:.5rem .8rem;border-top:1px solid var(--border);display:flex;gap:.4rem;flex-wrap:wrap}
-    .quick button{background:transparent;border:1px solid var(--border);color:var(--text);font-size:.8rem;padding:.25rem .5rem;border-radius:999px;cursor:pointer}
-    .quick button:hover{border-color:var(--primary)}
-    .chat-form{display:flex;gap:.4rem;border-top:1px solid var(--border);padding:.55rem .6rem}
-    .chat-form input{flex:1;background:#0b1129;border:1px solid var(--border);color:var(--text);border-radius:8px;padding:.5rem .6rem}
-    .chat-form button{padding:.5rem .8rem}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+    .title{font-weight:700;font-size:18px}
+    .price{color:#a5b4fc}
+    .row{display:flex;gap:8px;align-items:center}
+    select,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
+    button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    small{color:#9aa3b2}
   </style>
-
-  <!-- GA4 / Pixel: sostituisci gli ID -->
-  <script async src="https://www.googletagmanager.com/gtag/js?id=G-XXXXXXXXXX"></script>
-  <script>
-    window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}
-    gtag('js', new Date()); gtag('config','G-XXXXXXXXXX');
-  </script>
-  <script>
-    !function(f,b,e,v,n,t,s){if(f.fbq)return;n=f.fbq=function(){n.callMethod?
-    n.callMethod.apply(n,arguments):n.queue.push(arguments)};if(!f._fbq)n._fbq=n;
-    n.push=n;n.loaded=!0;n.version='2.0';n.queue=[];t=b.createElement(e);t.async=!0;
-    t.src=v;s=b.getElementsByTagName(e)[0];s.parentNode.insertBefore(t,s)}(window,document,'script','https://connect.facebook.net/en_US/fbevents.js');
-    fbq('init','YOUR_PIXEL_ID'); fbq('track','PageView');
-  </script>
-  <noscript><img height="1" width="1" style="display:none" src="https://www.facebook.com/tr?id=YOUR_PIXEL_ID&ev=PageView&noscript=1"/></noscript>
 </head>
-
 <body>
-  <header class="wrap">
-    <a href="/" class="logo">Colpa Mia</a>
-    <nav>
-      <a href="#catalogo">Catalogo</a>
-      <a href="#premium">Premium</a>
-      <a href="#wallet">Wallet</a>
-      <a href="#faq">FAQ</a>
-    </nav>
-  </header>
+  <div class="wrap">
+    <h1 style="margin:0 0 12px">Catalogo COLPA MIA</h1>
+    <p style="margin:0 0 24px"><small>Scegli la scusa. Consegna email + WhatsApp. Checkout Stripe.</small></p>
 
-  <main>
-    <!-- HERO -->
-    <section class="hero">
-      <div class="wrap">
-        <h1 class="hero__title">Ti serve una scusa credibile? Te la scriviamo in 30 secondi</h1>
-        <p class="hero__sub">Compra in 10 secondi con Stripe. Consegna automatica 30s–10m.</p>
-        <div class="cta-row">
-          <a class="btn btn--xl btn--primary" href="#catalogo">Compra ora</a>
-          <a class="btn btn--xl" href="#entry-offer">Prova a metà prezzo</a>
-        </div>
+    <div class="grid">
+      <!-- BASE -->
+      <div class="card">
+        <div class="title">SCUSA BASE</div>
+        <div class="price" id="p-base">Prezzo come da listino</div>
+        <label for="ctx-base"><small>Contesto</small></label>
+        <select id="ctx-base">
+          <option value="CENA">CENA</option>
+          <option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option>
+          <option value="LAVORO">LAVORO</option>
+          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="FAMIGLIA">FAMIGLIA</option>
+          <option value="SALUTE">SALUTE</option>
+          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+        </select>
+        <button data-sku="SCUSA_BASE"
+                data-price="price_BASE_REPLACE"  <!-- SOSTITUISCI con il tuo price id -->
+                data-context-select="#ctx-base">Acquista</button>
       </div>
-    </section>
 
-    <!-- LEAD MAGNET -->
-    <section class="wrap section leadbox" id="lead">
-  <h2>Quiz: che tipo di “scusatore” sei?</h2>
-  <p class="hero__sub">Ricevi il PDF <strong>“7 scuse che non funzionano più”</strong> e un codice sconto.</p>
-
-  <form id="lead-form" class="form" novalidate>
-    <input type="email" name="email" id="lead-email" placeholder="La tua email" required>
-    <input type="tel"   name="phone" id="lead-phone" placeholder="WhatsApp (opzionale)">
-    <!-- honeypot anti-bot -->
-    <input type="text" name="website" id="hp" style="display:none">
-    <button class="btn" id="lead-submit" type="submit">Scarica PDF</button>
-    <p id="lead-msg" style="margin:.5rem 0 0;opacity:.9"></p>
-  </form>
-</section>
-
-<!-- aggiungi dopo gli altri script -->
-<script src="lead.js?v=1" defer></script>
-
-
-    <!-- OFFERTA D’INGRESSO -->
-    <section class="wrap section" id="entry-offer">
-      <h2>Offerta d’ingresso</h2>
-      <p class="hero__sub">Prova il servizio con la <strong>Prima Scusa -50%</strong>. Stesse funzioni, metà prezzo.</p>
-    </section>
-
-    <!-- PROVA SOCIALE -->
-    <section class="wrap section" id="prove">
-      <h2>Cosa dicono i clienti</h2>
-      <div class="reviews">
-        <article class="review"><strong>Marco</strong><span>★ ★ ★ ★ ★</span><p>Alibi confezionato in 2 minuti. Zero sbatti.</p></article>
-        <article class="review"><strong>Giulia</strong><span>★ ★ ★ ★ ★</span><p>Testi credibili, tono perfetto. Ho riacquistato.</p></article>
-        <article class="review"><strong>Daniele</strong><span>★ ★ ★ ★ ★</span><p>Pagamento lampo, consegna ancora più rapida.</p></article>
-        <article class="review"><strong>Sara</strong><span>★ ★ ★ ★ ★</span><p>Il “vocale credibile” mi ha salvata. Top.</p></article>
-        <article class="review"><strong>Luca</strong><span>★ ★ ★ ★ ★</span><p>La Deluxe è inattaccabile. Consigliata.</p></article>
-        <article class="review"><strong>Elena</strong><span>★ ★ ★ ★ ★</span><p>Supporto ok, tempi reali sotto i 10m.</p></article>
+      <!-- DELUXE -->
+      <div class="card">
+        <div class="title">SCUSA DELUXE</div>
+        <div class="price" id="p-deluxe">Prezzo come da listino</div>
+        <label for="ctx-deluxe"><small>Contesto</small></label>
+        <select id="ctx-deluxe">
+          <option value="CENA">CENA</option>
+          <option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option>
+          <option value="LAVORO">LAVORO</option>
+          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="FAMIGLIA">FAMIGLIA</option>
+          <option value="SALUTE">SALUTE</option>
+          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+        </select>
+        <button data-sku="SCUSA_DELUXE"
+                data-price="price_DELUXE_REPLACE"  <!-- SOSTITUISCI -->
+                data-context-select="#ctx-deluxe">Acquista</button>
       </div>
-      <div class="case-grid">
-        <div><h3>🧑‍💼 Lavoro</h3><p>Riunione “non rinviabile” + blocco calendario.</p></div>
-        <div><h3>❤️ Relazioni</h3><p>Alibi soft-romantico con varianti.</p></div>
-        <div><h3>🏙️ Traffico</h3><p>Template localizzato + vocale ambientale.</p></div>
+
+      <!-- CONNESSIONE KO -->
+      <div class="card">
+        <div class="title">CONNESSIONE KO</div>
+        <div class="price" id="p-conn">Prezzo come da listino</div>
+        <small>Scenario fisso: “connessione/linea/VPN KO”.</small>
+        <button data-sku="CONNESSIONE"
+                data-price="price_CONN_REPLACE">Acquista</button> <!-- SOSTITUISCI -->
       </div>
-    </section>
 
-    <!-- CATALOGO -->
-    <section class="wrap section" id="catalogo">
-      <h2>Catalogo</h2>
-      <div id="catalogo-grid"></div>
-      <p id="catalogo-msg"></p>
-    </section>
-
-    <!-- PREMIUM -->
-    <section class="wrap section" id="premium">
-      <h2>Premium</h2>
-      <p id="premium-msg"></p>
-      <div id="premium-grid"></div>
-    </section>
-
-    <!-- RESPONSABILITÀ -->
-    <section class="wrap section" id="responsabilita">
-      <h2>Mi prendo io la responsabilità</h2>
-      <p class="hero__sub">Per progetti complessi e situazioni critiche: affidaci la gestione completa delle scuse e della reputazione.</p>
-      <div id="responsabilita-grid"></div>
-      <p id="responsabilita-msg"></p>
-    </section>
-
-    <!-- WALLET -->
-    <section class="wrap section" id="wallet">
-      <h2>Wallet</h2>
-      <div style="margin-bottom:1rem;display:flex;gap:.5rem;flex-wrap:wrap">
-        <input type="email" id="wallet-email" placeholder="Email usata in checkout" style="flex:1;padding:.5rem;border-radius:6px;border:1px solid var(--border);background:var(--panel);color:var(--text)"/>
-        <button class="btn" id="wallet-fetch">Vedi saldo</button>
+      <!-- TRAFFICO -->
+      <div class="card">
+        <div class="title">TRAFFICO</div>
+        <div class="price" id="p-traf">Prezzo come da listino</div>
+        <small>Scenario fisso: “traffico/incidente/coda”.</small>
+        <button data-sku="TRAFFICO"
+                data-price="price_TRAFF_REPLACE">Acquista</button> <!-- SOSTITUISCI -->
       </div>
-      <div id="wallet-grid"></div>
-      <p id="wallet-msg"></p>
-    </section>
 
-    <!-- FAQ -->
-    <section class="wrap section" id="faq">
-      <h2>FAQ</h2>
-      <div class="faq-item"><h3>Quanto tempo ci vuole per ricevere la scusa?</h3><p>Tra 30 secondi e 10 minuti, a seconda del pacchetto.</p></div>
-      <div class="faq-item"><h3>Posso chiedere un rimborso?</h3><p>Sì, se il testo non è soddisfacente ti rimborsiamo.</p></div>
-      <div class="faq-item"><h3>La mia privacy è garantita?</h3><p>Assolutamente. Le tue richieste restano anonime.</p></div>
-    </section>
-  </main>
-
-  <!-- CHATBOT -->
-  <div id="chatbot-container" class="chatbot">
-    <div class="chat-head"><b>Assistenza rapida</b><button id="cm-clear" title="Svuota">✕</button></div>
-    <div id="chatbot-messages" class="chat-messages"></div>
-    <div class="quick">
-      <button data-q="Prezzi">Prezzi</button>
-      <button data-q="Tempi di consegna">Tempi</button>
-      <button data-q="Rimborso">Rimborso</button>
-      <button data-q="Privacy">Privacy</button>
-      <button data-q="Come acquistare">Come acquistare</button>
+      <!-- RIUNIONE IMPROVVISA -->
+      <div class="card">
+        <div class="title">RIUNIONE IMPROVVISA</div>
+        <div class="price" id="p-riun">Prezzo come da listino</div>
+        <small>Scenario fisso: “riunione/call che sfora”.</small>
+        <button data-sku="RIUNIONE"
+                data-price="price_RIUN_REPLACE">Acquista</button> <!-- SOSTITUISCI -->
+      </div>
     </div>
-    <form id="chatbot-form" class="chat-form">
-      <input type="text" id="chatbot-input" placeholder="Scrivi qui la tua domanda..." required/>
-      <button type="submit" class="btn">Invia</button>
-    </form>
+
+    <p style="margin-top:20px"><small>
+      Al checkout potrai inserire il numero WhatsApp e specificare il contesto.
+      Se scegli BASE/DELUXE, il contesto selezionato qui compare nel campo “Contesto” per guidarti.
+    </small></p>
   </div>
-  <button id="chatbot-toggle" class="chat-toggle">Chat</button>
 
-  <!-- Scripts -->
-  <script src="/bg.js" defer></script>
-  <script src="wallet.js" defer></script>
-  <script src="premium.js" defer></script>
-  <script src="shop.js" defer></script>
-  <script src="responsabilita.js" defer></script>
+  <script>
+    const SUCCESS = location.origin + '/success.html';
+    const CANCEL  = location.origin + '/cancel.html';
 
-  <!-- Chatbot (solo file esterno) -->
-  <script src="chatbot.js?v=20250905-4" defer></script>
+    async function startCheckout(btn){
+      const priceId = btn.dataset.price;
+      const sku     = btn.dataset.sku;
+      if(!priceId || !sku) return;
+
+      // Per BASE/DELUXE legge la tendina; per gli altri lascia stringa generica.
+      let ctx = '';
+      const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
+      if (sel && sel.value) ctx = String(sel.value).trim();
+
+      // Etichetta dinamica per il campo obbligatorio “need” in Checkout
+      const needLabel = ctx
+        ? `Contesto (selezionato: ${ctx} — puoi modificare)`
+        : 'Contesto (obbligatorio: 4–120 caratteri)';
+
+      btn.disabled = true;
+      try{
+        const r = await fetch('/.netlify/functions/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify({
+            price_id: priceId,
+            sku,
+            success_url: SUCCESS,
+            cancel_url: CANCEL,
+            need_label: needLabel
+          })
+        });
+        const data = await r.json();
+        if (!r.ok) throw new Error(data?.error||'checkout_error');
+        if (data.url) { location.href = data.url; return; }
+        // fallback: se non c'è url, usa la sessione con redirect client
+        location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id);
+      }catch(e){
+        alert('Errore checkout: ' + (e.message||e));
+      }finally{
+        btn.disabled = false;
+      }
+    }
+
+    document.querySelectorAll('button[data-price]').forEach(b=>{
+      b.addEventListener('click', ()=> startCheckout(b));
+    });
+  </script>
 </body>
 </html>
-
