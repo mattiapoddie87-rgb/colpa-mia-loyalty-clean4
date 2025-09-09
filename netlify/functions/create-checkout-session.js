@@ -1,84 +1,75 @@
 // netlify/functions/create-checkout-session.js
 const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' };
+const stripe  = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const SITE    = (process.env.SITE_URL || 'https://colpamia.com').replace(/\/+$/, '');
+const CORS    = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
 const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type':'application/json', ...CORS }, body: JSON.stringify(b) });
+const safeJSON = (s)=>{ try { return JSON.parse(s || '{}'); } catch { return {}; } };
 
-// Legge mappa prezzi da JSON in env; se fallisce ritorna {}
-function mapFromJsonEnv() {
-  const raw = process.env.PRICE_BY_SKU_JSON || '';
-  if (!raw) return {};
-  try { return JSON.parse(raw); } catch { return {}; }
-}
-
-// Fallback su env singole (accetta più nomi “storici”)
-function fallbackSingles() {
-  const m = {};
-  if (process.env.PRICE_SCUSA_BASE_ID)    m.SCUSA_BASE   = process.env.PRICE_SCUSA_BASE_ID;
-  if (process.env.PRICE_SCUSA_DELUXE_ID)  m.SCUSA_DELUXE = process.env.PRICE_SCUSA_DELUXE_ID;
-  if (process.env.PRICE_CONN_ID)          m.CONNESSIONE  = process.env.PRICE_CONN_ID;
-  if (process.env.PRICE_TRAFF_ID)         m.TRAFFICO     = process.env.PRICE_TRAFF_ID;
-  if (process.env.PRICE_RIUN_ID)          m.RIUNIONE     = process.env.PRICE_RIUN_ID;
-  return m;
-}
-
-// Risolve price_id per SKU
-function resolvePriceId(sku, passedPrice) {
-  if (passedPrice) return passedPrice.trim();
-  const skuU = String(sku||'').toUpperCase();
-  const map = { ...mapFromJsonEnv(), ...fallbackSingles() };
-  return map[skuU] || null;
-}
+const PRICE_MAP = safeJSON(process.env.PRICE_BY_SKU_JSON); // {SKU: price_xxx}
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return j(204, {});
-  if (event.httpMethod !== 'POST')   return j(405, { error: 'method_not_allowed' });
+  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
+  if (event.httpMethod !== 'POST')    return j(405, { error: 'method_not_allowed' });
 
   let body = {};
-  try { body = JSON.parse(event.body || '{}'); } catch { return j(400, { error: 'bad_json' }); }
+  try { body = JSON.parse(event.body || '{}'); }
+  catch { return j(400, { error: 'bad_json' }); }
 
-  const sku         = String(body.sku || '').toUpperCase();
-  const passedPrice = String(body.price_id || '').trim() || null;
-  const successUrl  = String(body.success_url || '').trim();
-  const cancelUrl   = String(body.cancel_url  || '').trim();
-  const needLabel   = String(body.need_label  || 'Contesto (obbligatorio: 4–120 caratteri)');
-  const needDefault = (body.need_default ? String(body.need_default) : '');
+  const sku      = String(body.sku || '').toUpperCase();
+  let   priceId  = String(body.price_id || '').trim();
+  if (!priceId && sku && PRICE_MAP[sku]) priceId = PRICE_MAP[sku];
 
-  if (!sku)        return j(400, { error: 'missing_sku' });
-  if (!successUrl) return j(400, { error: 'missing_success_url' });
-  if (!cancelUrl)  return j(400, { error: 'missing_cancel_url' });
+  if (!priceId) return j(400, { error:'missing_price_id', hint:'Pass price_id in body o configura PRICE_BY_SKU_JSON' });
 
-  const priceId = resolvePriceId(sku, passedPrice);
-  if (!priceId) {
-    return j(400, {
-      error: 'missing_price_mapping',
-      message: `Manca il price_id per SKU=${sku}.`,
-      hint: 'Imposta PRICE_BY_SKU_JSON oppure le env singole (PRICE_CONN_ID, PRICE_TRAFF_ID, PRICE_RIUN_ID, PRICE_SCUSA_BASE_ID, PRICE_SCUSA_DELUXE_ID).'
-    });
+  // success deve contenere {CHECKOUT_SESSION_ID}
+  let success = String(body.success_url || `${SITE}/success.html`);
+  if (!success.includes('{CHECKOUT_SESSION_ID}')) {
+    success += (success.includes('?') ? '&' : '?') + 'session_id={CHECKOUT_SESSION_ID}';
   }
+  const cancel  = String(body.cancel_url  || `${SITE}/cancel.html?sku=${encodeURIComponent(sku)}`);
+
+  const needLabel   = String(body.need_label   || 'Contesto (obbligatorio: 4–120 caratteri)');
+  const needDefault = String(body.need_default || '');
 
   try {
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
-      client_reference_id: sku,
-      customer_creation: 'always',
-      allow_promotion_codes: true,
-      success_url: successUrl,
-      cancel_url:  cancelUrl,
-      phone_number_collection: { enabled: true },
-      custom_fields: [
-        { key:'phone', label:{ type:'custom', custom:'Telefono WhatsApp (opz.)' }, type:'text', optional:true },
-        { key:'need',  label:{ type:'custom', custom:needLabel }, type:'text', optional:false,
-          text:{ value: needDefault || null, minimum_length:4, maximum_length:120 } }
-      ],
       line_items: [{ price: priceId, quantity: 1 }],
-      metadata: { sku, source: 'site-index' }
+      allow_promotion_codes: true,
+      customer_creation: 'always',
+      client_reference_id: sku || 'UNKNOWN',
+      metadata: { sku },
+      phone_number_collection: { enabled: true },
+      ui_mode: 'hosted',
+      success_url: success,
+      cancel_url:  cancel,
+      custom_fields: [
+        {
+          key: 'phone',
+          label: { type: 'custom', custom: 'Telefono WhatsApp (opz.)' },
+          type: 'text',
+          optional: true,
+          text: { maximum_length: 20 }
+        },
+        {
+          key: 'need',
+          label: { type: 'custom', custom: needLabel },
+          type: 'text',
+          optional: false,
+          text: { minimum_length: 4, maximum_length: 120, default_value: needDefault || undefined }
+        }
+      ]
     });
 
-    return j(200, { id: session.id, url: session.url });
+    return j(200, { ok:true, id: session.id, url: session.url });
   } catch (err) {
-    // esempi utili: “No such price: 'price_xxx'” (mismatch live/test) ecc.
-    return j(500, { error: 'stripe_error', detail: String(err?.message || err) });
+    // Risposta chiara in caso di errore Stripe
+    return j(500, { error:'stripe_error', type: err?.type || null, message: String(err?.message || err) });
   }
 };
