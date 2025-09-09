@@ -41,7 +41,7 @@
           <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
         </select>
         <button data-sku="SCUSA_BASE"
-                data-price="price_1S1vuQAuMAjkbPdHnq3JIDQZ"  
+                data-price="price_1S1vuQAuMAjkbPdHnq3JIDQZ"
                 data-context-select="#ctx-base">Acquista</button>
       </div>
 
@@ -62,7 +62,7 @@
           <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
         </select>
         <button data-sku="SCUSA_DELUXE"
-                data-price="price_1S1vuXAuMAjkbPdHmgyfY8Bj"  
+                data-price="price_1S1vuXAuMAjkbPdHmgyfY8Bj"
                 data-context-select="#ctx-deluxe">Acquista</button>
       </div>
 
@@ -72,7 +72,7 @@
         <div class="price" id="p-conn">Prezzo come da listino</div>
         <small>Scenario fisso: “connessione/linea/VPN KO”.</small>
         <button data-sku="CONNESSIONE"
-                data-price="price_1S1w4RAuMAjkbPdHLfPElLnX">Acquista</button> 
+                data-price="price_1S1w4RAuMAjkbPdHLfPElLnX">Acquista</button>
       </div>
 
       <!-- TRAFFICO -->
@@ -81,7 +81,7 @@
         <div class="price" id="p-traf">Prezzo come da listino</div>
         <small>Scenario fisso: “traffico/incidente/coda”.</small>
         <button data-sku="TRAFFICO"
-                data-price="price_1S1wdaAuMAjkbPdH8We1FVEy">Acquista</button> 
+                data-price="price_1S1wdaAuMAjkbPdH8We1FVEy">Acquista</button>
       </div>
 
       <!-- RIUNIONE IMPROVVISA -->
@@ -90,7 +90,7 @@
         <div class="price" id="p-riun">Prezzo come da listino</div>
         <small>Scenario fisso: “riunione/call che sfora”.</small>
         <button data-sku="RIUNIONE"
-                data-price="price_1S1wdXAuMAjkbPdHfqU3fnwq">Acquista</button> 
+                data-price="price_1S1wdXAuMAjkbPdHfqU3fnwq">Acquista</button>
       </div>
     </div>
 
@@ -109,12 +109,10 @@
       const sku     = btn.dataset.sku;
       if(!priceId || !sku) return;
 
-      // Per BASE/DELUXE legge la tendina; per gli altri lascia stringa generica.
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
       if (sel && sel.value) ctx = String(sel.value).trim();
 
-      // Etichetta dinamica per il campo obbligatorio “need” in Checkout
       const needLabel = ctx
         ? `Contesto (selezionato: ${ctx} — puoi modificare)`
         : 'Contesto (obbligatorio: 4–120 caratteri)';
@@ -129,13 +127,13 @@
             sku,
             success_url: SUCCESS,
             cancel_url: CANCEL,
-            need_label: needLabel
+            need_label: needLabel,
+            need_default: ctx || ''   // prefill nel campo "need"
           })
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error||'checkout_error');
         if (data.url) { location.href = data.url; return; }
-        // fallback: se non c'è url, usa la sessione con redirect client
         location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id);
       }catch(e){
         alert('Errore checkout: ' + (e.message||e));
@@ -148,52 +146,5 @@
       b.addEventListener('click', ()=> startCheckout(b));
     });
   </script>
-  <script>
-  const SUCCESS = location.origin + '/success.html';
-  const CANCEL  = location.origin + '/cancel.html';
-
-  async function startCheckout(btn){
-    const priceId = btn.dataset.price;
-    const sku     = btn.dataset.sku;
-    if(!priceId || !sku) return;
-
-    let ctx = '';
-    const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-    if (sel && sel.value) ctx = String(sel.value).trim();
-
-    const needLabel = ctx
-      ? `Contesto (selezionato: ${ctx} — puoi modificare)`
-      : 'Contesto (obbligatorio: 4–120 caratteri)';
-
-    btn.disabled = true;
-    try{
-      const r = await fetch('/.netlify/functions/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          price_id: priceId,
-          sku,
-          success_url: SUCCESS,
-          cancel_url: CANCEL,
-          need_label: needLabel,
-          need_default: ctx || ''   // <-- PREFILL
-        })
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error||'checkout_error');
-      if (data.url) { location.href = data.url; return; }
-      location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id);
-    }catch(e){
-      alert('Errore checkout: ' + (e.message||e));
-    }finally{
-      btn.disabled = false;
-    }
-  }
-
-  document.querySelectorAll('button[data-price]').forEach(b=>{
-    b.addEventListener('click', ()=> startCheckout(b));
-  });
-</script>
-
 </body>
 </html>
