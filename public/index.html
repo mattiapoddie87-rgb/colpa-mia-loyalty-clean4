@@ -15,6 +15,7 @@
     button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
     button:disabled{opacity:.6;cursor:not-allowed}
     small{color:#9aa3b2}
+    h2{margin:28px 0 12px;font-size:20px}
   </style>
 </head>
 <body>
@@ -29,20 +30,14 @@
         <div class="price">Prezzo come da listino</div>
         <label for="ctx-base"><small>Contesto</small></label>
         <select id="ctx-base">
-          <option value="CENA">CENA</option>
-          <option value="APERITIVO">APERITIVO</option>
-          <option value="EVENTO">EVENTO</option>
-          <option value="LAVORO">LAVORO</option>
+          <option value="CENA">CENA</option><option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option><option value="LAVORO">LAVORO</option>
           <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
-          <option value="FAMIGLIA">FAMIGLIA</option>
-          <option value="SALUTE">SALUTE</option>
+          <option value="FAMIGLIA">FAMIGLIA</option><option value="SALUTE">SALUTE</option>
           <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
           <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
         </select>
-        <button
-          data-sku="SCUSA_BASE"
-          data-price="price_1S1vuQAuMAjkbPdHnq3JIDQZ"
-          data-context-select="#ctx-base">Acquista</button>
+        <button data-sku="SCUSA_BASE" data-price="price_1S1vuQAuMAjkbPdHnq3JIDQZ" data-context-select="#ctx-base">Acquista</button>
       </div>
 
       <!-- DELUXE -->
@@ -51,23 +46,17 @@
         <div class="price">Prezzo come da listino</div>
         <label for="ctx-deluxe"><small>Contesto</small></label>
         <select id="ctx-deluxe">
-          <option value="CENA">CENA</option>
-          <option value="APERITIVO">APERITIVO</option>
-          <option value="EVENTO">EVENTO</option>
-          <option value="LAVORO">LAVORO</option>
+          <option value="CENA">CENA</option><option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option><option value="LAVORO">LAVORO</option>
           <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
-          <option value="FAMIGLIA">FAMIGLIA</option>
-          <option value="SALUTE">SALUTE</option>
+          <option value="FAMIGLIA">FAMIGLIA</option><option value="SALUTE">SALUTE</option>
           <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
           <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
         </select>
-        <button
-          data-sku="SCUSA_DELUXE"
-          data-price="price_1S1vuXAuMAjkbPdHmgyfY8Bj"
-          data-context-select="#ctx-deluxe">Acquista</button>
+        <button data-sku="SCUSA_DELUXE" data-price="price_1S1vuXAuMAjkbPdHmgyfY8Bj" data-context-select="#ctx-deluxe">Acquista</button>
       </div>
 
-      <!-- CONNESSIONE KO (scenario fisso) -->
+      <!-- CONNESSIONE KO -->
       <div class="card">
         <div class="title">CONNESSIONE KO</div>
         <div class="price">Prezzo come da listino</div>
@@ -75,7 +64,7 @@
         <button data-sku="CONNESSIONE">Acquista</button>
       </div>
 
-      <!-- TRAFFICO (scenario fisso) -->
+      <!-- TRAFFICO -->
       <div class="card">
         <div class="title">TRAFFICO</div>
         <div class="price">Prezzo come da listino</div>
@@ -83,7 +72,7 @@
         <button data-sku="TRAFFICO">Acquista</button>
       </div>
 
-      <!-- RIUNIONE IMPROVVISA (scenario fisso) -->
+      <!-- RIUNIONE IMPROVVISA -->
       <div class="card">
         <div class="title">RIUNIONE IMPROVVISA</div>
         <div class="price">Prezzo come da listino</div>
@@ -92,9 +81,30 @@
       </div>
     </div>
 
+    <h2>Prendo io la colpa</h2>
+    <div class="grid">
+      <div class="card">
+        <div class="title">Prendo io la colpa — Light</div>
+        <div class="price">Prezzo come da listino</div>
+        <small>Copertura rapida “io mi prendo la colpa”.</small>
+        <button data-sku="COLPA_LIGHT">Acquista</button>
+      </div>
+      <div class="card">
+        <div class="title">Prendo io la colpa — Full</div>
+        <div class="price">Prezzo come da listino</div>
+        <small>Copertura completa, messaggio rinforzato.</small>
+        <button data-sku="COLPA_FULL">Acquista</button>
+      </div>
+      <div class="card">
+        <div class="title">Prendo io la colpa — Deluxe</div>
+        <div class="price">Prezzo come da listino</div>
+        <small>Gestione premium della colpa a tuo nome.</small>
+        <button data-sku="COLPA_DELUXE">Acquista</button>
+      </div>
+    </div>
+
     <p style="margin-top:20px"><small>
-      Al checkout potrai inserire il numero WhatsApp e specificare il contesto.
-      Se scegli BASE/DELUXE, il contesto selezionato qui compare nel campo “Contesto” per guidarti (puoi modificarlo).
+      Al checkout potrai inserire il numero WhatsApp e specificare il contesto. Per Base/Deluxe il contesto selezionato qui viene precompilato.
     </small></p>
   </div>
 
@@ -104,17 +114,14 @@
 
     async function startCheckout(btn){
       const sku     = btn.dataset.sku;
-      const priceId = btn.dataset.price || null;           // può mancare per gli scenari fissi
-      if (!sku) return;
+      const priceId = btn.dataset.price || null;
+      if(!sku) return;
 
-      // prefill del contesto solo per Base/Deluxe
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
       if (sel && sel.value) ctx = String(sel.value).trim();
 
-      const needLabel = ctx
-        ? `Contesto (selezionato: ${ctx} — puoi modificare)`
-        : 'Contesto (obbligatorio: 4–120 caratteri)';
+      const needLabel = ctx ? `Contesto (selezionato: ${ctx} — puoi modificare)` : 'Contesto (obbligatorio: 4–120 caratteri)';
 
       btn.disabled = true;
       try{
@@ -122,30 +129,26 @@
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
           body: JSON.stringify({
-            price_id: priceId,        // null per CONNESSIONE/TRAFFICO/RIUNIONE
+            price_id: priceId,
             sku,
-            success_url: SUCCESS,
-            cancel_url: CANCEL,
+            success_url: SUCCESS + '?session_id={CHECKOUT_SESSION_ID}',
+            cancel_url: CANCEL + '?sku=' + encodeURIComponent(sku),
             need_label: needLabel,
-            need_default: ctx || ''   // precompila il campo “Contesto”
+            need_default: ctx || ''
           })
         });
         const data = await r.json();
-        if (!r.ok) throw new Error(data?.error||'checkout_error');
-
+        if (!r.ok) throw new Error(data?.message||data?.error||'checkout_error');
         if (data.url) { location.href = data.url; return; }
-        // fallback
         location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id);
       }catch(e){
-        alert('Errore checkout: ' + (e.message || e));
+        alert('Errore checkout: ' + (e.message||e));
       }finally{
         btn.disabled = false;
       }
     }
 
-    document.querySelectorAll('button[data-sku]').forEach(b=>{
-      b.addEventListener('click', ()=> startCheckout(b));
-    });
+    document.querySelectorAll('button[data-sku]').forEach(b=> b.addEventListener('click', ()=> startCheckout(b)));
   </script>
 </body>
 </html>
