@@ -2,72 +2,129 @@
 <html lang="it">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Pagamento riuscito</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>COLPA MIA — Grazie</title>
   <style>
-    :root { color-scheme: dark; }
-    body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d12; color:#e9eef5; margin:0; }
-    .wrap{ max-width:900px; margin:40px auto; padding:0 16px; }
-    .box { background:#0f1623; border:1px solid #1f2636; border-radius:14px; padding:16px; }
-    input, button { padding:12px; border-radius:10px; border:1px solid #334; background:#111826; color:#e9eef5; }
-    input { width:100%; }
-    button { background:linear-gradient(135deg,#6c7dff,#8a6dff); border:0; cursor:pointer; font-weight:600; }
-    .row{display:flex; gap:12px; align-items:center; flex-wrap:wrap}
-    .msg{margin-left:12px}
-    .ok{color:#29d07b}.warn{color:#ffc14d}.err{color:#ff6b6b}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
+    .wrap{max-width:860px;margin:0 auto;padding:24px}
+    .box{background:#151822;border:1px solid #23283b;border-radius:16px;padding:18px;margin:12px 0}
+    h1{margin:0 0 10px}
+    a.btn,button.btn{display:inline-block;padding:10px 14px;border-radius:12px;border:1px solid #2b3150;background:#3b82f6;color:#fff;text-decoration:none}
+    .muted{color:#9aa3b2}
+    .row{display:flex;gap:10px;flex-wrap:wrap}
+    code{background:#0c0f17;border:1px solid #2b3150;padding:2px 6px;border-radius:8px}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Pagamento riuscito ✅</h1>
-    <p>Se non abbiamo potuto collegare automaticamente la tua email, usa questo recovery.</p>
+    <h1>Grazie! 🎉</h1>
+    <p class="muted">Pagamento ricevuto correttamente.</p>
 
-    <div class="box">
-      <div>
-        <label><b>Checkout session ID</b></label>
-        <input id="cs" placeholder="cs_live_..." />
+    <div class="box" id="summaryBox" hidden>
+      <h3 style="margin:0 0 8px">Riepilogo</h3>
+      <p style="margin:6px 0">Prodotto: <b id="skuName">—</b></p>
+      <p class="muted" style="margin:6px 0">ID sessione: <code id="sid">—</code></p>
+    </div>
+
+    <!-- Se è uno SKU COLPA_* mostriamo istruzioni e link mail -->
+    <div class="box" id="colpaBox" hidden>
+      <h3 style="margin:0 0 8px">Passo successivo: descrivi la situazione</h3>
+      <p style="margin:6px 0">
+        Per i pacchetti <b>“Prendo io la colpa”</b> non generiamo una scusa automatica:
+        ti chiediamo un breve <i>brief</i> via email per costruire il messaggio perfetto.
+      </p>
+      <p class="muted" style="margin:6px 0">
+        L’email di brief si apre automaticamente. Se non parte, usa il pulsante qui sotto.
+      </p>
+      <div class="row" style="margin-top:8px">
+        <a id="mailtoLink" class="btn" href="#" rel="noopener">Apri email di brief</a>
+        <a class="btn" href="/" rel="noopener">Torna al catalogo</a>
       </div>
+    </div>
 
-      <div style="margin-top:12px">
-        <label><b>Email (fallback, opzionale)</b></label>
-        <input id="emailRecovery" placeholder="email@esempio.com" />
-      </div>
-
-      <div style="margin-top:12px">
-        <label><b>Telefono (opzionale)</b></label>
-        <input id="phone" placeholder="+39..." />
-      </div>
-
-      <div class="row" style="margin-top:16px">
-        <button id="collega">Collega e accredita</button>
-        <span id="msg" class="msg"></span>
+    <!-- Se è una scusa “standard” mostriamo messaggio di consegna -->
+    <div class="box" id="standardBox" hidden>
+      <h3 style="margin:0 0 8px">Consegna</h3>
+      <p style="margin:6px 0">
+        Ti abbiamo inviato la scusa via <b>email</b> (e via <b>WhatsApp</b> se hai inserito il numero).
+        Controlla anche la cartella spam/promozioni. Se non ricevi nulla entro qualche minuto, rispondi a
+        <a href="mailto:support@colpamia.com">support@colpamia.com</a>.
+      </p>
+      <p class="muted" style="margin:6px 0">
+        Eventuali minuti previsti dal pacchetto sono stati accreditati sul tuo wallet.
+      </p>
+      <div class="row" style="margin-top:8px">
+        <a class="btn" href="/" rel="noopener">Torna al catalogo</a>
       </div>
     </div>
   </div>
 
   <script>
-    // Precompila da ?session_id=
+    // --- Utils ---
+    function qs(name){ return new URLSearchParams(location.search).get(name) || ''; }
+    function niceSku(sku){
+      if(!sku) return '—';
+      const map = {
+        SCUSA_BASE: 'Scusa Base',
+        SCUSA_DELUXE: 'Scusa Deluxe',
+        CONNESSIONE: 'Connessione KO',
+        TRAFFICO: 'Traffico',
+        RIUNIONE: 'Riunione Improvvisa',
+        COLPA_LIGHT: 'Prendo io la colpa — Light',
+        COLPA_FULL: 'Prendo io la colpa — Full',
+        COLPA_DELUXE: 'Prendo io la colpa — Deluxe'
+      };
+      return map[sku] || sku;
+    }
+    function buildBriefMailto(kind){
+      const nice = niceSku(kind);
+      const subj = encodeURIComponent(`Brief ${nice} — ${new Date().toLocaleDateString()}`);
+      const body = encodeURIComponent(
+`Ciao ColpaMia,
+
+pacchetto: ${kind}
+
+Contatto WhatsApp del destinatario (se lo hai):
+
+Contesto / obiettivo:
+- Chi è la persona
+- Tono desiderato (secco / gentile / professionale)
+- Limiti (cosa NON dire)
+
+Materiali utili (incolla eventuali chat/link):
+
+Grazie!`);
+      return `mailto:support@colpamia.com?subject=${subj}&body=${body}`;
+    }
+
+    // --- Page init ---
     (function(){
-      const sid = new URL(location.href).searchParams.get('session_id');
-      if (sid) document.querySelector('#cs').value = sid;
+      const sessionId = qs('session_id');
+      const sku       = qs('sku');
+      const openMail  = qs('openMail') === '1';
+
+      // riepilogo
+      const sum = document.getElementById('summaryBox');
+      document.getElementById('sid').textContent = sessionId || '—';
+      document.getElementById('skuName').textContent = niceSku(sku);
+      sum.hidden = false;
+
+      const isColpa = sku.startsWith('COLPA_');
+
+      if (isColpa) {
+        const mailHref = buildBriefMailto(sku);
+        const link = document.getElementById('mailtoLink');
+        link.href = mailHref;
+        document.getElementById('colpaBox').hidden = false;
+
+        if (openMail) {
+          // avvia dopo un breve delay per evitare blocchi popup
+          setTimeout(() => { window.location.href = mailHref; }, 400);
+        }
+      } else {
+        document.getElementById('standardBox').hidden = false;
+      }
     })();
-
-    function show(m, cls){ const d=document.querySelector('#msg'); d.textContent=m; d.className='msg ' + (cls||''); }
-
-    document.querySelector('#collega').addEventListener('click', async () => {
-      const session_id    = document.querySelector('#cs').value.replace(/\s/g,'');
-      const email_fallback= document.querySelector('#emailRecovery').value.trim();
-      const phone         = document.querySelector('#phone').value.trim();
-
-      const r = await fetch('/.netlify/functions/claim-purchase', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ session_id, email_fallback, phone })
-      });
-      const out = await r.json().catch(()=> ({}));
-      if (!r.ok || out.error) return show(out.error || `HTTP ${r.status}`,'err');
-      if (out.reason)        return show(out.reason,'warn');
-      show(`Accreditati ${out.minutes} minuti a ${out.email}`,'ok');
-    });
   </script>
 </body>
 </html>
