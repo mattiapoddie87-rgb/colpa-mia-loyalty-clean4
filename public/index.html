@@ -5,25 +5,33 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>COLPA MIA — Catalogo</title>
   <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
-    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    :root{
+      --bg:#0f1115; --card:#151822; --border:#23283b; --text:#e6e6e6; --muted:#9aa3b2;
+      --brand:#3b82f6; --brand-2:#a5b4fc;
+    }
+    *{box-sizing:border-box}
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:var(--bg);color:var(--text)}
+    .wrap{max-width:1100px;margin:0 auto;padding:24px}
+    h1{margin:0 0 12px}
+    p.small{color:var(--muted);margin:0 0 24px}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+    .card{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
     .title{font-weight:700;font-size:18px}
-    .price{color:#a5b4fc}
-    select,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
-    button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
+    .price{color:var(--brand-2);font-weight:600}
+    select,button{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:var(--text)}
+    button{cursor:pointer;background:var(--brand);border-color:var(--brand)}
     button:disabled{opacity:.6;cursor:not-allowed}
-    small{color:#9aa3b2}
-    .list{margin:0 0 6px 18px;padding:0}
-    .list li{margin:4px 0}
-    .consent{display:flex;gap:8px;align-items:flex-start}
+    small{color:var(--muted)}
+    .note{font-size:12px;color:var(--muted)}
+    ul.clean{margin:0 0 8px 16px;padding:0}
+    ul.clean li{margin:2px 0}
+    .section-title{margin:24px 0 8px;font-weight:700}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1 style="margin:0 0 12px">Catalogo COLPA MIA</h1>
-    <p style="margin:0 0 24px"><small>Scegli la scusa. Consegna email + (se presente) WhatsApp. Pagamenti via Stripe.</small></p>
+    <h1>Catalogo COLPA MIA</h1>
+    <p class="small">Scegli la scusa. Consegna email + WhatsApp. Checkout Stripe.</p>
 
     <div class="grid">
       <!-- SCUSA BASE -->
@@ -40,10 +48,10 @@
           <option value="FAMIGLIA">FAMIGLIA</option>
           <option value="SALUTE">SALUTE</option>
           <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+          <option value="ESAME">ESAME</option>
         </select>
         <button data-sku="SCUSA_BASE" data-context-select="#ctx-base">Acquista</button>
-        <small>Nota: SCUSA BASE consegna una sola scusa.</small>
+        <div class="note">Nota: SCUSA BASE consegna una sola scusa.</div>
       </div>
 
       <!-- SCUSA DELUXE -->
@@ -60,152 +68,116 @@
           <option value="FAMIGLIA">FAMIGLIA</option>
           <option value="SALUTE">SALUTE</option>
           <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+          <option value="ESAME">ESAME</option>
         </select>
         <button data-sku="SCUSA_DELUXE" data-context-select="#ctx-deluxe">Acquista</button>
-        <small>Nota: DELUXE consegna tre varianti.</small>
+        <div class="note">Nota: DELUXE consegna tre varianti.</div>
       </div>
 
-      <!-- CONNESSIONE KO (senza contesto) -->
+      <!-- CONNESSIONE KO (nessun contesto) -->
       <div class="card">
         <div class="title">CONNESSIONE KO</div>
         <div class="price">Prezzo come da listino</div>
-        <small>Scenario fisso: connessione/linea/VPN KO.</small>
+        <small>Scenario fisso: “connessione/linea/VPN KO”.</small>
         <button data-sku="CONNESSIONE">Acquista</button>
       </div>
 
-      <!-- TRAFFICO -->
+      <!-- TRAFFICO (nessun contesto) -->
       <div class="card">
         <div class="title">TRAFFICO</div>
         <div class="price">Prezzo come da listino</div>
-        <small>Scenario fisso: traffico/incidente/coda.</small>
+        <small>Scenario fisso: “traffico/incidente/coda”.</small>
         <button data-sku="TRAFFICO">Acquista</button>
       </div>
 
-      <!-- RIUNIONE IMPROVVISA -->
+      <!-- RIUNIONE IMPROVVISA (nessun contesto) -->
       <div class="card">
         <div class="title">RIUNIONE IMPROVVISA</div>
         <div class="price">Prezzo come da listino</div>
-        <small>Scenario fisso: riunione/call che sfora.</small>
+        <small>Scenario fisso: “riunione/call che sfora”.</small>
         <button data-sku="RIUNIONE">Acquista</button>
       </div>
     </div>
 
-    <h2 style="margin:28px 0 12px">Prendo io la colpa</h2>
-    <p><small>Qui gestisco io la comunicazione (no AI autogenerata). Dopo il pagamento verrai indirizzato alla mail di brief per descrivere la situazione.</small></p>
+    <h2 class="section-title">Prendo io la colpa</h2>
+    <p class="small">In questi pacchetti mi occupo personalmente della gestione: nessuna scusa automatica viene inviata. Al termine del pagamento si aprirà l’email per descrivere la situazione.</p>
 
     <div class="grid">
       <!-- COLPA LIGHT -->
       <div class="card">
         <div class="title">Prendo io la colpa — Light</div>
-        <p style="margin:0">Scrivo io su WhatsApp a tuo nome con una scusa credibile e misurata. 1 invio garantito entro 15 minuti e prova di consegna.</p>
-        <ul class="list">
+        <p>Scrivo io su WhatsApp a tuo nome con una scusa credibile e misurata. 1 invio garantito entro 15 minuti e prova di consegna. Dati usati solo per erogare il servizio.</p>
+        <ul class="clean">
           <li>1 messaggio WhatsApp</li>
           <li>Report di consegna</li>
         </ul>
         <div class="price">€9,90 IVA inclusa</div>
-        <label class="consent">
-          <input type="checkbox" id="consent-light">
-          <small>Confermo di aver letto e accettato la manleva del servizio “ColpaMia”.</small>
-        </label>
-        <button data-sku="COLPA_LIGHT" data-consent-checkbox="#consent-light">Acquista</button>
+        <button data-sku="COLPA_LIGHT">Acquista</button>
       </div>
 
       <!-- COLPA FULL -->
       <div class="card">
         <div class="title">Prendo io la colpa — Full</div>
-        <p style="margin:0">Gestisco io la situazione: messaggio personalizzato, fino a 3 tentativi in 24 ore, piccole correzioni su richiesta e prova di consegna. Priorità media.</p>
-        <ul class="list">
+        <p>Gestisco io la situazione: messaggio personalizzato, fino a 3 tentativi in 24 ore, piccole correzioni su richiesta e prova di consegna. Priorità media.</p>
+        <ul class="clean">
           <li>Fino a 3 invii WhatsApp in 24h</li>
           <li>1 revisione del testo</li>
           <li>Prova di consegna</li>
         </ul>
         <div class="price">€19,90 IVA inclusa</div>
-        <label class="consent">
-          <input type="checkbox" id="consent-full">
-          <small>Confermo di aver letto e accettato la manleva del servizio “ColpaMia”.</small>
-        </label>
-        <button data-sku="COLPA_FULL" data-consent-checkbox="#consent-full">Acquista</button>
+        <button data-sku="COLPA_FULL">Acquista</button>
       </div>
 
       <!-- COLPA DELUXE -->
       <div class="card">
         <div class="title">Prendo io la colpa — Deluxe</div>
-        <p style="margin:0">Mi assumo la responsabilità piena della comunicazione: strategia breve, varianti, follow-up e tracciamento completo. Priorità alta.</p>
-        <ul class="list">
+        <p>Mi assumo la responsabilità piena della comunicazione: strategia breve, varianti, follow-up e tracciamento completo. Priorità alta.</p>
+        <ul class="clean">
           <li>Varianti + follow-up programmato</li>
           <li>Fino a 2 revisioni</li>
           <li>Riepilogo finale con prove di consegna</li>
         </ul>
         <div class="price">€39,90 IVA inclusa</div>
-        <label class="consent">
-          <input type="checkbox" id="consent-deluxe">
-          <small>Confermo di aver letto e accettato la manleva del servizio “ColpaMia”.</small>
-        </label>
-        <button data-sku="COLPA_DELUXE" data-consent-checkbox="#consent-deluxe">Acquista</button>
+        <button data-sku="COLPA_DELUXE">Acquista</button>
       </div>
     </div>
 
-    <p style="margin-top:20px"><small>
-      Al checkout potrai inserire l’email e (se vuoi) il numero WhatsApp. Per BASE/DELUXE il contesto selezionato qui viene precompilato nel campo “Contesto”.
-      Per CONNESSIONE KO non viene richiesto alcun contesto.
-    </small></p>
+    <p class="small" style="margin-top:16px">
+      Al checkout potrai inserire il numero WhatsApp e specificare il contesto. Per Base/Deluxe il contesto
+      selezionato qui viene precompilato (puoi modificarlo). Per Connessione/Traffico/Riunione il contesto non è richiesto.
+    </p>
   </div>
 
   <script>
     const SUCCESS = location.origin + '/success.html';
     const CANCEL  = location.origin + '/cancel.html';
 
-    function buildBriefMailto(kind){
-      const nice = kind.replace('COLPA_','Colpa ');
-      const subj = encodeURIComponent(`Brief ${nice} — ${new Date().toLocaleDateString()}`);
-      const body = encodeURIComponent(
-`Ciao ColpaMia,
-
-pacchetto: ${kind}
-
-Contatto WhatsApp del destinatario (se lo hai):
-
-Contesto / obiettivo:
-- Chi è la persona
-- Tono desiderato (secco / gentile / professionale)
-- Limiti (cosa NON dire)
-
-Materiali utili (incolla eventuali chat/link):
-
-Grazie!`);
-      return `mailto:support@colpamia.com?subject=${subj}&body=${body}`;
+    function isBaseOrDeluxe(sku){
+      const x = String(sku||'').toUpperCase();
+      return x === 'SCUSA_BASE' || x === 'SCUSA_DELUXE';
     }
 
     async function startCheckout(btn){
       const sku = btn.dataset.sku;
       if(!sku) return;
 
-      // consenso obbligatorio per i pacchetti "colpa"
-      if (sku.startsWith('COLPA_')) {
-        const sel = btn.dataset.consentCheckbox || '';
-        const ck = sel ? document.querySelector(sel) : null;
-        if (!ck || !ck.checked){ alert('Devi accettare la manleva per procedere.'); return; }
-      }
-
-      // Solo BASE/DELUXE hanno contesto
-      let needLabel = null, needDefault = null;
-      if (sku === 'SCUSA_BASE' || sku === 'SCUSA_DELUXE') {
-        needLabel = 'Contesto';                        // <= 50 char
-        const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-        needDefault = sel && sel.value ? String(sel.value).trim().slice(0,120) : '';
-      }
-
-      const successQ = `?session_id={CHECKOUT_SESSION_ID}&sku=${encodeURIComponent(sku)}${sku.startsWith('COLPA_') ? '&openMail=1' : ''}`;
-
+      // payload base
       const payload = {
         sku,
-        price_id: null,                 // usa mapping server PRICE_BY_SKU_JSON
-        success_url: SUCCESS + successQ,
-        cancel_url:  CANCEL  + '?sku=' + encodeURIComponent(sku),
+        success_url: SUCCESS,
+        cancel_url: CANCEL
       };
-      if (needLabel)    payload.need_label = needLabel;
-      if (needDefault)  payload.need_default = needDefault;
+
+      // SOLO Base/Deluxe: passa il contesto
+      if (isBaseOrDeluxe(sku)) {
+        let ctx = '';
+        const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
+        if (sel && sel.value) ctx = String(sel.value).trim();
+        payload.need_label   = ctx
+          ? `Contesto (selezionato: ${ctx} — puoi modificare)`
+          : 'Contesto (obbligatorio: 4–120 caratteri)';
+        payload.need_default = ctx || '';
+      }
 
       btn.disabled = true;
       try{
@@ -215,8 +187,9 @@ Grazie!`);
           body: JSON.stringify(payload)
         });
         const data = await r.json();
-        if (!r.ok) throw new Error(data?.message || data?.error || 'checkout_error');
-        location.href = data.url || (SUCCESS + successQ.replace('{CHECKOUT_SESSION_ID}',''));
+        if (!r.ok) throw new Error(data?.error||'stripe_error');
+        if (data.url) { location.href = data.url; return; }
+        location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id);
       }catch(e){
         alert('Errore checkout: ' + (e.message||e));
       }finally{
