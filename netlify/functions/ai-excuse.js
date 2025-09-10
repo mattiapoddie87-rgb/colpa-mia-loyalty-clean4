@@ -1,6 +1,8 @@
 // netlify/functions/ai-excuse.js
-// 3 varianti SEMPRE. Tutti i testi iniziano con "Ciao," e suonano naturali.
-// Priorità: scenari fissi (riunione/traffico/connessione) → contesto (CENA, APERITIVO, …) per BASE/DELUXE → fallback base/deluxe.
+// Output SEMPRE JSON: { variants: [ {whatsapp_text}, ... ] }
+// Regole: tutte le frasi iniziano con "Ciao," e suonano naturali.
+// PRIORITÀ: scenari fissi (riunione/traffico/connessione) → contesto (CENA, APERITIVO, …) per BASE/DELUXE → fallback base/deluxe.
+// DIFFERENZA: SCUSA BASE restituisce 1 variante. Tutti gli altri 3.
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -8,8 +10,34 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Content-Type',
 };
 const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
-
 const clampLen = (s, max) => String(s || '').slice(0, Math.max(120, Math.min(380, Number(max || 320))));
+
+function ensureCiao(s) {
+  const t = String(s || '').trim();
+  if (/^ciao[,!\s]/i.test(t)) return t;
+  return 'Ciao, ' + t.replace(/^Ciao[,!\s]*/i, '');
+}
+function sanitizeTerms(s) {
+  return s
+    .replace(/\bETA\b/gi, 'tempistica')
+    .replace(/timing\s+pulito/gi, 'orari aggiornati')
+    .replace(/fascia\s+sensata/gi, 'orario credibile');
+}
+function finalizeLine(s, maxLen) {
+  let out = ensureCiao(sanitizeTerms(s)).trim();
+  if (!/[.!?]$/.test(out)) out += '.';
+  return clampLen(out, maxLen);
+}
+function pickN(arr, n, seed) {
+  const a = Array.from(arr);
+  if (a.length <= n) return a.slice(0, n);
+  let h = 0; const s = String(seed || '');
+  for (let i = 0; i < s.length; i++) h = (h * 131 + s.charCodeAt(i)) >>> 0;
+  const start = h % a.length;
+  const out = [];
+  for (let k = 0; k < n; k++) out.push(a[(start + k) % a.length]);
+  return out;
+}
 
 // ————————————————— Scenari fissi (kind) —————————————————
 const BANK_KIND = {
@@ -41,7 +69,6 @@ const BANK_KIND = {
 };
 
 // ————————————————— Contesti (contextTag) per BASE/DELUXE —————————————————
-// NOTA: tutti i testi vengono prefissati con "Ciao," se mancasse.
 const BANK_CTX = {
   CENA: [
     "grazie mille per l'invito, mi fa molto piacere che tu abbia pensato a me. Sfortunatamente, ho già un impegno per quella sera e non potrò unirmi a voi.",
@@ -63,7 +90,6 @@ const BANK_CTX = {
     'non riesco a esserci, ti auguro un evento meraviglioso e grazie per la comprensione.'
   ],
   LAVORO: [
-    // Scuse formali/operative (uso bracket come placeholder)
     'gentile [Nome], ti porgo le mie scuse per [errore/ritardo specifico]. Mi assumo la responsabilità: ho già avviato le correzioni e definito i prossimi passi. Condivido orari aggiornati a breve. Cordiali saluti, [Il tuo nome]',
     'oggetto: assenza dal lavoro — [Il tuo nome]. gentile [Responsabile], oggi [Data] non potrò presentarmi per un’improvvisa indisposizione. Invio certificazione appena possibile. Per urgenze: [collega] — [email]. Cordiali saluti, [Il tuo nome]'
   ],
@@ -108,52 +134,6 @@ const BANK_CTX = {
   ]
 };
 
-// ————————————————— micro-varianti leggere —————————————————
-const TWISTS_A = [
-  'Ti aggiorno più tardi.',
-  'Appena ho un orario credibile, ti scrivo.',
-  'Meglio darti orari reali tra poco.'
-];
-const TWISTS_B = [
-  'Riduco l’attesa.',
-  'Minimizzo il ritardo.',
-  'Preferisco essere preciso che frettoloso.'
-];
-
-function ensureCiao(s) {
-  const t = String(s || '').trim();
-  if (/^ciao[,!\s]/i.test(t)) return t;
-  return 'Ciao, ' + t.replace(/^Ciao[,!\s]*/i, '');
-}
-
-function sanitizeTerms(s) {
-  return s
-    .replace(/\bETA\b/gi, 'tempistica')
-    .replace(/timing\s+pulito/gi, 'orari aggiornati')
-    .replace(/fascia\s+sensata/gi, 'orario credibile');
-}
-
-function varyOnce(base, i, maxLen) {
-  let out = ensureCiao(sanitizeTerms(base)).trim();
-  if (!/[.!?]$/.test(out)) out += '.';
-  const tail = (i % 2 === 0) ? TWISTS_A[i % TWISTS_A.length] : TWISTS_B[i % TWISTS_B.length];
-  // Evita doppioni troppo “gonfi”
-  if (out.length < 260) out += ' ' + tail;
-  return clampLen(out, maxLen);
-}
-
-// Determinismo semplice con seed (se fornito)
-function pickThree(arr, seed) {
-  const a = Array.from(arr);
-  if (a.length <= 3) return a.slice(0, 3);
-  let h = 0; const s = String(seed || '');
-  for (let i = 0; i < s.length; i++) h = (h * 131 + s.charCodeAt(i)) >>> 0;
-  const start = h % a.length;
-  const out = [];
-  for (let k = 0; k < 3; k++) out.push(a[(start + k) % a.length]);
-  return out;
-}
-
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') return j(204, {});
   if (event.httpMethod !== 'POST')   return j(405, { error: 'method_not_allowed' });
@@ -169,16 +149,13 @@ exports.handler = async (event) => {
 
   const genderRaw = String(body.gender || '').toUpperCase(); // 'M' | 'F' | '' (solo per ESAME)
   const seed = body.seed || Date.now();
-
   const maxLen = Number(body.maxLen || 320);
 
   // Scelta banca frasi
   let bank = null;
-
   if (['riunione','traffico','connessione'].includes(kind)) {
     bank = BANK_KIND[kind];
   } else {
-    // base/deluxe con contesto
     if (tag) {
       if (tag === 'ESAME') {
         bank = (genderRaw === 'F') ? BANK_CTX.ESAME_F : (genderRaw === 'M' ? BANK_CTX.ESAME_M : BANK_CTX.ESAME_M);
@@ -189,9 +166,9 @@ exports.handler = async (event) => {
     if (!bank) bank = BANK_KIND[kind] || BANK_KIND.base;
   }
 
-  // Prendi 3 frasi dalla banca scelta con rotazione deterministica
-  const chosen = pickThree(bank, seed);
+  const count = (kind === 'base') ? 1 : 3;
+  const chosen = pickN(bank, count, seed);
+  const variants = chosen.map(s => ({ whatsapp_text: finalizeLine(s, maxLen) }));
 
-  const variants = chosen.map((s, i) => ({ whatsapp_text: varyOnce(s, i, maxLen) }));
   return j(200, { variants });
 };
