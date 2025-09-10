@@ -1,174 +1,129 @@
 // netlify/functions/ai-excuse.js
-// Output SEMPRE JSON: { variants: [ {whatsapp_text}, ... ] }
-// Regole: tutte le frasi iniziano con "Ciao," e suonano naturali.
-// PRIORITÀ: scenari fissi (riunione/traffico/connessione) → contesto (CENA, APERITIVO, …) per BASE/DELUXE → fallback base/deluxe.
-// DIFFERENZA: SCUSA BASE restituisce 1 variante. Tutti gli altri 3.
-
 const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Origin':'*',
+  'Access-Control-Allow-Methods':'POST,OPTIONS',
+  'Access-Control-Allow-Headers':'Content-Type'
 };
-const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
-const clampLen = (s, max) => String(s || '').slice(0, Math.max(120, Math.min(380, Number(max || 320))));
+const j=(s,b)=>({statusCode:s,headers:{'Content-Type':'application/json',...CORS},body:JSON.stringify(b)});
+const cap=(s,max)=>String(s||'').slice(0, Math.max(120, Math.min(2000, max||600)));
 
-function ensureCiao(s) {
-  const t = String(s || '').trim();
-  if (/^ciao[,!\s]/i.test(t)) return t;
-  return 'Ciao, ' + t.replace(/^Ciao[,!\s]*/i, '');
-}
-function sanitizeTerms(s) {
-  return s
-    .replace(/\bETA\b/gi, 'tempistica')
-    .replace(/timing\s+pulito/gi, 'orari aggiornati')
-    .replace(/fascia\s+sensata/gi, 'orario credibile');
-}
-function finalizeLine(s, maxLen) {
-  let out = ensureCiao(sanitizeTerms(s)).trim();
-  if (!/[.!?]$/.test(out)) out += '.';
-  return clampLen(out, maxLen);
-}
-function pickN(arr, n, seed) {
-  const a = Array.from(arr);
-  if (a.length <= n) return a.slice(0, n);
-  let h = 0; const s = String(seed || '');
-  for (let i = 0; i < s.length; i++) h = (h * 131 + s.charCodeAt(i)) >>> 0;
-  const start = h % a.length;
-  const out = [];
-  for (let k = 0; k < n; k++) out.push(a[(start + k) % a.length]);
-  return out;
+function pickN(arr,n){
+  const a=[...arr]; const out=[];
+  while(a.length&&out.length<n){ out.push(a.splice(Math.floor(Math.random()*a.length),1)[0]); }
+  while(out.length<n) out.push(arr[out.length%arr.length]);
+  return out.slice(0,n);
 }
 
-// ————————————————— Scenari fissi (kind) —————————————————
-const BANK_KIND = {
+// --- BANCHE TESTI ---
+// Scenari fissi (3 varianti)
+const FIXED = {
   riunione: [
-    'Ciao, mi è entrata una riunione al volo. Finisco e ti aggiorno tra poco.',
-    'Ciao, una call sta sforando. Chiudo e ti dico quando arrivo.',
-    'Ciao, sono bloccato in riunione su un punto urgente. Appena libero ti scrivo.'
+    'Ciao, mi è subentrata una riunione proprio ora. Appena chiudo ti aggiorno con orari aggiornati.',
+    'Ciao, call imprevista che sta sforando: finisco e ti do orari aggiornati.',
+    'Ciao, sono in un punto urgente di riunione; appena libero ti confermo un orario credibile.'
   ],
   traffico: [
-    'Ciao, sembra ci sia stato un incidente e il navigatore allunga i tempi. Ti aggiorno a breve.',
-    'Ciao, traffico fuori scala sul percorso. Sto accorciando dove posso e ti aggiorno a momenti.',
-    'Ciao, coda a fisarmonica in tangenziale. Procedo piano, arrivo e ti scrivo la tempistica.'
+    'Ciao, c’è stato un incidente e i tempi si sono allungati. Ti aggiorno appena ho una tempistica chiara.',
+    'Ciao, traffico anomalo sul percorso: sto recuperando e ti do una tempistica appena si sblocca.',
+    'Ciao, coda a fisarmonica in tangenziale; arrivo ma vado lento. Ti scrivo a breve con una tempistica.'
   ],
   connessione: [
-    'Ciao, la connessione è instabile in questo momento. Rientro in rete e ti confermo.',
-    'Ciao, VPN/linea a terra proprio ora. Ripristino e poi ti do orari aggiornati.',
-    'Ciao, la rete salta di continuo. Passo in tethering e ti aggiorno quando torna stabile.'
-  ],
-  base: [
-    'Ciao, ho un intoppo reale. Sistemo e ti do un orario credibile a breve.',
-    'Ciao, sto chiudendo una cosa urgente. Tra poco ti passo orari aggiornati.',
-    'Ciao, piccolo imprevisto organizzativo. Mi rimetto in carreggiata e ti aggiorno.'
-  ],
-  deluxe: [
-    'Ciao, è emersa una priorità che richiede presenza. Riorganizzo con criterio e ti propongo una fascia concreta con orari aggiornati.',
-    'Ciao, sto gestendo un imprevisto che merita attenzione. Ottimizzo i prossimi passi e ti mando orari aggiornati affidabili.',
-    'Ciao, niente promesse a caso: ripianifico con margine e torno con un orario credibile e chiaro.'
+    'Ciao, la connessione è KO e sto passando al tethering. Ti aggiorno non appena ho una tempistica affidabile.',
+    'Ciao, VPN/linea giù proprio ora: ripristino e ti do una tempistica appena aggancio.',
+    'Ciao, rete instabile: sistemo e torno con orari aggiornati.'
   ]
 };
 
-// ————————————————— Contesti (contextTag) per BASE/DELUXE —————————————————
-const BANK_CTX = {
+// Contesti (tuoi modelli). Base = 1, Deluxe = 3 da queste liste.
+const CTX = {
   CENA: [
-    "grazie mille per l'invito, mi fa molto piacere che tu abbia pensato a me. Sfortunatamente, ho già un impegno per quella sera e non potrò unirmi a voi.",
-    'mi dispiace, ma ho un imprevisto e non riesco proprio a venire stasera.',
-    'mi dispiace, ma non sono in vena di uscire: avrei bisogno di una serata tranquilla a casa.',
-    'ho già mangiato e sto tenendo la dieta, stasera passo. Organizziamo presto?',
-    'non so se riesco a venire, ti faccio sapere più tardi.',
-    'spero vi divertiate tantissimo, vediamoci presto e recuperiamo!'
+    'Ciao, grazie mille per l’invito, mi fa piacere che tu abbia pensato a me. Sfortunatamente ho già un impegno per quella sera e non potrò unirmi.',
+    'Ciao, mi dispiace ma ho un imprevisto e stasera non riesco proprio a venire.',
+    'Ciao, non sono in vena di uscire: ho bisogno di una serata tranquilla a casa.',
+    'Ciao, ho già mangiato / sono a dieta e stasera non ho molta fame.',
+    'Ciao, non so se riesco a venire: ti faccio sapere più tardi.',
+    'Ciao, spero vi divertiate; organizziamo presto per vederci.'
   ],
   APERITIVO: [
-    'mi spiace molto, ma non riesco a venire. Ho un altro impegno inderogabile.',
-    'purtroppo ho già altri impegni per quella sera e non mi sarà possibile partecipare. Spero ci sia una prossima volta.',
-    'mi dispiace, avrei voluto esserci, ma ho un imprevisto familiare che richiede la mia attenzione adesso.',
-    'purtroppo un’urgenza lavorativa improvvisa mi impedisce di partecipare. Mi rifaccio presto.'
+    'Ciao, mi spiace moltissimo ma non riesco a venire: ho un altro impegno inderogabile.',
+    'Ciao, ho già un impegno per quella sera e non mi sarà possibile partecipare. Spero nella prossima.',
+    'Ciao, avrei voluto esserci ma ho un imprevisto familiare che richiede la mia attenzione.',
+    'Ciao, urgenza lavorativa improvvisa che mi blocca; cerco di rifarmi presto.'
   ],
   EVENTO: [
-    'ti ringrazio sinceramente per l’invito all’evento. Mi dispiace, ma non potrò esserci per un impegno precedente e inderogabile.',
-    'mi dispiace non poter partecipare, mi sarebbe piaciuto. Spero in un’altra occasione per vederci.',
-    'non riesco a esserci, ti auguro un evento meraviglioso e grazie per la comprensione.'
+    'Ciao, grazie per l’invito all’evento. Purtroppo non potrò esserci per un impegno precedente e inderogabile.',
+    'Ciao, mi dispiace non poter partecipare: mi sarebbe piaciuto essere presente. Spero in un’altra occasione.',
+    'Ciao, non riuscirò a esserci: ti auguro un evento riuscito e grazie per la comprensione.'
   ],
   LAVORO: [
-    'gentile [Nome], ti porgo le mie scuse per [errore/ritardo specifico]. Mi assumo la responsabilità: ho già avviato le correzioni e definito i prossimi passi. Condivido orari aggiornati a breve. Cordiali saluti, [Il tuo nome]',
-    'oggetto: assenza dal lavoro — [Il tuo nome]. gentile [Responsabile], oggi [Data] non potrò presentarmi per un’improvvisa indisposizione. Invio certificazione appena possibile. Per urgenze: [collega] — [email]. Cordiali saluti, [Il tuo nome]'
+    // Scusa per errore
+    'Ciao, ti chiedo scusa per il disguido su [tema]. Mi assumo la responsabilità: ho già avviato le correzioni e condivido gli orari aggiornati a breve.',
+    // Assenza per indisposizione
+    'Ciao, oggi non riesco a presentarmi per un’improvvisa indisposizione. Mi scuso per il disagio e invierò certificazione appena possibile.'
   ],
   CALCETTO: [
-    'mi dispiace, ma non posso partecipare questa volta: ho già un altro impegno.',
-    'mi sono svegliato con un po’ di mal di testa, meglio riposare oggi.',
-    'ho avuto un imprevisto al lavoro/studio e non riesco a liberarmi in tempo.',
-    'ho un appuntamento importante che non posso spostare.',
-    'sono molto stanco e non renderei al meglio, passo questa.',
-    'ho un piccolo infortunio e preferisco non rischiare.'
+    'Ciao, non posso partecipare questa volta: ho già un altro impegno.',
+    'Ciao, mi sono svegliato con mal di testa; meglio riposare oggi.',
+    'Ciao, imprevisto lavoro/studio e non riesco a liberarmi.',
+    'Ciao, ho un appuntamento importante che non posso spostare.',
+    'Ciao, oggi sono stanco e non renderei al meglio.',
+    'Ciao, ho un piccolo infortunio e preferisco non rischiare.'
   ],
   FAMIGLIA: [
-    'mi dispiace molto, devo disdire l’appuntamento di [data] alle [ora] per un imprevisto familiare urgente. Riprogrammiamo appena possibile.',
-    'ho un impegno familiare che non posso rimandare e non potrò esserci. Spero vi divertiate.',
-    'mio marito ha avuto un piccolo incidente: devo correre in pronto soccorso.',
-    'devo cancellare stasera: mio padre ha avuto un piccolo incidente domestico e sono al pronto soccorso.',
-    'mi hanno appena avvisato che mia madre è caduta: vado a controllare che stia bene.',
-    'mia figlia giovedì alle 10:00 deve andare dal dentista: arriverò tardi, la accompagno io.'
+    'Ciao, devo disdire l’appuntamento: è subentrato un imprevisto familiare urgente. Riprogrammiamo appena possibile.',
+    'Ciao, ho un impegno familiare che non posso rimandare e non potrò esserci. Spero vi divertiate.',
+    'Ciao, mi hanno appena chiamato: devo correre in pronto soccorso per un parente. Ti aggiorno più tardi.'
   ],
   SALUTE: [
-    'mi sono svegliato con mal di gola e tosse. Per non contagiare nessuno, oggi è meglio evitare.',
-    'ho un attacco forte di allergia e non tengo a bada i sintomi: devo prendermi un giorno.',
-    'si è liberato un appuntamento medico atteso da settimane: devo approfittarne.',
-    'mi sono svegliato con febbre alta e ho fissato un controllo al volo: oggi non riesco.',
-    'mi hanno anticipato una visita nel pomeriggio: dovrò andare via prima.'
+    'Ciao, mi sono svegliato con mal di gola e tosse. Evito di contagiare: oggi non riesco a venire.',
+    'Ciao, allergia forte oggi e sintomi fuori controllo: devo fermarmi un giorno.',
+    'Ciao, si è liberato un appuntamento medico urgente: devo assentarmi.'
   ],
   APP_CONS: [
-    'devo annullare l’appuntamento di [data/ora] per una conflittualità di impegni. Possiamo riprogrammare?',
-    'non riesco a rispettare l’appuntamento per [motivo sintetico]. Scusa il disagio: troviamo un’altra data?',
-    'c’è stato un cambio piani: non sarò presente all’appuntamento di [data/ora]. Proponi tu una nuova fascia?',
-    'ho avuto un contrattempo e non potrò essere all’appuntamento di [data/ora]. Chiedo scusa per la cancellazione.',
-    'a causa di circostanze impreviste non potrò partecipare: felice di fissare un nuovo incontro quando possibile.',
-    'a malincuore devo disdire l’appuntamento di [data/ora] per un’urgenza. Rimandiamo?'
+    'Ciao, devo annullare l’appuntamento di [data/ora] per una sovrapposizione imprevista. Possiamo riprogrammare?',
+    'Ciao, non riesco a rispettare l’appuntamento per un imprevisto. Scusa il disagio, troviamo un’altra data?',
+    'Ciao, è cambiata la mia agenda e non potrò partecipare all’appuntamento previsto. Possiamo rimandare?'
   ],
-  ESAME_M: [
-    'mi dispiace per il ritardo: sono rimasto bloccato nel traffico per un incidente e non sono riuscito ad arrivare prima.',
-    'mi dispiace per il ritardo: un incidente ha fermato la strada e sono rimasto imbottigliato.'
-  ],
-  ESAME_F: [
-    'mi dispiace per il ritardo: sono rimasta bloccata nel traffico per un incidente e non sono riuscita ad arrivare prima.',
-    'mi dispiace per il ritardo: c’è stato un incidente e sono rimasta imbottigliata.'
+  ESAME: [
+    'Ciao, mi dispiace per il ritardo: sono rimasto bloccato nel traffico per un incidente.',
+    'Ciao, mi dispiace per il ritardo: sono rimasta bloccata nel traffico per un incidente.'
   ]
 };
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return j(204, {});
-  if (event.httpMethod !== 'POST')   return j(405, { error: 'method_not_allowed' });
+exports.handler=async(event)=>{
+  if(event.httpMethod==='OPTIONS') return j(204,{});
+  if(event.httpMethod!=='POST') return j(405,{error:'method_not_allowed'});
 
-  let body = {}; try { body = JSON.parse(event.body || '{}'); } catch { return j(400, { error: 'bad_json' }); }
+  let body={}; try{body=JSON.parse(event.body||'{}');}catch{return j(400,{error:'bad_json'});}
 
-  const kindRaw = String(body.kind || 'base').toLowerCase();
-  const kind = ['riunione','traffico','connessione','base','deluxe'].includes(kindRaw) ? kindRaw : 'base';
+  const kind = String(body.kind||'base').toLowerCase();            // base | deluxe | riunione | traffico | connessione
+  const tag  = String(body.contextTag||'').toUpperCase().trim();   // es. CENA, APERITIVO...
+  const need = String(body.need||'');
+  const max  = Number(body.maxLen|| (kind==='deluxe'?600:480));
 
-  const tagRaw = String(body.contextTag || '').toUpperCase(); // es. CENA, LAVORO, APP_CONS, ESAME
-  let tag = tagRaw;
-  if (tag === 'APPUNTAMENTO' || tag === 'APPUNTAMENTO/CONSEGNA') tag = 'APP_CONS';
-
-  const genderRaw = String(body.gender || '').toUpperCase(); // 'M' | 'F' | '' (solo per ESAME)
-  const seed = body.seed || Date.now();
-  const maxLen = Number(body.maxLen || 320);
-
-  // Scelta banca frasi
-  let bank = null;
-  if (['riunione','traffico','connessione'].includes(kind)) {
-    bank = BANK_KIND[kind];
-  } else {
-    if (tag) {
-      if (tag === 'ESAME') {
-        bank = (genderRaw === 'F') ? BANK_CTX.ESAME_F : (genderRaw === 'M' ? BANK_CTX.ESAME_M : BANK_CTX.ESAME_M);
-      } else {
-        bank = BANK_CTX[tag] || null;
-      }
-    }
-    if (!bank) bank = BANK_KIND[kind] || BANK_KIND.base;
+  // Scenari fissi → 3 varianti
+  if(['riunione','traffico','connessione'].includes(kind)){
+    const arr = FIXED[kind]||[];
+    return j(200,{variants: pickN(arr,3).map(s=>({whatsapp_text: cap(s,max)}))});
   }
 
-  const count = (kind === 'base') ? 1 : 3;
-  const chosen = pickN(bank, count, seed);
-  const variants = chosen.map(s => ({ whatsapp_text: finalizeLine(s, maxLen) }));
+  // Base/Deluxe con contesto
+  if(tag && CTX[tag]){
+    if(kind==='base'){
+      const one = pickN(CTX[tag],1)[0];
+      return j(200,{variants:[{whatsapp_text: cap(one,max)}]});
+    }
+    // deluxe → 3
+    const three = pickN(CTX[tag],3);
+    return j(200,{variants: three.map(s=>({whatsapp_text: cap(s,max)}))});
+  }
 
-  return j(200, { variants });
+  // Fallback se tag mancante: frasi neutrali coerenti
+  const FALLBACK = (kind==='deluxe'
+    ? ['Ciao, ho avuto un imprevisto serio: sistemo le priorità e ti aggiorno con orari aggiornati.',
+       'Ciao, sto chiudendo un’urgenza: preferisco darti un orario credibile tra poco.',
+       'Ciao, sto riorganizzando l’agenda per ridurre l’attesa: ti scrivo con una tempistica affidabile.']
+    : ['Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.']);
+  const out = (kind==='deluxe')?pickN(FALLBACK,3):pickN(FALLBACK,1);
+  return j(200,{variants: out.map(s=>({whatsapp_text: cap(s,max)}))});
 };
