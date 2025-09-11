@@ -9,10 +9,10 @@ const CORS = {
 };
 const res = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
 
-// Ricompense (puoi modificarle)
+// Ricompense
 const REWARDS = {
-  BASE_FREE:  { cost: 50, coupon: { percent_off: 100, duration: 'once' } },
-  DELUXE_50:  { cost: 80, coupon: { percent_off: 50,  duration: 'once' } },
+  BASE_FREE: { cost: 50, coupon: { percent_off: 100, duration: 'once' } },
+  DELUXE_50:{ cost: 80, coupon: { percent_off: 50,  duration: 'once' } },
 };
 const genCode = (p='COLPA') => `${p}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 
