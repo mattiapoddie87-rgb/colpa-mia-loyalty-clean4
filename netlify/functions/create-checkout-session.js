@@ -11,6 +11,7 @@ const json = (s,b)=>({ statusCode:s, headers:{ 'Content-Type':'application/json'
 
 exports.handler = async (event)=>{
   if (event.httpMethod === 'OPTIONS') return json(204,{});
+
   try{
     const {
       sku,
@@ -22,31 +23,52 @@ exports.handler = async (event)=>{
 
     if(!sku) return json(400,{error:'missing_sku'});
 
-    // mappa prezzi da env
-    const map = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
-    const priceId = map[sku];
+    // Prezzi per SKU
+    let priceMap = {};
+    try { priceMap = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}'); }
+    catch { return json(500,{error:'bad_PRICE_BY_SKU_JSON'}); }
+    const priceId = priceMap[sku];
     if(!priceId) return json(400,{error:'unknown_sku'});
+
+    // Regole minuti per wallet
+    let ruleMap = {};
+    try { ruleMap = JSON.parse(process.env.PRICE_RULES_JSON || '{}'); } // esiste già nel tuo progetto
+    catch { /* opzionale; se manca, minuti=0 */ }
+    const rule = ruleMap[sku] || {};
+    const minutes = Number(rule.minutes || 0); // per “Prendo io la colpa” dovrebbe essere 0
+
+    // Solo questi SKU richiedono il contesto in checkout
+    const REQUIRE_CONTEXT = new Set(['SCUSA_BASE','SCUSA_DELUXE']);
+
+    const customFields = REQUIRE_CONTEXT.has(sku) ? [{
+      key: 'need',
+      type: 'text',
+      optional: false,
+      // label max 50 char -> teniamola breve per sicurezza
+      label: { type:'custom', custom:'Contesto (obbligatorio)' },
+      text: {
+        default_value: (need_default || '').slice(0,120),
+        minimum_length: 4,
+        maximum_length: 120
+      }
+    }] : []; // niente campo per Connessione/Traffico/Riunione e per i pacchetti “Prendo io la colpa”
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
       client_reference_id: sku,
       success_url: success_url || 'https://colpamia.com/success.html?session_id={CHECKOUT_SESSION_ID}',
       cancel_url:  cancel_url  || 'https://colpamia.com/cancel.html',
-      metadata: { context_hint: (context_hint || '').slice(0,120) },
-      phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
+      phone_number_collection: { enabled: true },
       line_items: [{ price: priceId, quantity: 1 }],
-      custom_fields: [{
-        key: 'need',
-        type: 'text',
-        optional: false,
-        label: { type:'custom', custom:'Contesto (obbligatorio: 4–120 caratteri)' },
-        text: {
-          default_value: (need_default || '').slice(0,120),
-          minimum_length: 4,
-          maximum_length: 120
-        }
-      }]
+      // mostriamo il campo contesto solo se serve
+      ...(customFields.length ? { custom_fields: customFields } : {}),
+      // metadata usati dal webhook (wallet & routing)
+      metadata: {
+        sku,
+        minutes: String(isNaN(minutes) ? 0 : minutes),
+        context_hint: (context_hint || '').slice(0,120)
+      }
     });
 
     return json(200, { id: session.id, url: session.url });
