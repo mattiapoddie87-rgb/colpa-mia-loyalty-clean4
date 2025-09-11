@@ -30,28 +30,27 @@ exports.handler = async (event)=>{
     const priceId = priceMap[sku];
     if(!priceId) return json(400,{error:'unknown_sku'});
 
-    // Regole minuti per wallet
+    // Regole minuti (wallet)
     let ruleMap = {};
-    try { ruleMap = JSON.parse(process.env.PRICE_RULES_JSON || '{}'); } // esiste già nel tuo progetto
-    catch { /* opzionale; se manca, minuti=0 */ }
+    try { ruleMap = JSON.parse(process.env.PRICE_RULES_JSON || '{}'); }
+    catch { /* opzionale */ }
     const rule = ruleMap[sku] || {};
-    const minutes = Number(rule.minutes || 0); // per “Prendo io la colpa” dovrebbe essere 0
+    const minutes = Number(rule.minutes || 0);
 
-    // Solo questi SKU richiedono il contesto in checkout
+    // Per quali SKU chiedere il contesto in Checkout
     const REQUIRE_CONTEXT = new Set(['SCUSA_BASE','SCUSA_DELUXE']);
 
     const customFields = REQUIRE_CONTEXT.has(sku) ? [{
       key: 'need',
       type: 'text',
       optional: false,
-      // label max 50 char -> teniamola breve per sicurezza
-      label: { type:'custom', custom:'Contesto (obbligatorio)' },
+      label: { type:'custom', custom:'Contesto (obbligatorio)' }, // breve (<=50 char)
       text: {
         default_value: (need_default || '').slice(0,120),
         minimum_length: 4,
         maximum_length: 120
       }
-    }] : []; // niente campo per Connessione/Traffico/Riunione e per i pacchetti “Prendo io la colpa”
+    }] : [];
 
     const session = await stripe.checkout.sessions.create({
       mode: 'payment',
@@ -60,10 +59,9 @@ exports.handler = async (event)=>{
       cancel_url:  cancel_url  || 'https://colpamia.com/cancel.html',
       allow_promotion_codes: true,
       phone_number_collection: { enabled: true },
+      customer_creation: 'always', // così abbiamo SEMPRE il customer
       line_items: [{ price: priceId, quantity: 1 }],
-      // mostriamo il campo contesto solo se serve
       ...(customFields.length ? { custom_fields: customFields } : {}),
-      // metadata usati dal webhook (wallet & routing)
       metadata: {
         sku,
         minutes: String(isNaN(minutes) ? 0 : minutes),
