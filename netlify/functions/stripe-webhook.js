@@ -1,55 +1,91 @@
 // netlify/functions/stripe-webhook.js
-import Stripe from 'stripe';
-import { get, set } from '@netlify/blobs';
-
+const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const STORE = 'colpamia';
-const KEY   = 'wallets.json';
+const { Resend } = require('resend');
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-async function loadWallets() {
-  return (await get({ name: KEY, type: 'json', store: STORE })) || {};
-}
-async function saveWallets(w) {
-  await set({
-    name: KEY,
-    data: JSON.stringify(w),
-    store: STORE,
-    contentType: 'application/json'
-  });
-}
+// Generatore testo scuse (già presente nel tuo repo)
+const { buildExcuse } = require('./ai-excuse'); // deve esportare buildExcuse({ kind, context })
 
-export const handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
-
+exports.handler = async (event) => {
   const sig = event.headers['stripe-signature'];
-  const rawBody = event.isBase64Encoded
-    ? Buffer.from(event.body || '', 'base64')
-    : Buffer.from(event.body || '', 'utf8');
+  let payload = event.body;
 
-  let evt;
   try {
-    evt = stripe.webhooks.constructEvent(rawBody, sig, process.env.STRIPE_WEBHOOK_SECRET);
+    const evt = stripe.webhooks.constructEvent(
+      payload,
+      sig,
+      process.env.STRIPE_WEBHOOK_SECRET
+    );
+
+    // Gestiamo SOLO il completamento del checkout pagato
+    if (evt.type !== 'checkout.session.completed') {
+      return { statusCode: 200, body: 'ignored' };
+    }
+
+    const session = evt.data.object;
+
+    // Sicurezza: elaboriamo una sola volta
+    if (session.payment_status !== 'paid') {
+      return { statusCode: 200, body: 'not_paid' };
+    }
+
+    const sku = session.client_reference_id || session.metadata?.sku || '';
+    const minutesToAdd = parseInt(session.metadata?.minutes || '0', 10) || 0;
+
+    const email = (session.customer_details?.email || '').toLowerCase();
+    const customerId = session.customer;
+
+    // 1) WALLET: somma minuti sul Customer.metadata.wallet_minutes (case-insensitive)
+    if (customerId) {
+      const cust = await stripe.customers.retrieve(customerId);
+      const current = parseInt((cust.metadata?.wallet_minutes || '0'), 10) || 0;
+      const next = current + (minutesToAdd > 0 ? minutesToAdd : 0);
+      if (next !== current) {
+        await stripe.customers.update(customerId, {
+          metadata: { ...cust.metadata, wallet_minutes: String(next) }
+        });
+      }
+    }
+
+    // 2) INVIO SCUSA automatica SOLO per gli SKU “SCUSA_*” e per Connessione/Traffico/Riunione
+    const isPersonalPackage = sku.startsWith('COLPA_'); // nessun invio automatico
+    if (!isPersonalPackage && email) {
+      // determina contesto: dal campo custom o dall'hint
+      let context = session.metadata?.context_hint || '';
+      if (Array.isArray(session.custom_fields)) {
+        const f = session.custom_fields.find(x => x.key === 'need');
+        if (f?.text?.value) context = f.text.value;
+      }
+
+      // mappa semplice “kind” per il generatore
+      let kind = 'base';
+      if (sku === 'SCUSA_DELUXE') kind = 'deluxe';
+      if (sku === 'CONNESSIONE') kind = 'conn';
+      if (sku === 'TRAFFICO') kind = 'traffico';
+      if (sku === 'RIUNIONE') kind = 'riunione';
+
+      const { subject, lines } = await buildExcuse({ kind, context });
+
+      const html = `
+        <h2>La tua Scusa</h2>
+        <ol>${lines.map(l => `<li>${l}</li>`).join('')}</ol>
+        <p><small>Accreditati ${minutesToAdd} minuti sul tuo wallet.</small></p>
+      `;
+
+      await resend.emails.send({
+        from: 'COLPA MIA <no-reply@colpamia.com>',
+        to: email,
+        reply_to: 'colpamiaconsulenze@proton.me',
+        subject: subject || 'La tua Scusa — COLPA MIA',
+        html
+      });
+    }
+
+    return { statusCode: 200, body: JSON.stringify({ ok: true }) };
   } catch (err) {
+    console.error('webhook_error', err);
     return { statusCode: 400, body: `Webhook Error: ${err.message}` };
   }
-
-  if (evt.type === 'checkout.session.completed') {
-    const s = evt.data.object;
-
-    // Email normalizzata
-    const email = (s.customer_details?.email || '').trim().toLowerCase();
-
-    // Minuti per il wallet (inseriti in create-checkout-session come metadata.minutes)
-    const minutes = Number(s.metadata?.minutes || 0);
-
-    if (email && !isNaN(minutes) && minutes > 0) {
-      const wallets = await loadWallets();
-      const current = Number(wallets[email] || 0);
-      wallets[email] = current + minutes;
-      await saveWallets(wallets);
-    }
-  }
-
-  return { statusCode: 200, body: JSON.stringify({ received: true }) };
 };
