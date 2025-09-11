@@ -2,65 +2,55 @@
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Methods': 'POST,OPTIONS', 'Access-Control-Allow-Headers': 'Content-Type' };
-const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
+};
+const json = (s,b)=>({ statusCode:s, headers:{ 'Content-Type':'application/json', ...CORS }, body:JSON.stringify(b) });
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return j(204, {});
-  if (event.httpMethod !== 'POST') return j(405, { error: 'method_not_allowed' });
-
-  let body = {};
-  try { body = JSON.parse(event.body || '{}'); } catch { return j(400, { error: 'bad_json' }); }
-
-  const {
-    price_id,      // può arrivare già dal client
-    sku,           // SCUSA_BASE, SCUSA_DELUXE, CONNESSIONE, TRAFFICO, RIUNIONE, COLPA_LIGHT, COLPA_FULL, COLPA_DELUXE
-    success_url,
-    cancel_url,
-    need_default = '' // valore precompilato per il campo "Contesto" (SOLTANTO Base/Deluxe)
-  } = body;
-
-  // Mappa prezzi da env
-  let mapping = {};
-  try { mapping = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}'); } catch {}
-  const resolvedPrice = price_id || mapping[sku];
-
-  if (!resolvedPrice) return j(400, { error: 'missing_price', detail: `Nessun price per sku=${sku}` });
-  if (!success_url || !cancel_url) return j(400, { error: 'missing_urls' });
-
-  // solo Base/Deluxe vogliono il campo "Contesto"
-  const wantsContext = (sku === 'SCUSA_BASE' || sku === 'SCUSA_DELUXE');
-  const ctx = String(need_default || '').trim();
-
-  // ATTENZIONE: label corta per non superare 50 char
-  const customFields = wantsContext ? [{
-    key: 'need',
-    type: 'text',
-    optional: true,
-    label: { type: 'custom', custom: 'Contesto' }, // <= 50 char
-    text: { default_value: ctx.slice(0, 120) }     // sicurezza, max 120
-  }] : [];
-
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
+exports.handler = async (event)=>{
+  if (event.httpMethod === 'OPTIONS') return json(204,{});
+  try{
+    const {
+      sku,
       success_url,
       cancel_url,
-      line_items: [{ price: resolvedPrice, quantity: 1 }],
+      need_default = '',
+      context_hint = ''
+    } = JSON.parse(event.body || '{}');
+
+    if(!sku) return json(400,{error:'missing_sku'});
+
+    // mappa prezzi da env
+    const map = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
+    const priceId = map[sku];
+    if(!priceId) return json(400,{error:'unknown_sku'});
+
+    const session = await stripe.checkout.sessions.create({
+      mode: 'payment',
+      client_reference_id: sku,
+      success_url: success_url || 'https://colpamia.com/success.html?session_id={CHECKOUT_SESSION_ID}',
+      cancel_url:  cancel_url  || 'https://colpamia.com/cancel.html',
+      metadata: { context_hint: (context_hint || '').slice(0,120) },
+      phone_number_collection: { enabled: true },
       allow_promotion_codes: true,
-      customer_creation: 'always',
-      ui_mode: 'hosted',
-      // Per i pacchetti "Prendo io la colpa" NON vogliamo alcun campo contesto
-      custom_fields: customFields,
-      metadata: {
-        sku: sku || '',
-        contextPrefill: ctx
-      }
+      line_items: [{ price: priceId, quantity: 1 }],
+      custom_fields: [{
+        key: 'need',
+        type: 'text',
+        optional: false,
+        label: { type:'custom', custom:'Contesto (obbligatorio: 4–120 caratteri)' },
+        text: {
+          default_value: (need_default || '').slice(0,120),
+          minimum_length: 4,
+          maximum_length: 120
+        }
+      }]
     });
 
-    return j(200, { id: session.id, url: session.url });
-  } catch (err) {
-    // ritorna il messaggio utile a debug
-    return j(500, { error: 'stripe_create_failed', message: String(err.message || err) });
+    return json(200, { id: session.id, url: session.url });
+  }catch(e){
+    return json(500,{error:'create_failed', detail:String(e.message||e)});
   }
 };
