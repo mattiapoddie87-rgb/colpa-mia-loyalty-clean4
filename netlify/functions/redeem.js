@@ -1,110 +1,50 @@
-// netlify/functions/redeem.js
-// Redeem Premium: scala minuti dal wallet utente e crea un "ticket" di delivery.
-// Input (POST JSON): { email, phone, item_id }
-// Risposta: { ok:true, remaining, ticket_id, message } oppure { ok:false, error }
+// netlify/functions/wallet-redeem.js
+const Stripe = require('stripe');
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const { blobs } = require('@netlify/blobs');
-
-const corsHeaders = {
+const CORS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
 };
+const res = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
 
-// Mappa costi (minuti) dei premium: deve combaciare con public/premium.js
-const PREMIUM_COSTS = {
-  ai_custom: 30,
-  voice: 20,
-  med: 40,
-  ics: 15,
-  email_pack: 25,
+// Ricompense (puoi modificarle)
+const REWARDS = {
+  BASE_FREE:  { cost: 50, coupon: { percent_off: 100, duration: 'once' } },
+  DELUXE_50:  { cost: 80, coupon: { percent_off: 50,  duration: 'once' } },
 };
+const genCode = (p='COLPA') => `${p}-${Math.random().toString(36).slice(2,8).toUpperCase()}`;
 
 exports.handler = async (event) => {
-  // Preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return { statusCode: 204, headers: corsHeaders };
-  }
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, headers: corsHeaders, body: 'Method Not Allowed' };
-  }
-
+  if (event.httpMethod === 'OPTIONS') return res(204, {});
   try {
     const body = JSON.parse(event.body || '{}');
-    const email = (body.email || '').trim().toLowerCase();
-    const phone = (body.phone || '').trim();
-    const itemId = body.item_id;
+    const email = String(body.email || '').trim().toLowerCase();
+    const rewardKey = String(body.reward || '').toUpperCase();
+    if (!email || !REWARDS[rewardKey]) return res(400, { error: 'bad_request' });
 
-    if (!itemId || !PREMIUM_COSTS[itemId]) {
-      return resp(400, { ok:false, error:'Item non valido' });
-    }
-    if (!email && !phone) {
-      return resp(400, { ok:false, error:'Inserisci almeno telefono o email' });
-    }
+    const list = await stripe.customers.list({ email, limit: 1 });
+    const cust = list.data?.[0];
+    if (!cust) return res(404, { error: 'customer_not_found' });
 
-    // Stores Blobs
-    const balances = blobs({ name: 'balances' });   // saldo e history
-    const deliveries = blobs({ name: 'deliveries' });// ticket da evadere
+    const current = Number(cust.metadata?.walletMinutes || 0) || 0;
+    const need = REWARDS[rewardKey].cost;
+    if (current < need) return res(400, { error: 'insufficient_minutes', have: current, need });
 
-    // Chiave per il wallet: preferisco l'email. Se manca, uso phone come chiave.
-    const key = email || `tel:${phone}`;
-
-    // Carica saldo
-    let bal = await balances.getJSON(key).catch(()=>null);
-    if (!bal) bal = { minutes: 0, history: [] };
-
-    const cost = PREMIUM_COSTS[itemId];
-
-    if ((bal.minutes || 0) < cost) {
-      return resp(400, {
-        ok:false,
-        error:`Minuti insufficienti. Servono ${cost} min, saldo attuale ${bal.minutes||0} min.`
-      });
-    }
-
-    // Scala minuti + history
-    bal.minutes = (bal.minutes || 0) - cost;
-    bal.history = bal.history || [];
-    const now = Date.now();
-    const entry = {
-      ts: now,
-      type: 'redeem_premium',
-      delta: -cost,
-      item_id: itemId,
-    };
-    bal.history.push(entry);
-
-    await balances.setJSON(key, bal);
-
-    // Crea un "ticket" per la delivery (da evadere con AI/telefono/mail)
-    const ticketId = `${key}:${itemId}:${now}`;
-    await deliveries.setJSON(ticketId, {
-      ticket_id: ticketId,
-      created_at: now,
-      item_id: itemId,
-      via: phone ? 'phone' : 'email',
-      phone: phone || null,
-      email: email || null,
-      status: 'queued',
+    const coupon = await stripe.coupons.create(REWARDS[rewardKey].coupon);
+    const promo  = await stripe.promotionCodes.create({
+      coupon: coupon.id,
+      code: genCode(),
+      max_redemptions: 1,
+      expires_at: Math.floor(Date.now()/1000) + 60*60*24*14, // 14 giorni
     });
 
-    return resp(200, {
-      ok: true,
-      remaining: bal.minutes,
-      ticket_id: ticketId,
-      message: 'Premium sbloccato! Ti invieremo il contenuto sul canale scelto.'
-    });
+    const remaining = current - need;
+    await stripe.customers.update(cust.id, { metadata: { walletMinutes: String(remaining) } });
 
+    return res(200, { ok: true, reward: rewardKey, promo_code: promo.code, remaining });
   } catch (e) {
-    console.error('redeem error', e);
-    return resp(500, { ok:false, error:'Errore interno' });
+    return res(500, { error: 'wallet_redeem_failed', detail: String(e.message || e) });
   }
 };
-
-function resp(code, obj){
-  return {
-    statusCode: code,
-    headers: { ...corsHeaders, 'Content-Type':'application/json' },
-    body: JSON.stringify(obj),
-  };
-}
