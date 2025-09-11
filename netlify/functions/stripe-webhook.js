@@ -1,211 +1,137 @@
 // netlify/functions/stripe-webhook.js
 const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const crypto = require('crypto');
 
-const RESEND_KEY = (process.env.RESEND_API_KEY || '').trim();
-const SITE_URL   = (process.env.SITE_URL || '').replace(/\/+$/, '');
-const TW_SID     = (process.env.TWILIO_ACCOUNT_SID || '').trim();
-const TW_TOKEN   = (process.env.TWILIO_AUTH_TOKEN || '').trim();
-const TW_FROM_WA = (process.env.TWILIO_FROM_WA || '').trim(); // es: whatsapp:+1415...
-
-const CORS = { 'Access-Control-Allow-Origin': '*' };
-const resp = (s, b) => ({ statusCode: s, headers: { 'Content-Type': 'application/json', ...CORS }, body: JSON.stringify(b) });
-
-/* -------------------- helpers -------------------- */
-function isColpaPackage(sku = '') {
-  return String(sku).toUpperCase().startsWith('COLPA_');
-}
-function skuToKind(sku = '') {
-  const x = String(sku).toUpperCase();
-  if (x === 'RIUNIONE') return 'riunione';
-  if (x === 'TRAFFICO') return 'traffico';
-  if (x === 'CONNESSIONE' || x === 'CONS_KO' || x === 'CONN_KO') return 'connessione';
-  if (x === 'SCUSA_DELUXE') return 'deluxe';
-  return 'base';
-}
-async function listLineItemsWithProduct(sessionId) {
-  try {
-    return await stripe.checkout.sessions.listLineItems(sessionId, {
-      limit: 100,
-      expand: ['data.price.product'],
-    });
-  } catch {
-    return { data: [] };
-  }
-}
-function pick(obj, path, d = null) {
-  try { return path.split('.').reduce((a, c) => (a && a[c] != null ? a[c] : null), obj) ?? d; } catch { return d; }
-}
-async function minutesFromSession(session) {
-  const items = await listLineItemsWithProduct(session.id);
-  let total = 0;
-  for (const li of (items.data || [])) {
-    const qty = Number(li?.quantity || 1);
-    const m1 = Number(pick(li, 'price.metadata.minutes', 0)) || 0;
-    const m2 = Number(pick(li, 'price.product.metadata.minutes', 0)) || 0;
-    total += (m1 || m2) * qty;
-  }
-  return total;
-}
-async function sendWhatsApp(toE164, body) {
-  try {
-    if (!TW_SID || !TW_TOKEN || !TW_FROM_WA) return { ok: false, skip: 'twilio_not_configured' };
-    const form = new URLSearchParams();
-    form.append('To', `whatsapp:${toE164.replace(/^whatsapp:/, '')}`);
-    form.append('From', TW_FROM_WA);
-    form.append('Body', body);
-    const r = await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TW_SID}/Messages.json`, {
-      method: 'POST',
-      headers: {
-        Authorization: 'Basic ' + Buffer.from(`${TW_SID}:${TW_TOKEN}`).toString('base64'),
-        'Content-Type': 'application/x-www-form-urlencoded',
-      },
-      body: form,
-    });
-    const j = await r.json().catch(() => ({}));
-    return { ok: r.ok, sid: j.sid, status: j.status, raw: j };
-  } catch (e) {
-    return { ok: false, error: String(e.message || e) };
-  }
-}
-async function sendEmailResend(to, subject, html) {
-  try {
-    if (!RESEND_KEY) return { ok: false, skip: 'resend_not_configured' };
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        from: 'COLPA MIA <no-reply@colpamia.com>',    // mantiene dominio verificato
-        to: [to],
-        subject,
-        html,
-        reply_to: 'colpamiaconsulenze@proton.me',      // nuovo indirizzo di risposta
-      }),
-    });
-    const j = await r.json().catch(() => ({}));
-    return { ok: r.ok, id: j?.id, raw: j };
-  } catch (e) {
-    return { ok: false, error: String(e.message || e) };
-  }
-}
-async function getExcuseVariants({ kind, need }) {
-  const url = SITE_URL ? `${SITE_URL}/.netlify/functions/ai-excuse` : `/.netlify/functions/ai-excuse`;
-  const r = await fetch(url, {
+// Resend per invio email
+async function sendEmail({ to, subject, html }) {
+  const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ sku: kind, need, tone: 'naturale', locale: 'it-IT', maxLen: 320 }),
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      from: 'COLPA MIA <no-reply@colpamia.com>',
+      to: [to],
+      subject,
+      html,
+      reply_to: 'colpamiaconsulenze@proton.me'
+    })
   });
-  const data = await r.json().catch(() => ({}));
-  const arr = Array.isArray(data?.variants) ? data.variants : [];
-  const texts = arr.map(v => String(v.whatsapp_text || v.text || '').trim()).filter(Boolean);
-  while (texts.length < 3) texts.push(texts[0] || 'Ciao, è saltato un imprevisto reale. Sistemo e ti aggiorno a breve.');
-  return texts.slice(0, 3);
+  if (!resp.ok) throw new Error('email_send_failed');
 }
 
-/* ------------------ Netlify handler ------------------ */
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return resp(204, {});
-  const sig = event.headers['stripe-signature'] || '';
-  let type, obj;
+// (facoltativo) Twilio WhatsApp Business
+async function sendWhatsApp({ to, body }) {
+  if (!process.env.TWILIO_ACCOUNT_SID) return { ok:false, skipped:true };
+  const sid = process.env.TWILIO_ACCOUNT_SID;
+  const token = process.env.TWILIO_AUTH_TOKEN;
+  const from = process.env.TWILIO_WHATSAPP_FROM; // es. 'whatsapp:+14155238886'
+  const url = `https://api.twilio.com/2010-04-01/Accounts/${sid}/Messages.json`;
+  const form = new URLSearchParams();
+  form.append('From', from);
+  form.append('To', `whatsapp:${to.replace(/^whatsapp:/,'')}`);
+  form.append('Body', body);
+  const resp = await fetch(url, {
+    method:'POST',
+    headers:{ 'Authorization':'Basic '+Buffer.from(`${sid}:${token}`).toString('base64') },
+    body: form
+  });
+  return { ok: resp.ok };
+}
+
+// calcolo minuti dal mapping env PRICE_RULES_JSON
+function minutesFromSku(sku) {
   try {
-    const evt = stripe.webhooks.constructEvent(event.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    type = evt.type;
-    obj = evt.data.object;
-  } catch (e) {
-    return resp(400, { error: 'invalid_signature' });
+    const rules = JSON.parse(process.env.PRICE_RULES_JSON || '{}');
+    const r = rules[sku] || {};
+    return Number(r.minutes || 0);
+  } catch { return 0; }
+}
+
+// wallet su metadata cliente Stripe
+async function addToWallet(customerId, add) {
+  if (!customerId || !add) return 0;
+  const c = await stripe.customers.retrieve(customerId);
+  const current = Number(c?.metadata?.wallet_minutes || 0);
+  const next = Math.max(0, current + add);
+  await stripe.customers.update(customerId, { metadata: { ...c.metadata, wallet_minutes: String(next) } });
+  return next;
+}
+
+const CORS = {'Access-Control-Allow-Origin':'*'};
+const ok = ()=>({statusCode:200,headers:CORS,body:'ok'});
+
+exports.handler = async (event) => {
+  // verifica firma webhook
+  const sig = event.headers['stripe-signature'];
+  let data;
+  try {
+    data = stripe.webhooks.constructEvent(event.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
+  } catch (err) {
+    return { statusCode: 400, headers:CORS, body: 'bad signature' };
   }
 
-  if (type !== 'checkout.session.completed') return resp(200, { ok: true, ignored: true });
+  if (data.type !== 'checkout.session.completed') return ok();
 
   try {
-    const session = await stripe.checkout.sessions.retrieve(obj.id);
+    const session = await stripe.checkout.sessions.retrieve(data.data.object.id);
+
     const email = (session?.customer_details?.email || '').toLowerCase().trim();
     const phone = (session?.customer_details?.phone || '').trim();
     const customerId = session?.customer || null;
     const sku = String(session?.client_reference_id || '').trim();
 
-    const minutes = await minutesFromSession(session);
-
+    // — CONTEX parsing robusto —
     let need = '';
     try {
       for (const f of (session?.custom_fields || [])) {
-        if (String(f?.key || '') === 'need' && f?.text?.value) { need = String(f.text.value); break; }
+        if (String(f?.key || '') === 'need' && f?.text?.value) {
+          need = String(f.text.value || '');
+          break;
+        }
       }
     } catch {}
+    if (!need) need = String(session?.metadata?.context_hint || '');
 
-    let waSent = false, emSent = false, variantsUsed = 0;
+    // — genera testo scuse con funzione ai-excuse —
+    const aiResp = await fetch(`${process.env.URL || 'https://colpamia.com'}/.netlify/functions/ai-excuse`, {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ sku, need })
+    });
+    const ai = await aiResp.json();
+    const variants = Array.isArray(ai?.variants) ? ai.variants : [];
+    const texts = variants.map(v => v.text || '').filter(Boolean);
+    if (!texts.length) texts.push('Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.');
 
-    if (!isColpaPackage(sku)) {
-      const kind = skuToKind(sku);
-      const variants = await getExcuseVariants({ kind, need });
-      variantsUsed = variants.length;
-
-      if (phone && variants[0]) {
-        const text =
-          `La tua Scusa\n` +
-          `1) ${variants[0]}\n` +
-          `2) ${variants[1]}\n` +
-          `3) ${variants[2]}\n\n` +
-          (minutes ? `Accreditati +${minutes} minuti sul tuo wallet.` : '');
-        const wa = await sendWhatsApp(phone, text);
-        waSent = !!wa.ok;
-      }
-
-      if (email) {
-        const html =
-          `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
-             <h2 style="margin:0 0 8px">La tua Scusa</h2>
-             <ol>${variants.map(v => `<li>${v}</li>`).join('')}</ol>
-             ${minutes ? `<p style="color:#555">Accreditati <b>${minutes}</b> minuti sul tuo wallet.</p>` : ''}
-           </div>`;
-        const em = await sendEmailResend(email, 'La tua Scusa — COLPA MIA', html);
-        emSent = !!em.ok;
-      }
-    } else {
-      if (email) {
-        await sendEmailResend(
-          email,
-          'COLPA MIA — pagamento ricevuto',
-          `<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
-            Grazie! Pagamento ricevuto. Nessuna scusa automatica è stata inviata.<br/>
-            Rispondi a questa email con i dettagli per gestire la situazione insieme.${
-              minutes ? `<br/>Accreditati <b>${minutes}</b> minuti sul tuo wallet.` : ''
-            }
-           </p>`
-        );
-        emSent = true;
-      }
+    // — invio email (Base = 1 punto; Deluxe = elenco) —
+    if (email) {
+      const list = texts.map((t,i)=>`${i+1}. ${t}`).join('<br/>');
+      const minutes = minutesFromSku(sku);
+      const html =
+`<h2>La tua Scusa</h2>
+<p>${list}</p>
+<p style="margin-top:16px">Accreditati <b>${minutes}</b> minuti sul tuo wallet.</p>`;
+      await sendEmail({
+        to: email,
+        subject: 'La tua Scusa — COLPA MIA',
+        html
+      });
     }
 
-    // WALLET
-    let walletTotal = minutes;
-    if (customerId) {
-      try {
-        const cust = await stripe.customers.retrieve(customerId);
-        const prev = Number(cust?.metadata?.walletMinutes || 0) || 0;
-        walletTotal = prev + minutes;
-        await stripe.customers.update(customerId, { metadata: { walletMinutes: String(walletTotal) } });
-      } catch {}
+    // — invio WhatsApp (prima variante) —
+    if (phone && texts[0]) {
+      try { await sendWhatsApp({ to: phone, body: texts[0] }); } catch {}
     }
 
-    if (session.payment_intent) {
-      try {
-        await stripe.paymentIntents.update(session.payment_intent, {
-          metadata: {
-            minutesCredited: String(minutes || 0),
-            excusesCount: String(variantsUsed || 0),
-            customerEmail: email || '',
-            colpamiaWaStatus: waSent ? 'sent' : 'skip',
-            colpamiaEmailSent: emSent ? 'true' : 'false',
-            walletAfter: String(walletTotal || 0),
-            sku,
-          },
-        });
-      } catch {}
-    }
+    // — wallet —
+    const added = minutesFromSku(sku);
+    if (customerId && added) await addToWallet(customerId, added);
 
-    return resp(200, { ok: true, minutes, waSent, emSent, wallet: walletTotal, sku });
+    return ok();
   } catch (e) {
-    return resp(500, { error: 'webhook_error', detail: String(e.message || e) });
+    return { statusCode: 500, headers:CORS, body: 'webhook_error: '+String(e.message||e) };
   }
 };
