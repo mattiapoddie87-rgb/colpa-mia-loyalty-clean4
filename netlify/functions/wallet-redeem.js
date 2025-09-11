@@ -1,66 +1,67 @@
 // netlify/functions/wallet-redeem.js
-import Stripe from 'stripe';
-import { get, set } from '@netlify/blobs';
-
+const Stripe = require('stripe');
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const STORE = 'colpamia';
-const KEY   = 'wallets.json';
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type'
+};
+const json = (s,b)=>({ statusCode:s, headers:{ 'Content-Type':'application/json', ...CORS }, body:JSON.stringify(b) });
 
 const REWARDS = {
-  // Riscatta 50 minuti → coupon 100% (1 uso)
-  BASE_FREE:  { cost: 50, coupon: { percent_off: 100, duration: 'once' } },
-  // Riscatta 80 minuti → coupon -50% (1 uso)
-  DELUXE_50: { cost: 80, coupon: { percent_off: 50,  duration: 'once' } },
+  BASE_FREE: { cost: 50,  percent_off: 100, name: 'Base GRATIS' },
+  DELUXE_50:{ cost: 80,  percent_off: 50,  name: 'Deluxe -50%' }
 };
 
-async function loadWallets() {
-  return (await get({ name: KEY, type: 'json', store: STORE })) || {};
-}
-async function saveWallets(w) {
-  await set({
-    name: KEY,
-    data: JSON.stringify(w),
-    store: STORE,
-    contentType: 'application/json'
-  });
+function randCode() {
+  return 'COLPA-' +
+    Math.random().toString(36).slice(2,6).toUpperCase() +
+    '-' +
+    Date.now().toString(36).slice(-4).toUpperCase();
 }
 
-export const handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+exports.handler = async (event)=>{
+  if (event.httpMethod === 'OPTIONS') return json(204,{});
+  try{
+    const { email, reward } = JSON.parse(event.body || '{}');
+    if(!email || !reward) return json(400,{error:'missing_params'});
 
-  let payload = {};
-  try { payload = JSON.parse(event.body || '{}'); } catch { /* ignore */ }
+    const r = REWARDS[reward];
+    if(!r) return json(400,{error:'unknown_reward'});
 
-  const email  = (payload.email || '').trim().toLowerCase();
-  const reward = String(payload.reward || '');
-  const def    = REWARDS[reward];
+    const em = String(email).trim().toLowerCase();
+    const search = await stripe.customers.search({ query: `email:'${em}'`, limit: 1 });
+    if(!search.data.length) return json(404,{error:'customer_not_found'});
 
-  if (!email || !def) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'bad_request' }) };
+    const cust = search.data[0];
+    const current = parseInt(cust.metadata?.wallet_minutes || '0', 10) || 0;
+    if(current < r.cost) return json(400,{error:'not_enough_minutes', current });
+
+    // crea coupon + promotion code
+    const coupon = await stripe.coupons.create({
+      percent_off: r.percent_off,
+      duration: 'once',
+      name: r.name
+    });
+
+    const code = randCode();
+    const promo = await stripe.promotionCodes.create({
+      coupon: coupon.id,
+      code,
+      active: true,
+      max_redemptions: 1,
+      restrictions: { first_time_transaction: false }
+    });
+
+    const remaining = current - r.cost;
+    await stripe.customers.update(cust.id, {
+      metadata: { ...cust.metadata, wallet_minutes: String(remaining) }
+    });
+
+    return json(200,{ promo_code: promo.code, remaining });
+  }catch(e){
+    console.error('wallet_redeem_error', e);
+    return json(500,{error:'redeem_failed'});
   }
-
-  const wallets = await loadWallets();
-  const current = Number(wallets[email] || 0);
-  const cost    = Number(def.cost);
-
-  if (isNaN(current) || current < cost) {
-    return { statusCode: 400, body: JSON.stringify({ error: 'not_enough_minutes', current }) };
-  }
-
-  // Crea coupon e promotion code una-tantum
-  const coupon = await stripe.coupons.create(def.coupon);
-  const promo  = await stripe.promotionCodes.create({
-    coupon: coupon.id,
-    max_redemptions: 1,
-    active: true
-  });
-
-  wallets[email] = current - cost;
-  await saveWallets(wallets);
-
-  return {
-    statusCode: 200,
-    body: JSON.stringify({ promo_code: promo.code, remaining: wallets[email] })
-  };
 };
