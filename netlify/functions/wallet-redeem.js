@@ -1,66 +1,66 @@
 // netlify/functions/wallet-redeem.js
-const Stripe = require('stripe');
+import Stripe from 'stripe';
+import { get, set } from '@netlify/blobs';
+
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type'
-};
-const json = (s,b)=>({ statusCode:s, headers:{ 'Content-Type':'application/json', ...CORS }, body:JSON.stringify(b) });
+const STORE = 'colpamia';
+const KEY   = 'wallets.json';
 
 const REWARDS = {
-  BASE_FREE:  { needMinutes: 50, couponEnv: 'STRIPE_COUPON_BASE_FREE'  }, // 100% Base
-  DELUXE_50:  { needMinutes: 80, couponEnv: 'STRIPE_COUPON_DELUXE_50' }  // -50% Deluxe
+  // Riscatta 50 minuti → coupon 100% (1 uso)
+  BASE_FREE:  { cost: 50, coupon: { percent_off: 100, duration: 'once' } },
+  // Riscatta 80 minuti → coupon -50% (1 uso)
+  DELUXE_50: { cost: 80, coupon: { percent_off: 50,  duration: 'once' } },
 };
 
-function genCode(prefix='CM'){
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let s = '';
-  for(let i=0;i<8;i++) s += chars[Math.floor(Math.random()*chars.length)];
-  return `${prefix}-${s}`;
+async function loadWallets() {
+  return (await get({ name: KEY, type: 'json', store: STORE })) || {};
+}
+async function saveWallets(w) {
+  await set({
+    name: KEY,
+    data: JSON.stringify(w),
+    store: STORE,
+    contentType: 'application/json'
+  });
 }
 
-exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return json(204,{});
-  if (event.httpMethod !== 'POST')   return json(405,{error:'method_not_allowed'});
+export const handler = async (event) => {
+  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
-  try{
-    const { email = '', reward = '' } = JSON.parse(event.body || '{}');
-    if (!email || !reward) return json(400,{error:'missing_params'});
+  let payload = {};
+  try { payload = JSON.parse(event.body || '{}'); } catch { /* ignore */ }
 
-    const conf = REWARDS[reward];
-    if (!conf) return json(400,{error:'unknown_reward'});
+  const email  = (payload.email || '').trim().toLowerCase();
+  const reward = String(payload.reward || '');
+  const def    = REWARDS[reward];
 
-    // trova cliente Stripe per email
-    const list = await stripe.customers.list({ email, limit: 1 });
-    const cust = list.data[0];
-    if (!cust) return json(404,{error:'wallet_not_found'});
-
-    const current = Number(cust.metadata?.wallet_minutes || 0);
-    if (current < conf.needMinutes) {
-      return json(400,{error:'not_enough_minutes', have: current, need: conf.needMinutes});
-    }
-
-    // scala minuti
-    const remaining = current - conf.needMinutes;
-    await stripe.customers.update(cust.id, {
-      metadata: { ...cust.metadata, wallet_minutes: String(Math.max(0, remaining)) }
-    });
-
-    // crea Promotion Code dal coupon configurato
-    const couponId = process.env[conf.couponEnv];
-    if (!couponId) return json(500,{error:'missing_coupon_env', missing: conf.couponEnv});
-
-    const promo = await stripe.promotionCodes.create({
-      coupon: couponId,
-      code: genCode(reward === 'BASE_FREE' ? 'FREEBASE' : 'DELUXE50'),
-      max_redemptions: 1,
-      expires_at: Math.floor(Date.now()/1000) + 14*24*60*60 // 14 giorni
-    });
-
-    return json(200, { promo_code: promo.code, remaining });
-  }catch(e){
-    return json(500,{error:'redeem_failed', detail:String(e.message||e)});
+  if (!email || !def) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'bad_request' }) };
   }
+
+  const wallets = await loadWallets();
+  const current = Number(wallets[email] || 0);
+  const cost    = Number(def.cost);
+
+  if (isNaN(current) || current < cost) {
+    return { statusCode: 400, body: JSON.stringify({ error: 'not_enough_minutes', current }) };
+  }
+
+  // Crea coupon e promotion code una-tantum
+  const coupon = await stripe.coupons.create(def.coupon);
+  const promo  = await stripe.promotionCodes.create({
+    coupon: coupon.id,
+    max_redemptions: 1,
+    active: true
+  });
+
+  wallets[email] = current - cost;
+  await saveWallets(wallets);
+
+  return {
+    statusCode: 200,
+    body: JSON.stringify({ promo_code: promo.code, remaining: wallets[email] })
+  };
 };
