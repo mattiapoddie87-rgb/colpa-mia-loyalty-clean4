@@ -75,11 +75,11 @@ async function sendEmailResend(to, subject, html) {
       method: 'POST',
       headers: { Authorization: `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        from: 'COLPA MIA <no-reply@colpamia.com>',
+        from: 'COLPA MIA <no-reply@colpamia.com>',    // mantiene dominio verificato
         to: [to],
         subject,
         html,
-        reply_to: 'support@colpamia.com',
+        reply_to: 'colpamiaconsulenze@proton.me',      // nuovo indirizzo di risposta
       }),
     });
     const j = await r.json().catch(() => ({}));
@@ -97,7 +97,6 @@ async function getExcuseVariants({ kind, need }) {
   });
   const data = await r.json().catch(() => ({}));
   const arr = Array.isArray(data?.variants) ? data.variants : [];
-  // normalizza
   const texts = arr.map(v => String(v.whatsapp_text || v.text || '').trim()).filter(Boolean);
   while (texts.length < 3) texts.push(texts[0] || 'Ciao, è saltato un imprevisto reale. Sistemo e ti aggiorno a breve.');
   return texts.slice(0, 3);
@@ -125,10 +124,8 @@ exports.handler = async (event) => {
     const customerId = session?.customer || null;
     const sku = String(session?.client_reference_id || '').trim();
 
-    // minuti dal listino (price/product metadata)
     const minutes = await minutesFromSession(session);
 
-    // need (campo custom 'need', se presente)
     let need = '';
     try {
       for (const f of (session?.custom_fields || [])) {
@@ -136,7 +133,6 @@ exports.handler = async (event) => {
       }
     } catch {}
 
-    // di default non inviamo niente per i pacchetti "Prendo io la colpa"
     let waSent = false, emSent = false, variantsUsed = 0;
 
     if (!isColpaPackage(sku)) {
@@ -144,7 +140,6 @@ exports.handler = async (event) => {
       const variants = await getExcuseVariants({ kind, need });
       variantsUsed = variants.length;
 
-      // WhatsApp
       if (phone && variants[0]) {
         const text =
           `La tua Scusa\n` +
@@ -156,7 +151,6 @@ exports.handler = async (event) => {
         waSent = !!wa.ok;
       }
 
-      // Email
       if (email) {
         const html =
           `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
@@ -168,23 +162,22 @@ exports.handler = async (event) => {
         emSent = !!em.ok;
       }
     } else {
-      // Pacchetto COLPA_*: nessuna scusa automatica.
-      // (minuti eventuali comunque accreditati)
-      if (email && minutes) {
+      if (email) {
         await sendEmailResend(
           email,
           'COLPA MIA — pagamento ricevuto',
           `<p style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
             Grazie! Pagamento ricevuto. Nessuna scusa automatica è stata inviata.<br/>
-            Rispondi a questa email con i dettagli per gestire la situazione insieme.<br/>
-            Accreditati <b>${minutes}</b> minuti sul tuo wallet.
+            Rispondi a questa email con i dettagli per gestire la situazione insieme.${
+              minutes ? `<br/>Accreditati <b>${minutes}</b> minuti sul tuo wallet.` : ''
+            }
            </p>`
         );
         emSent = true;
       }
     }
 
-    // WALLET: somma sullo Stripe Customer
+    // WALLET
     let walletTotal = minutes;
     if (customerId) {
       try {
@@ -195,7 +188,6 @@ exports.handler = async (event) => {
       } catch {}
     }
 
-    // salva metadati sull’Intent
     if (session.payment_intent) {
       try {
         await stripe.paymentIntents.update(session.payment_intent, {
