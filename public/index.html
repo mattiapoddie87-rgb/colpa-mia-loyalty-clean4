@@ -180,7 +180,7 @@
             sku,
             success_url: SUCCESS,
             cancel_url: CANCEL,
-            need_default: ctx || '' // label fissa lato server
+            need_default: ctx || ''
           })
         });
         const data = await r.json();
@@ -199,8 +199,8 @@
       });
     });
 
-    // “Prendo io la colpa” → email
-    const SUPPORT = 'support@colpamia.com';
+    // “Prendo io la colpa” → email (nuovo indirizzo)
+    const SUPPORT = 'colpamiaconsulenze@proton.me';
     function openMail(pkg){
       const label = {COLPA_LIGHT:'Colpa MIA — Light',COLPA_FULL:'Colpa MIA — Full',COLPA_DELUXE:'Colpa MIA — Deluxe'}[pkg] || 'Colpa MIA';
       const subject = encodeURIComponent(label);
