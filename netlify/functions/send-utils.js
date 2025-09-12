@@ -1,8 +1,9 @@
-// netlify/functions/send-utils.js
+// Invio email robusto: Resend HTTP diretto → fallback SMTP. BCC di controllo.
 const nodemailer = require('nodemailer');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
+const BCC_ADMIN = process.env.RESPONSABILITA_MAIL || ''; // presente tra le tue env
 
 function assertFrom(from) {
   if (!from || !from.includes('@')) throw new Error('MAIL_FROM non valido');
@@ -13,18 +14,21 @@ async function sendWithResendHTTP({ from, to, subject, html, text }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY mancante');
   assertFrom(from);
 
+  const payload = { from, to, subject, html, text };
+  if (BCC_ADMIN) payload.bcc = BCC_ADMIN;
+
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
       'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from, to, subject, html, text })
+    body: JSON.stringify(payload),
   });
 
   const body = await resp.text();
   if (!resp.ok) throw new Error(`Resend ${resp.status}: ${body}`);
-  const data = JSON.parse(body); // { id: "..." }
+  const data = JSON.parse(body);
   console.log('Resend OK', { id: data.id, to });
   return data;
 }
@@ -40,10 +44,13 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
 
   const transporter = nodemailer.createTransport({
     host, port, secure,
-    auth: user && pass ? { user, pass } : undefined
+    auth: user && pass ? { user, pass } : undefined,
   });
 
-  const info = await transporter.sendMail({ from, to, subject, html, text });
+  const mail = { from, to, subject, html, text };
+  if (BCC_ADMIN) mail.bcc = BCC_ADMIN;
+
+  const info = await transporter.sendMail(mail);
   console.log('SMTP OK', { to, messageId: info.messageId });
   return info;
 }
