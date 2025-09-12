@@ -1,22 +1,46 @@
-// netlify/functions/send-utils.js
-// Email via Resend. ENV richieste: RESEND_API_KEY, MAIL_FROM (opzionale).
+// Invio email con fallback: Resend -> SMTP (Nodemailer)
+let resendClient = null;
+try {
+  const { Resend } = require('@resend/node');
+  if (process.env.RESEND_API_KEY) {
+    resendClient = new Resend(process.env.RESEND_API_KEY);
+  }
+} catch {}
 
-const API = 'https://api.resend.com/emails';
+const nodemailer = require('nodemailer');
 
-const KEY  = process.env.RESEND_API_KEY || '';
-const FROM = process.env.MAIL_FROM || 'onboarding@resend.dev'; // ok per test; per produzione usa dominio verificato
-
-async function sendEmail(to, subject, html) {
-  if (!KEY) return { sent: false, reason: 'RESEND_API_KEY missing' };
-  const r = await fetch(API, {
-    method: 'POST',
-    headers: { 'Authorization': `Bearer ${KEY}`, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ from: FROM, to: [to], subject, html })
-  });
-  const out = await r.json().catch(() => ({}));
-  if (!r.ok) throw new Error(out?.message || 'Resend error');
-  return { sent: true, id: out.id || null };
+async function sendWithResend({ from, to, subject, html, text }) {
+  if (!resendClient) throw new Error('RESEND non configurato');
+  const res = await resendClient.emails.send({ from, to, subject, html, text });
+  if (res.error) throw new Error(res.error.message || 'Errore Resend');
+  return res;
 }
 
-module.exports = { sendEmail };
+async function sendWithSMTP({ from, to, subject, html, text }) {
+  const host = process.env.SMTP_HOST;
+  const port = parseInt(process.env.SMTP_PORT || '587', 10);
+  const secure = (process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
+  const user = process.env.SMTP_USER;
+  const pass = process.env.SMTP_PASS;
 
+  if (!host) throw new Error('SMTP_HOST mancante');
+
+  const transporter = nodemailer.createTransport({
+    host, port, secure,
+    auth: user && pass ? { user, pass } : undefined,
+  });
+
+  const info = await transporter.sendMail({ from, to, subject, html, text });
+  return info;
+}
+
+async function sendMail(opts) {
+  try {
+    if (resendClient) return await sendWithResend(opts);
+  } catch (e) {
+    console.warn('Resend fallito, passo a SMTP:', e.message);
+  }
+  return await sendWithSMTP(opts);
+}
+
+module.exports = { sendMail };
