@@ -1,32 +1,36 @@
-// Invio email robusto: Resend via HTTPS nativo → fallback SMTP
+// Resend via HTTPS nativo → fallback SMTP. Log chiari e rethrow dell’errore reale.
 const https = require('https');
 const { URL } = require('url');
 const nodemailer = require('nodemailer');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
-const BCC_ADMIN = process.env.RESPONSABILITA_MAIL || '';
+const BCC_ADMIN = (process.env.RESPONSABILITA_MAIL || '').trim();
 const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
 
+function asArray(v) {
+  if (!v) return undefined;
+  if (Array.isArray(v)) return v.filter(Boolean);
+  return [String(v).trim()].filter(Boolean);
+}
 function assertFrom(from) {
   if (!from || !from.includes('@')) throw new Error('MAIL_FROM non valido');
 }
-
 function httpsJson(method, url, headers, bodyObj) {
   const u = new URL(url);
   const payload = bodyObj ? Buffer.from(JSON.stringify(bodyObj)) : Buffer.alloc(0);
-
   const opts = {
     method,
     hostname: u.hostname,
     port: 443,
     path: u.pathname + (u.search || ''),
     headers: {
+      Accept: 'application/json',
       'Content-Type': 'application/json',
       'Content-Length': payload.length,
       ...headers,
     },
+    timeout: 15000,
   };
-
   return new Promise((resolve, reject) => {
     const req = https.request(opts, (res) => {
       let data = '';
@@ -42,6 +46,7 @@ function httpsJson(method, url, headers, bodyObj) {
       });
     });
     req.on('error', reject);
+    req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
     if (payload.length) req.write(payload);
     req.end();
   });
@@ -52,9 +57,15 @@ async function sendWithResend({ from, to, subject, html, text, replyTo }) {
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY mancante');
   assertFrom(from);
 
-  const body = { from, to, subject, html, text };
-  if (replyTo) body.reply_to = replyTo;
-  if (BCC_ADMIN) body.bcc = BCC_ADMIN;
+  const body = {
+    from,
+    to: asArray(to),
+    subject,
+    html,
+    text,
+    reply_to: asArray(replyTo) || undefined,
+    bcc: asArray(BCC_ADMIN) || undefined,
+  };
 
   const res = await httpsJson(
     'POST',
@@ -62,7 +73,7 @@ async function sendWithResend({ from, to, subject, html, text, replyTo }) {
     { Authorization: `Bearer ${RESEND_API_KEY}` },
     body
   );
-  console.log('Resend OK', { id: res.id, to });
+  console.log('Resend OK', { id: res.id, to: body.to });
   return res;
 }
 
@@ -72,20 +83,30 @@ async function sendWithSMTP({ from, to, subject, html, text, replyTo }) {
   if (!host) throw new Error('SMTP_HOST mancante');
 
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
-  const secure = (process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
+  const secure =
+    (process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
 
   const transporter = nodemailer.createTransport({
-    host, port, secure, auth: user && pass ? { user, pass } : undefined,
+    host,
+    port,
+    secure,
+    auth: user && pass ? { user, pass } : undefined,
   });
 
-  const mail = { from, to, subject, html, text };
-  if (replyTo) mail.replyTo = replyTo;
-  if (BCC_ADMIN) mail.bcc = BCC_ADMIN;
+  const mail = {
+    from,
+    to: asArray(to),
+    subject,
+    html,
+    text,
+    replyTo: asArray(replyTo),
+    bcc: asArray(BCC_ADMIN),
+  };
 
   const info = await transporter.sendMail(mail);
-  console.log('SMTP OK', { to, messageId: info.messageId });
+  console.log('SMTP OK', { to: mail.to, messageId: info.messageId });
   return info;
 }
 
@@ -94,10 +115,12 @@ async function sendMail(opts) {
     return await sendWithResend(opts);
   } catch (e) {
     console.warn('Resend fallito:', e.message);
+    // Rilancia l’errore se non c’è SMTP configurato, così lo vedi nei log/diagnostica
+    if (!process.env.SMTP_HOST) throw e;
   }
-  // Fallback solo se SMTP configurato
-  if (process.env.SMTP_HOST) return sendWithSMTP(opts);
-  throw new Error('Nessun canale email disponibile');
+  return sendWithSMTP(opts);
 }
 
 module.exports = { sendMail };
+
+
