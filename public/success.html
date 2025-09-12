@@ -40,26 +40,24 @@
   <script>
     (async ()=>{
       const $ = s=>document.querySelector(s);
-      const params = new URLSearchParams(location.search);
-      const id = params.get('session_id');
+      const id = new URLSearchParams(location.search).get('session_id');
 
-      if(!id){ $('#prod').textContent='—'; $('#sess').textContent='(manca session_id)'; return; }
+      if(!id){ $('#sess').textContent='(manca session_id)'; return; }
+
+      $('#sess').textContent = id;
 
       try{
         const r = await fetch('/.netlify/functions/session-info?id='+encodeURIComponent(id));
         const data = await r.json();
-        if(!r.ok) throw new Error(data.error||'lookup_failed');
+        if(!r.ok) throw 0;
 
         $('#prod').textContent = data.title || data.sku || 'Prodotto';
-        $('#sess').textContent = data.id || id;
-
-        if (typeof data.amount_total === 'number' && data.currency){
+        if (Number.isFinite(data.amount_total) && data.currency){
           const euro = (data.amount_total/100).toLocaleString('it-IT', { style:'currency', currency: data.currency });
-          document.getElementById('amt').innerHTML = `<small class="k">Importo:</small> ${euro}`;
+          $('#amt').innerHTML = `<small class="k">Importo:</small> ${euro}`;
         }
-      }catch(e){
-        $('#prod').textContent = '—';
-        $('#sess').textContent = id;
+      }catch{
+        // fallback: mostro solo l'ID; prodotto resta "—"
       }
     })();
   </script>
