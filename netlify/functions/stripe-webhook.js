@@ -1,4 +1,4 @@
-// Stripe webhook: invio email certo, dedupe opzionale su Netlify Blobs, nessun 500.
+// Stripe webhook: invio email certo, dedupe opzionale, nessun 500.
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -37,18 +37,16 @@ exports.handler = async (event) => {
     const session = evt.data.object;
     const store = await getBlobsStore();
 
-    // dedupe per evitare doppie mail se Stripe ritenta
+    // Dedupe per tentativi ripetuti di Stripe
     const dedupeKey = `mailed:${evt.id}`;
     try {
       if (store && (await store.get(dedupeKey))) {
         console.log('Skip email: già inviata per', evt.id);
         return { statusCode: 200, body: 'ok' };
       }
-    } catch (e) {
-      console.warn('Dedupe non disponibile:', e.message);
-    }
+    } catch (e) { console.warn('Dedupe non disponibile:', e.message); }
 
-    // destinatario robusto
+    // Destinatario robusto
     let to =
       session?.customer_details?.email ||
       session?.customer_email ||
@@ -59,21 +57,17 @@ exports.handler = async (event) => {
       try {
         const cust = await stripe.customers.retrieve(session.customer);
         to = cust?.email || null;
-      } catch (e) {
-        console.warn('Lookup customer email fallito:', e.message);
-      }
+      } catch (e) { console.warn('Lookup customer email fallito:', e.message); }
     }
 
-    // line items non bloccanti
+    // Line items non bloccanti
     let lineItems = [];
     try {
       const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 50 });
       lineItems = li.data || [];
-    } catch (e) {
-      console.warn('Line items non disponibili:', e.message);
-    }
+    } catch (e) { console.warn('Line items non disponibili:', e.message); }
 
-    // invio email
+    // Invio email
     try {
       const { sendCheckoutEmail } = require('./session-email');
       console.log('Invio email', { evtId: evt.id, sessionId: session.id, to });
@@ -82,13 +76,11 @@ exports.handler = async (event) => {
       console.log('Email marcata come inviata', { evtId: evt.id });
     } catch (e) {
       console.error('Invio email fallito:', e.message);
-      // non bloccare il webhook
+      // Non bloccare il webhook
     }
 
-    // persistenza session opzionale
-    try {
-      if (store) await store.set(`${session.id}.json`, JSON.stringify(session));
-    } catch (e) {
+    // Persistenza session opzionale
+    try { if (store) await store.set(`${session.id}.json`, JSON.stringify(session)); } catch (e) {
       console.warn('Persistenza session fallita:', e.message);
     }
   }
