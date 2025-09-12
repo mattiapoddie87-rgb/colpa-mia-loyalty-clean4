@@ -1,4 +1,4 @@
-// Stripe webhook: invio email certo, dedupe opzionale, nessun 500.
+// Stripe webhook: invio email certo, dedupe opzionale, nessun 500
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -11,10 +11,7 @@ async function getBlobsStore() {
     const { createClient } = await import('@netlify/blobs');
     const client = createClient({ token, siteID });
     return client.getStore('checkouts');
-  } catch (e) {
-    console.warn('Blobs non disponibile:', e.message);
-    return null;
-  }
+  } catch { return null; }
 }
 
 exports.handler = async (event) => {
@@ -37,22 +34,17 @@ exports.handler = async (event) => {
     const session = evt.data.object;
     const store = await getBlobsStore();
 
-    // Dedupe per tentativi ripetuti di Stripe
+    // Dedupe per tentativi ripetuti
     const dedupeKey = `mailed:${evt.id}`;
     try {
       if (store && (await store.get(dedupeKey))) {
         console.log('Skip email: già inviata per', evt.id);
         return { statusCode: 200, body: 'ok' };
       }
-    } catch (e) { console.warn('Dedupe non disponibile:', e.message); }
+    } catch {}
 
     // Destinatario robusto
-    let to =
-      session?.customer_details?.email ||
-      session?.customer_email ||
-      session?.metadata?.email ||
-      null;
-
+    let to = session?.customer_details?.email || session?.customer_email || session?.metadata?.email || null;
     if (!to && session?.customer) {
       try {
         const cust = await stripe.customers.retrieve(session.customer);
@@ -80,9 +72,7 @@ exports.handler = async (event) => {
     }
 
     // Persistenza session opzionale
-    try { if (store) await store.set(`${session.id}.json`, JSON.stringify(session)); } catch (e) {
-      console.warn('Persistenza session fallita:', e.message);
-    }
+    try { if (store) await store.set(`${session.id}.json`, JSON.stringify(session)); } catch {}
   }
 
   return { statusCode: 200, body: 'ok' };
