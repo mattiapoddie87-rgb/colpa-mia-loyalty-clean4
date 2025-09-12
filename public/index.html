@@ -1,251 +1,295 @@
 <!doctype html>
 <html lang="it">
 <head>
-<meta charset="utf-8"/>
-<meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>COLPA MIA — Catalogo</title>
-<style>
-  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
-  .wrap{max-width:980px;margin:0 auto;padding:24px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-  .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
-  .title{font-weight:700;font-size:18px}
-  .price{color:#a5b4fc}
-  select,button,input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
-  button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
-  button:disabled{opacity:.6;cursor:not-allowed}
-  small{color:#9aa3b2}
-  .row{display:flex;gap:8px;align-items:center}
-  label a{color:#a5b4fc}
-</style>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>COLPA MIA — Catalogo</title>
+  <style>
+    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
+    .wrap{max-width:980px;margin:0 auto;padding:24px}
+    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
+    .title{font-weight:700;font-size:18px}
+    .price{color:#a5b4fc}
+    .row{display:flex;gap:8px;align-items:center}
+    select,button,input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
+    button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
+    button:disabled{opacity:.6;cursor:not-allowed}
+    small{color:#9aa3b2}
+    a{color:#93c5fd}
+    .muted{color:#9aa3b2;font-size:12px}
+    .checkrow{display:flex;gap:8px;align-items:center}
+  </style>
 </head>
 <body>
-<div class="wrap">
-  <h1 style="margin:0 0 12px">Catalogo COLPA MIA</h1>
-  <p style="margin:0 0 24px"><small>Scegli la scusa. Consegna email + WhatsApp. Checkout Stripe.</small></p>
+  <div class="wrap">
+    <h1 style="margin:0 0 12px">Catalogo COLPA MIA</h1>
+    <p style="margin:0 0 24px"><small>Scegli la scusa. Consegna email + WhatsApp. Checkout Stripe.</small></p>
 
-  <div class="grid">
-    <!-- SCUSA BASE -->
-    <div class="card">
-      <div class="title">SCUSA BASE</div>
-      <div class="price">Prezzo come da listino</div>
-      <label for="ctx-base"><small>Contesto</small></label>
-      <select id="ctx-base">
-        <option value="CENA">CENA</option>
-        <option value="APERITIVO">APERITIVO</option>
-        <option value="EVENTO">EVENTO</option>
-        <option value="LAVORO">LAVORO</option>
-        <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
-        <option value="FAMIGLIA">FAMIGLIA</option>
-        <option value="SALUTE">SALUTE</option>
-        <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-        <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
-      </select>
-      <button data-sku="SCUSA_BASE" data-context-select="#ctx-base">Acquista</button>
-      <small>Nota: SCUSA BASE consegna una sola scusa.</small>
-    </div>
-
-    <!-- SCUSA DELUXE -->
-    <div class="card">
-      <div class="title">SCUSA DELUXE</div>
-      <div class="price">Prezzo come da listino</div>
-      <label for="ctx-deluxe"><small>Contesto</small></label>
-      <select id="ctx-deluxe">
-        <option value="CENA">CENA</option>
-        <option value="APERITIVO">APERITIVO</option>
-        <option value="EVENTO">EVENTO</option>
-        <option value="LAVORO">LAVORO</option>
-        <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
-        <option value="FAMIGLIA">FAMIGLIA</option>
-        <option value="SALUTE">SALUTE</option>
-        <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-        <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
-      </select>
-      <button data-sku="SCUSA_DELUXE" data-context-select="#ctx-deluxe">Acquista</button>
-      <small>Nota: DELUXE consegna tre varianti.</small>
-    </div>
-
-    <!-- CONNESSIONE KO -->
-    <div class="card">
-      <div class="title">CONNESSIONE KO</div>
-      <div class="price">Prezzo come da listino</div>
-      <small>Scenario fisso. Contesto non richiesto.</small>
-      <button data-sku="CONNESSIONE">Acquista</button>
-    </div>
-
-    <!-- TRAFFICO -->
-    <div class="card">
-      <div class="title">TRAFFICO</div>
-      <div class="price">Prezzo come da listino</div>
-      <small>Scenario fisso. Contesto non richiesto.</small>
-      <button data-sku="TRAFFICO">Acquista</button>
-    </div>
-
-    <!-- RIUNIONE IMPROVVISA -->
-    <div class="card">
-      <div class="title">RIUNIONE IMPROVVISA</div>
-      <div class="price">Prezzo come da listino</div>
-      <small>Scenario fisso. Contesto non richiesto.</small>
-      <button data-sku="RIUNIONE">Acquista</button>
-    </div>
-  </div>
-
-  <h2 style="margin:24px 0 8px">Prendo io la colpa</h2>
-  <p style="margin:0 0 12px"><small>Mi occupo personalmente della gestione: nessuna scusa automatica viene inviata. Dopo il pagamento si apre l’email per descrivere la situazione.</small></p>
-
-  <div class="grid">
-    <!-- LIGHT -->
-    <div class="card">
-      <div class="title">Prendo io la colpa — Light</div>
-      <div class="price">€9,90 IVA inclusa</div>
-      <ul style="margin:0 0 6px 18px">
-        <li>1 messaggio WhatsApp</li>
-        <li>Report di consegna</li>
-      </ul>
-      <label class="row">
-        <input type="checkbox" id="cons-light"/>
-        <small>Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></small>
-      </label>
-      <button data-sku="COLPA_LIGHT" data-requires-consent="#cons-light">Acquista</button>
-    </div>
-
-    <!-- FULL -->
-    <div class="card">
-      <div class="title">Prendo io la colpa — Full</div>
-      <div class="price">€19,90 IVA inclusa</div>
-      <ul style="margin:0 0 6px 18px">
-        <li>Fino a 3 invii WhatsApp in 24h</li>
-        <li>1 revisione del testo</li>
-        <li>Prova di consegna</li>
-      </ul>
-      <label class="row">
-        <input type="checkbox" id="cons-full"/>
-        <small>Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></small>
-      </label>
-      <button data-sku="COLPA_FULL" data-requires-consent="#cons-full">Acquista</button>
-    </div>
-
-    <!-- DELUXE -->
-    <div class="card">
-      <div class="title">Prendo io la colpa — Deluxe</div>
-      <div class="price">€39,90 IVA inclusa</div>
-      <ul style="margin:0 0 6px 18px">
-        <li>Strategia + varianti + follow-up</li>
-        <li>Fino a 2 revisioni</li>
-        <li>Report finale</li>
-      </ul>
-      <label class="row">
-        <input type="checkbox" id="cons-deluxe"/>
-        <small>Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></small>
-      </label>
-      <button data-sku="COLPA_DELUXE" data-requires-consent="#cons-deluxe">Acquista</button>
-    </div>
-  </div>
-
-  <!-- WALLET & PREMIUM -->
-  <section class="card" style="margin-top:24px">
-    <h2 style="margin:0 0 10px">Wallet & Premium</h2>
-    <p><small>Controlla il saldo dei tuoi “minuti di vita risparmiati” e riscattali.</small></p>
-    <div class="row">
-      <input id="wallet-email" placeholder="La tua email"/>
-      <button id="btn-wallet-check" style="width:auto">Vedi saldo</button>
-    </div>
-    <p id="wallet-result" style="margin-top:8px"></p>
-
-    <div class="grid" style="margin-top:12px">
+    <div class="grid">
+      <!-- SCUSA BASE -->
       <div class="card">
-        <div class="title">Scusa Base GRATIS</div>
-        <small>Riscatta <b>50 min</b> → cod. sconto 100% (1 uso, 14 giorni).</small>
-        <button data-reward="BASE_FREE">Riscatta 50 min</button>
+        <div class="title">SCUSA BASE</div>
+        <div class="price">Prezzo come da listino</div>
+        <label for="ctx-base"><small>Contesto</small></label>
+        <select id="ctx-base">
+          <option value="CENA">CENA</option>
+          <option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option>
+          <option value="LAVORO">LAVORO</option>
+          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="FAMIGLIA">FAMIGLIA</option>
+          <option value="SALUTE">SALUTE</option>
+          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+        </select>
+        <button
+          data-sku="SCUSA_BASE"
+          data-title="Scusa Base"
+          data-context-select="#ctx-base">Acquista</button>
+        <div class="muted">Nota: SCUSA BASE consegna una sola scusa.</div>
       </div>
+
+      <!-- SCUSA DELUXE -->
       <div class="card">
-        <div class="title">Deluxe -50%</div>
-        <small>Riscatta <b>80 min</b> → cod. sconto -50% (1 uso, 14 giorni).</small>
-        <button data-reward="DELUXE_50">Riscatta 80 min</button>
+        <div class="title">SCUSA DELUXE</div>
+        <div class="price">Prezzo come da listino</div>
+        <label for="ctx-deluxe"><small>Contesto</small></label>
+        <select id="ctx-deluxe">
+          <option value="CENA">CENA</option>
+          <option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option>
+          <option value="LAVORO">LAVORO</option>
+          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="FAMIGLIA">FAMIGLIA</option>
+          <option value="SALUTE">SALUTE</option>
+          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+        </select>
+        <button
+          data-sku="SCUSA_DELUXE"
+          data-title="Scusa Deluxe"
+          data-context-select="#ctx-deluxe">Acquista</button>
+        <div class="muted">Nota: DELUXE consegna tre varianti.</div>
+      </div>
+
+      <!-- CONNESSIONE KO -->
+      <div class="card">
+        <div class="title">CONNESSIONE KO</div>
+        <div class="price">Prezzo come da listino</div>
+        <small>Scenario fisso: “connessione/linea/VPN KO”. Contesto non richiesto.</small>
+        <button data-sku="CONNESSIONE" data-title="Connessione KO">Acquista</button>
+      </div>
+
+      <!-- TRAFFICO -->
+      <div class="card">
+        <div class="title">TRAFFICO</div>
+        <div class="price">Prezzo come da listino</div>
+        <small>Scenario fisso: “traffico/incidente/coda”. Contesto non richiesto.</small>
+        <button data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
+      </div>
+
+      <!-- RIUNIONE IMPROVVISA -->
+      <div class="card">
+        <div class="title">RIUNIONE IMPROVVISA</div>
+        <div class="price">Prezzo come da listino</div>
+        <small>Scenario fisso: “riunione/call che sfora”. Contesto non richiesto.</small>
+        <button data-sku="RIUNIONE" data-title="Riunione Improvvisa">Acquista</button>
       </div>
     </div>
-  </section>
-</div>
 
-<script>
-(function(){
-  const SUCCESS = location.origin + '/success.html';
-  const CANCEL  = location.origin + '/cancel.html';
-  const $ = s=>document.querySelector(s);
+    <h2 style="margin:24px 0 8px">Prendo io la colpa</h2>
+    <p class="muted" style="margin:0 0 16px">Mi occupo personalmente della gestione: nessuna scusa automatica viene inviata. Al termine del pagamento si aprirà l’email per descrivere la situazione.</p>
 
-  async function startCheckout(btn){
-    const sku = btn.dataset.sku;
-    if(!sku) return;
+    <div class="grid">
+      <!-- COLPA LIGHT -->
+      <div class="card">
+        <div class="title">Prendo io la colpa — Light</div>
+        <small>€9,90 IVA inclusa</small>
+        <ul class="muted" style="margin:0 0 8px 16px">
+          <li>1 messaggio WhatsApp</li>
+          <li>Report di consegna</li>
+        </ul>
+        <div class="checkrow">
+          <input id="cons-light" type="checkbox">
+          <label for="cons-light" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
+        </div>
+        <button class="mailto-btn" data-tier="LIGHT" data-title="Prendo io la colpa — Light" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
+      </div>
 
-    // se richiede consenso (solo pacchetti “Prendo io la colpa”)
-    const consSel = btn.dataset.requiresConsent;
-    if (consSel) {
-      const ok = document.querySelector(consSel)?.checked;
-      if (!ok) { alert('Per procedere accetta la manleva.'); return; }
-    }
+      <!-- COLPA FULL -->
+      <div class="card">
+        <div class="title">Prendo io la colpa — Full</div>
+        <small>€19,90 IVA inclusa</small>
+        <ul class="muted" style="margin:0 0 8px 16px">
+          <li>Testo personalizzato, fino a 3 tentativi in 24h</li>
+          <li>1 revisione del testo</li>
+          <li>Prova di consegna</li>
+        </ul>
+        <div class="checkrow">
+          <input id="cons-full" type="checkbox">
+          <label for="cons-full" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
+        </div>
+        <button class="mailto-btn" data-tier="FULL" data-title="Prendo io la colpa — Full" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
+      </div>
 
-    // precompila contesto solo per Base/Deluxe
-    let need_default = '';
-    const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-    if (sel && sel.value) need_default = String(sel.value).trim();
+      <!-- COLPA DELUXE -->
+      <div class="card">
+        <div class="title">Prendo io la colpa — Deluxe</div>
+        <small>€39,90 IVA inclusa</small>
+        <ul class="muted" style="margin:0 0 8px 16px">
+          <li>Strategia + varianti + follow-up programmato</li>
+          <li>Fino a 2 revisioni</li>
+          <li>Report finale</li>
+        </ul>
+        <div class="checkrow">
+          <input id="cons-deluxe" type="checkbox">
+          <label for="cons-deluxe" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
+        </div>
+        <button class="mailto-btn" data-tier="DELUXE" data-title="Prendo io la colpa — Deluxe" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
+      </div>
+    </div>
 
-    btn.disabled = true;
-    try{
-      const r = await fetch('/.netlify/functions/create-checkout-session', {
-        method: 'POST',
-        headers: { 'Content-Type':'application/json' },
-        body: JSON.stringify({
-          sku,
-          success_url: SUCCESS,
-          cancel_url: CANCEL,
-          need_default,
-          context_hint: need_default
-        })
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error||'stripe_create_failed');
-      if (data.url) location.href = data.url;
-    }catch(e){
-      alert('Errore checkout: '+(e.message||e));
-    }finally{
-      btn.disabled = false;
-    }
-  }
+    <!-- WALLET -->
+    <section class="card" style="margin-top:24px">
+      <h2 style="margin:0 0 10px">Wallet & Premium</h2>
+      <p><small>Controlla il saldo dei tuoi “minuti di vita risparmiati” e riscattali.</small></p>
+      <div class="row">
+        <input id="wallet-email" type="text" placeholder="La tua email" style="flex:1"/>
+        <button id="btn-wallet-check" style="width:auto">Vedi saldo</button>
+      </div>
+      <p id="wallet-result" style="margin-top:8px"></p>
 
-  document.querySelectorAll('button[data-sku]').forEach(b=>{
-    b.addEventListener('click', ()=> startCheckout(b));
-  });
+      <div class="grid" style="margin-top:12px">
+        <div class="card">
+          <div class="title">Scusa Base GRATIS</div>
+          <small>Riscatta <b>50 min</b> → codice sconto 100% (1 uso, 14 giorni).</small>
+          <button data-reward="BASE_FREE">Riscatta 50 min</button>
+        </div>
+        <div class="card">
+          <div class="title">Deluxe −50%</div>
+          <small>Riscatta <b>80 min</b> → codice sconto −50% (1 uso, 14 giorni).</small>
+          <button data-reward="DELUXE_50">Riscatta 80 min</button>
+        </div>
+      </div>
+      <p class="muted" style="margin-top:8px">Leggi la <a href="/manleva.html" target="_blank">manleva del servizio</a>.</p>
+    </section>
+  </div>
 
-  // WALLET
-  const out = $('#wallet-result');
-  $('#btn-wallet-check').onclick = async ()=>{
-    const email = ($('#wallet-email').value||'').trim().toLowerCase();
-    if(!email){ alert('Inserisci la tua email'); return; }
-    try{
-      const r = await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
-      const data = await r.json();
-      out.textContent = r.ok ? `Saldo: ${data.wallet||0} minuti` : (data.error||'Errore');
-    }catch{ out.textContent='Errore'; }
-  };
+  <script>
+    const SUCCESS = location.origin + '/success.html';
+    const CANCEL  = location.origin + '/cancel.html';
 
-  document.querySelectorAll('button[data-reward]').forEach(btn=>{
-    btn.onclick = async ()=>{
-      const email = ($('#wallet-email').value||'').trim().toLowerCase();
-      if(!email){ alert('Inserisci la tua email'); return; }
-      btn.disabled=true;
+    async function startCheckout(btn){
+      const sku = btn.dataset.sku;
+      if(!sku){ alert('SKU mancante'); return; }
+
+      // (NOVITÀ) Salvo il titolo per mostrarlo su success.html
+      const title = btn.getAttribute('data-title')
+        || btn.closest('.card')?.querySelector('.title')?.textContent
+        || sku;
+      sessionStorage.setItem('last_checkout_title', title);
+
+      // Per BASE/DELUXE legge la tendina; per gli altri, contesto vuoto
+      let ctx = '';
+      const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
+      if (sel && sel.value) ctx = String(sel.value).trim();
+
+      const payload = {
+        sku,
+        success_url: SUCCESS + '?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: CANCEL,
+        need_default: ctx || '',
+        context_hint: ctx || ''
+      };
+
+      btn.disabled = true;
       try{
-        const r = await fetch('/.netlify/functions/wallet-redeem',{
-          method:'POST',headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({email, reward: btn.dataset.reward})
+        const r = await fetch('/.netlify/functions/create-checkout-session', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json' },
+          body: JSON.stringify(payload)
         });
         const data = await r.json();
-        if(!r.ok) throw new Error(data.error||'redeem_failed');
-        out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
-      }catch(e){ alert('Errore: '+(e.message||e)); }
-      finally{ btn.disabled=false; }
-    };
-  });
-})();
-</script>
+        if (!r.ok) throw new Error(data?.error||'stripe_create_failed');
+
+        // (NOVITÀ) salvo anche la session_id (se presente nella risposta)
+        if (data.id) sessionStorage.setItem('last_session_id', data.id);
+
+        if (data.url) {
+          location.href = data.url;
+        } else {
+          // Fallback
+          location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id||'');
+        }
+      }catch(e){
+        alert('Errore checkout: ' + (e.message||e));
+      }finally{
+        btn.disabled = false;
+      }
+    }
+
+    // Acquisto scuse standard
+    document.querySelectorAll('button[data-sku]').forEach(b=>{
+      b.addEventListener('click', ()=> startCheckout(b));
+    });
+
+    // “Prendo io la colpa” → mailto con consenso
+    document.querySelectorAll('.mailto-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const card = btn.closest('.card');
+        const chk  = card.querySelector('input[type="checkbox"]');
+        if (!chk || !chk.checked) { alert('Per procedere devi accettare la manleva.'); return; }
+
+        const tier = btn.dataset.tier || 'LIGHT';
+        const to   = btn.dataset.mail || 'colpamiaconsulenze@proton.me';
+        const subj = encodeURIComponent(`[${tier}] Prendo io la colpa — richiesta`);
+        const body = encodeURIComponent(
+`Ciao,
+ti scrivo per il pacchetto "${tier}".
+Ecco i dettagli del caso (contesto, persone coinvolte, obiettivo, tempistiche, eventuale orario credibile):
+- 
+Grazie!`
+        );
+        // apre il client di posta
+        location.href = `mailto:${to}?subject=${subj}&body=${body}`;
+      });
+    });
+
+    // Wallet & Premium
+    (function(){
+      const $ = s=>document.querySelector(s);
+      const out = $('#wallet-result');
+
+      $('#btn-wallet-check').onclick = async ()=>{
+        const email = ($('#wallet-email').value||'').trim();
+        if(!email){ alert('Inserisci la tua email'); return; }
+        try{
+          const r = await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
+          const data = await r.json();
+          out.textContent = r.ok ? `Saldo: ${data.wallet||0} minuti` : (data.error||'Errore');
+        }catch{ out.textContent='Errore'; }
+      };
+
+      document.querySelectorAll('button[data-reward]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          const email = ($('#wallet-email').value||'').trim();
+          if(!email){ alert('Inserisci la tua email'); return; }
+          btn.disabled=true;
+          try{
+            const r = await fetch('/.netlify/functions/wallet-redeem',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ email, reward: btn.dataset.reward })
+            });
+            const data = await r.json();
+            if(!r.ok) throw new Error(data.error||'redeem_failed');
+            out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
+          }catch(e){ alert('Errore: '+(e.message||e)); }
+          finally{ btn.disabled=false; }
+        };
+      });
+    })();
+  </script>
 </body>
 </html>
