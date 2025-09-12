@@ -1,75 +1,74 @@
-// netlify/functions/create-checkout-session.js
+// Crea una Stripe Checkout Session con "Contesto" escluso per TRAFFICO/RIUNIONE/CONNESSIONE
 const Stripe = require('stripe');
+const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
-const stripe  = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
-const SITE    = (process.env.SITE_URL || 'https://colpamia.com').replace(/\/+$/, '');
-const CORS    = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-const j = (s, b) => ({ statusCode: s, headers: { 'Content-Type':'application/json', ...CORS }, body: JSON.stringify(b) });
-const safeJSON = (s)=>{ try { return JSON.parse(s || '{}'); } catch { return {}; } };
+const SITE = process.env.SITE_URL || 'https://colpamia.com';
 
-const PRICE_MAP = safeJSON(process.env.PRICE_BY_SKU_JSON); // {SKU: price_xxx}
+// SKU che NON devono mostrare il campo "Contesto"
+function noContextSKU(sku) {
+  const s = String(sku || '').toUpperCase();
+  return s.includes('TRAFFICO') || s.includes('RIUNIONE') || s.includes('CONNESSIONE');
+}
+
+function customFieldsFor(sku) {
+  const fields = [
+    {
+      key: 'phone',
+      label: { type: 'custom', custom: 'Telefono WhatsApp (opz.)' },
+      optional: true,
+      type: 'text',
+      text: { maximum_length: 20 }
+    }
+  ];
+  if (!noContextSKU(sku)) {
+    fields.push({
+      key: 'need',
+      label: { type: 'custom', custom: 'Contesto (obbligatorio: 4–120 caratteri)' },
+      optional: false,
+      type: 'text',
+      text: { minimum_length: 4, maximum_length: 120 }
+    });
+  }
+  return fields;
+}
+
+function getPriceIdForSKU(sku) {
+  // Mappa definita in env: {"SCUSA_BASE":"price_...","TRAFFICO":"price_..."}
+  const map = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
+  return map[sku];
+}
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS, body: '' };
-  if (event.httpMethod !== 'POST')    return j(405, { error: 'method_not_allowed' });
+  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
 
   let body = {};
-  try { body = JSON.parse(event.body || '{}'); }
-  catch { return j(400, { error: 'bad_json' }); }
+  try { body = JSON.parse(event.body || '{}'); } catch {}
+  const sku = String(body.sku || 'SCUSA_BASE');
+  const qty = Number(body.quantity || 1);
 
-  const sku      = String(body.sku || '').toUpperCase();
-  let   priceId  = String(body.price_id || '').trim();
-  if (!priceId && sku && PRICE_MAP[sku]) priceId = PRICE_MAP[sku];
+  const priceId = getPriceIdForSKU(sku);
+  if (!priceId) return { statusCode: 400, body: `SKU non valido: ${sku}` };
 
-  if (!priceId) return j(400, { error:'missing_price_id', hint:'Pass price_id in body o configura PRICE_BY_SKU_JSON' });
+  const params = {
+    mode: 'payment',
+    line_items: [{ price: priceId, quantity: qty }],
+    success_url: `${SITE}/success.html?session_id={CHECKOUT_SESSION_ID}`,
+    cancel_url: `${SITE}/cancel.html`,
+    allow_promotion_codes: true,
+    customer_creation: 'always',
+    phone_number_collection: { enabled: true },
+    client_reference_id: sku,
+    metadata: { sku }
+  };
 
-  // success deve contenere {CHECKOUT_SESSION_ID}
-  let success = String(body.success_url || `${SITE}/success.html`);
-  if (!success.includes('{CHECKOUT_SESSION_ID}')) {
-    success += (success.includes('?') ? '&' : '?') + 'session_id={CHECKOUT_SESSION_ID}';
-  }
-  const cancel  = String(body.cancel_url  || `${SITE}/cancel.html?sku=${encodeURIComponent(sku)}`);
-
-  const needLabel   = String(body.need_label   || 'Contesto (obbligatorio: 4–120 caratteri)');
-  const needDefault = String(body.need_default || '');
+  // Applica i campi personalizzati in modo condizionale
+  params.custom_fields = customFieldsFor(sku);
 
   try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      line_items: [{ price: priceId, quantity: 1 }],
-      allow_promotion_codes: true,
-      customer_creation: 'always',
-      client_reference_id: sku || 'UNKNOWN',
-      metadata: { sku },
-      phone_number_collection: { enabled: true },
-      ui_mode: 'hosted',
-      success_url: success,
-      cancel_url:  cancel,
-      custom_fields: [
-        {
-          key: 'phone',
-          label: { type: 'custom', custom: 'Telefono WhatsApp (opz.)' },
-          type: 'text',
-          optional: true,
-          text: { maximum_length: 20 }
-        },
-        {
-          key: 'need',
-          label: { type: 'custom', custom: needLabel },
-          type: 'text',
-          optional: false,
-          text: { minimum_length: 4, maximum_length: 120, default_value: needDefault || undefined }
-        }
-      ]
-    });
-
-    return j(200, { ok:true, id: session.id, url: session.url });
-  } catch (err) {
-    // Risposta chiara in caso di errore Stripe
-    return j(500, { error:'stripe_error', type: err?.type || null, message: String(err?.message || err) });
-  }
+    const session = await stripe.checkout.sessions.create(params);
+    return { statusCode: 200, body: JSON.stringify({ id: session.id, url: session.url }) };
+  } catch (e) {
+    console.error('Errore creazione sessione:', e.message);
+    return { statusCode: 500, body: 'create_session_failed' };
+    }
 };
