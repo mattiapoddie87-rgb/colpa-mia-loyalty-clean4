@@ -1,4 +1,4 @@
-// Crea una Stripe Checkout Session con "Contesto" escluso per TRAFFICO/RIUNIONE/CONNESSIONE
+// netlify/functions/create-checkout-session.js
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 
@@ -10,7 +10,14 @@ function noContextSKU(sku) {
   return s.includes('TRAFFICO') || s.includes('RIUNIONE') || s.includes('CONNESSIONE');
 }
 
-function customFieldsFor(sku) {
+// se il menu a tendina ha già deciso il contesto, non chiedere nulla
+function shouldAskContext(sku, presetNeed) {
+  if (noContextSKU(sku)) return false;
+  if (presetNeed && String(presetNeed).trim().length >= 4) return false;
+  return true;
+}
+
+function customFieldsFor(sku, presetNeed) {
   const fields = [
     {
       key: 'phone',
@@ -20,7 +27,7 @@ function customFieldsFor(sku) {
       text: { maximum_length: 20 }
     }
   ];
-  if (!noContextSKU(sku)) {
+  if (shouldAskContext(sku, presetNeed)) {
     fields.push({
       key: 'need',
       label: { type: 'custom', custom: 'Contesto (obbligatorio: 4–120 caratteri)' },
@@ -33,7 +40,6 @@ function customFieldsFor(sku) {
 }
 
 function getPriceIdForSKU(sku) {
-  // Mappa definita in env: {"SCUSA_BASE":"price_...","TRAFFICO":"price_..."}
   const map = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
   return map[sku];
 }
@@ -45,6 +51,9 @@ exports.handler = async (event) => {
   try { body = JSON.parse(event.body || '{}'); } catch {}
   const sku = String(body.sku || 'SCUSA_BASE');
   const qty = Number(body.quantity || 1);
+
+  // dal menu a tendina: body.need oppure body.context
+  const presetNeed = (body.need || body.context || '').trim();
 
   const priceId = getPriceIdForSKU(sku);
   if (!priceId) return { statusCode: 400, body: `SKU non valido: ${sku}` };
@@ -61,8 +70,10 @@ exports.handler = async (event) => {
     metadata: { sku }
   };
 
-  // Applica i campi personalizzati in modo condizionale
-  params.custom_fields = customFieldsFor(sku);
+  // se il contesto è già deciso, lo salvo in metadata e NON mostro il campo
+  if (presetNeed) params.metadata.need = presetNeed;
+
+  params.custom_fields = customFieldsFor(sku, presetNeed);
 
   try {
     const session = await stripe.checkout.sessions.create(params);
@@ -70,5 +81,5 @@ exports.handler = async (event) => {
   } catch (e) {
     console.error('Errore creazione sessione:', e.message);
     return { statusCode: 500, body: 'create_session_failed' };
-    }
+  }
 };
