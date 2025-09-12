@@ -1,44 +1,46 @@
-// Invio email robusto: HTTP Resend diretto → fallback SMTP
+// netlify/functions/send-utils.js
 const nodemailer = require('nodemailer');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
 
+function assertFrom(from) {
+  if (!from || !from.includes('@')) throw new Error('MAIL_FROM non valido');
+}
+
 async function sendWithResendHTTP({ from, to, subject, html, text }) {
   if (FORCE_SMTP) throw new Error('Forzato SMTP');
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY mancante');
+  assertFrom(from);
 
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
     headers: {
       Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json'
     },
-    body: JSON.stringify({ from, to, subject, html, text }),
+    body: JSON.stringify({ from, to, subject, html, text })
   });
 
-  if (!resp.ok) {
-    const body = await resp.text();
-    throw new Error(`Resend ${resp.status}: ${body}`);
-  }
-
-  const data = await resp.json(); // { id: "..." }
+  const body = await resp.text();
+  if (!resp.ok) throw new Error(`Resend ${resp.status}: ${body}`);
+  const data = JSON.parse(body); // { id: "..." }
   console.log('Resend OK', { id: data.id, to });
   return data;
 }
 
 async function sendWithSMTP({ from, to, subject, html, text }) {
+  assertFrom(from);
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
   const secure = (process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-
   if (!host) throw new Error('SMTP_HOST mancante');
 
   const transporter = nodemailer.createTransport({
     host, port, secure,
-    auth: user && pass ? { user, pass } : undefined,
+    auth: user && pass ? { user, pass } : undefined
   });
 
   const info = await transporter.sendMail({ from, to, subject, html, text });
@@ -47,11 +49,8 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
 }
 
 async function sendMail(opts) {
-  try {
-    return await sendWithResendHTTP(opts);
-  } catch (e) {
-    console.warn('Resend fallito:', e.message);
-  }
+  try { return await sendWithResendHTTP(opts); }
+  catch (e) { console.warn('Resend fallito:', e.message); }
   return sendWithSMTP(opts);
 }
 
