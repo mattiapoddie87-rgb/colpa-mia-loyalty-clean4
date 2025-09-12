@@ -1,14 +1,8 @@
 {
-  "name": "colpamia-site",
-  "private": true,
-  "engines": {
-    "node": ">=18"
-  },
   "dependencies": {
-    "@netlify/blobs": "^6.3.0",
-    "openai": "^4.56.0",
-    "resend": "^3.2.0",
     "stripe": "^14.0.0",
-    "twilio": "^4.20.1"
+    "@netlify/blobs": "^7.0.0",
+    "@resend/node": "^3.2.0",
+    "nodemailer": "^6.9.13"
   }
 }
