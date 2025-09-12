@@ -1,28 +1,26 @@
-// Invio email robusto: Resend HTTP diretto → fallback SMTP. BCC di controllo.
+// Invio email: Resend HTTP diretto → fallback SMTP. Log completi.
 const nodemailer = require('nodemailer');
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
-const BCC_ADMIN = process.env.RESPONSABILITA_MAIL || ''; // presente tra le tue env
+const BCC_ADMIN = process.env.RESPONSABILITA_MAIL || '';
 
 function assertFrom(from) {
   if (!from || !from.includes('@')) throw new Error('MAIL_FROM non valido');
 }
 
-async function sendWithResendHTTP({ from, to, subject, html, text }) {
+async function sendWithResendHTTP({ from, to, subject, html, text, replyTo }) {
   if (FORCE_SMTP) throw new Error('Forzato SMTP');
   if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY mancante');
   assertFrom(from);
 
   const payload = { from, to, subject, html, text };
+  if (replyTo) payload.reply_to = replyTo;
   if (BCC_ADMIN) payload.bcc = BCC_ADMIN;
 
   const resp = await fetch('https://api.resend.com/emails', {
     method: 'POST',
-    headers: {
-      Authorization: `Bearer ${RESEND_API_KEY}`,
-      'Content-Type': 'application/json'
-    },
+    headers: { Authorization: `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
   });
 
@@ -33,7 +31,7 @@ async function sendWithResendHTTP({ from, to, subject, html, text }) {
   return data;
 }
 
-async function sendWithSMTP({ from, to, subject, html, text }) {
+async function sendWithSMTP({ from, to, subject, html, text, replyTo }) {
   assertFrom(from);
   const host = process.env.SMTP_HOST;
   const port = parseInt(process.env.SMTP_PORT || '587', 10);
@@ -43,11 +41,11 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
   if (!host) throw new Error('SMTP_HOST mancante');
 
   const transporter = nodemailer.createTransport({
-    host, port, secure,
-    auth: user && pass ? { user, pass } : undefined,
+    host, port, secure, auth: user && pass ? { user, pass } : undefined,
   });
 
   const mail = { from, to, subject, html, text };
+  if (replyTo) mail.replyTo = replyTo;
   if (BCC_ADMIN) mail.bcc = BCC_ADMIN;
 
   const info = await transporter.sendMail(mail);
