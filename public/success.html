@@ -3,61 +3,52 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Grazie! — COLPA MIA</title>
+  <title>Grazie!</title>
   <style>
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
     .wrap{max-width:900px;margin:0 auto;padding:24px}
-    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;margin:12px 0}
-    .btn{display:inline-block;padding:10px 14px;border-radius:12px;background:#3b82f6;color:#fff;text-decoration:none}
+    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;margin-bottom:16px}
+    .btn{display:inline-block;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:#fff;text-decoration:none}
     small{color:#9aa3b2}
-    .k{color:#9aa3b2}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Grazie! 🎉</h1>
+    <h1 style="margin:0 0 16px">Grazie! 🎉</h1>
     <p>Pagamento ricevuto correttamente.</p>
 
     <div class="card">
-      <h3>Riepilogo</h3>
-      <p><span class="k">Prodotto:</span> <span id="prod">—</span></p>
-      <p><span class="k">ID sessione:</span> <span id="sess">—</span></p>
-      <p id="amt" style="margin:0"></p>
+      <h2 style="margin:0 0 8px">Riepilogo</h2>
+      <p>Prodotto: <span id="p">—</span></p>
+      <p>ID sessione: <span id="sid">(manca session_id)</span></p>
     </div>
 
     <div class="card">
-      <h3>Consegna</h3>
+      <h2 style="margin:0 0 8px">Consegna</h2>
       <p>
-        Ti abbiamo inviato la scusa via <b>email</b> (e via <b>WhatsApp</b> se hai inserito il numero).
-        Controlla anche la cartella spam/promozioni. Se non ricevi nulla entro qualche minuto, rispondi a
+        Ti abbiamo inviato la scusa via <b>email</b> (e via <b>WhatsApp</b> se hai inserito il numero). Controlla anche la cartella spam/promozioni.
+        Se non ricevi nulla entro qualche minuto, rispondi a
         <a href="mailto:colpamiaconsulenze@proton.me">colpamiaconsulenze@proton.me</a>.
       </p>
       <p>Eventuali minuti previsti dal pacchetto sono stati accreditati sul tuo wallet.</p>
-      <a class="btn" href="/catalogo">Torna al catalogo</a>
+      <p><a class="btn" href="/catalogo">Torna al catalogo</a></p>
     </div>
   </div>
 
   <script>
-    (async ()=>{
-      const $ = s=>document.querySelector(s);
-      const id = new URLSearchParams(location.search).get('session_id');
+    (function(){
+      const qs = new URLSearchParams(location.search);
+      const sid = qs.get('session_id') || sessionStorage.getItem('last_session_id') || '';
+      if (sid) {
+        document.getElementById('sid').textContent = sid;
+        sessionStorage.removeItem('last_session_id');
+      }
 
-      if(!id){ $('#sess').textContent='(manca session_id)'; return; }
-
-      $('#sess').textContent = id;
-
-      try{
-        const r = await fetch('/.netlify/functions/session-info?id='+encodeURIComponent(id));
-        const data = await r.json();
-        if(!r.ok) throw 0;
-
-        $('#prod').textContent = data.title || data.sku || 'Prodotto';
-        if (Number.isFinite(data.amount_total) && data.currency){
-          const euro = (data.amount_total/100).toLocaleString('it-IT', { style:'currency', currency: data.currency });
-          $('#amt').innerHTML = `<small class="k">Importo:</small> ${euro}`;
-        }
-      }catch{
-        // fallback: mostro solo l'ID; prodotto resta "—"
+      // Prodotto: salvato prima del redirect
+      const title = sessionStorage.getItem('last_checkout_title');
+      if (title) {
+        document.getElementById('p').textContent = title;
+        sessionStorage.removeItem('last_checkout_title');
       }
     })();
   </script>
