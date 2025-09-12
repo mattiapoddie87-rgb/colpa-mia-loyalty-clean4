@@ -1,7 +1,4 @@
 // netlify/functions/wallet-get.js
-const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
@@ -9,21 +6,20 @@ const CORS = {
 };
 const json = (s,b)=>({ statusCode:s, headers:{ 'Content-Type':'application/json', ...CORS }, body:JSON.stringify(b) });
 
+// Stesso store in-memory del webhook
+const mem = globalThis.__WALLETS__ ||= new Map();
+
 exports.handler = async (event)=>{
   if (event.httpMethod === 'OPTIONS') return json(204,{});
+  if (event.httpMethod !== 'GET')    return json(405,{error:'method_not_allowed'});
 
   try{
     const email = (event.queryStringParameters?.email || '').trim().toLowerCase();
-    if(!email) return json(400,{error:'missing_email'});
+    if (!email) return json(400,{error:'missing_email'});
 
-    const search = await stripe.customers.search({ query: `email:'${email}'`, limit: 1 });
-    const wallet = search.data.length
-      ? parseInt(search.data[0].metadata?.wallet_minutes || '0', 10) || 0
-      : 0;
-
-    return json(200,{ wallet });
+    const wallet = parseInt(mem.get(email) || 0, 10) || 0;
+    return json(200,{ ok:true, wallet });
   }catch(e){
-    console.error('wallet_get_error', e);
-    return json(500,{error:'wallet_get_failed'});
+    return json(500,{error:'wallet_get_failed', detail:String(e.message || e)});
   }
 };
