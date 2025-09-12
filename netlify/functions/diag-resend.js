@@ -1,13 +1,21 @@
-exports.handler = async () => {
-  const v = (process.env.RESEND_API_KEY || '').trim();
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      hasKey: !!v,
-      prefix: v ? v.slice(0,5) : null,
-      suffix: v ? v.slice(-5) : null,
-      len: v.length
-    })
-  };
+// netlify/functions/diag-resend.js
+const { sendMail } = require('./send-utils');
+
+exports.handler = async (event) => {
+  const to =
+    (event.queryStringParameters && event.queryStringParameters.to) ||
+    process.env.RESPONSABILITA_MAIL;
+
+  try {
+    const res = await sendMail({
+      from: process.env.MAIL_FROM,            // es. "COLPA MIA <onboarding@resend.dev>"
+      to,
+      subject: 'Diag Resend/SMTP',
+      html: '<p>Diagnostica OK</p>',
+      text: 'Diagnostica OK'
+    });
+    return { statusCode: 200, body: JSON.stringify({ ok: true, res }) };
+  } catch (e) {
+    return { statusCode: 500, body: JSON.stringify({ ok: false, error: e.message }) };
+  }
 };
