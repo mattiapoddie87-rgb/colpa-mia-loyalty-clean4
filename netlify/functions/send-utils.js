@@ -1,20 +1,26 @@
-// Invio email con preferenza Resend, fallback SMTP
-let resendClient = null;
-try {
-  const mod = require('resend');                // pacchetto corretto
-  const Resend = mod.Resend || mod.default || mod;
-  if (process.env.RESEND_API_KEY) {
-    resendClient = new Resend(process.env.RESEND_API_KEY);
-  }
-} catch (_) {
-  // Resend non installato o non configurato: useremo SMTP
-}
-
+// Invio email: Resend se possibile, altrimenti SMTP. Debug verboso.
 const nodemailer = require('nodemailer');
 
+const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
+
+// Lazy dynamic import per compat ESM su Netlify
+async function getResendClient() {
+  if (FORCE_SMTP) return null;
+  try {
+    if (!process.env.RESEND_API_KEY) return null;
+    const mod = await import('resend'); // ESM safe
+    const Resend = mod.Resend || mod.default || mod;
+    return new Resend(process.env.RESEND_API_KEY);
+  } catch (e) {
+    console.warn('Resend client non disponibile:', e.message);
+    return null;
+  }
+}
+
 async function sendWithResend({ from, to, subject, html, text }) {
-  if (!resendClient) throw new Error('RESEND non configurato');
-  const res = await resendClient.emails.send({ from, to, subject, html, text });
+  const client = await getResendClient();
+  if (!client) throw new Error('RESEND non configurato');
+  const res = await client.emails.send({ from, to, subject, html, text });
   if (res?.error) throw new Error(res.error.message || 'Errore Resend');
   return res;
 }
@@ -37,12 +43,22 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
 }
 
 async function sendMail(opts) {
+  // Prova Resend → fallback SMTP
   try {
-    if (resendClient) return await sendWithResend(opts);
+    const r = await sendWithResend(opts);
+    console.log('Email inviata via Resend:', { to: opts.to });
+    return r;
   } catch (e) {
-    console.warn('Resend fallito, passo a SMTP:', e.message);
+    console.warn('Resend fallito:', e.message);
   }
-  return sendWithSMTP(opts);
+  try {
+    const s = await sendWithSMTP(opts);
+    console.log('Email inviata via SMTP:', { to: opts.to });
+    return s;
+  } catch (e) {
+    console.error('SMTP fallito:', e.message);
+    throw e;
+  }
 }
 
 module.exports = { sendMail };
