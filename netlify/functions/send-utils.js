@@ -1,18 +1,21 @@
-// Invio email con fallback: Resend -> SMTP (Nodemailer)
+// Invio email con preferenza Resend, fallback SMTP
 let resendClient = null;
 try {
-  const { Resend } = require('@resend/node');
+  const mod = require('resend');                // pacchetto corretto
+  const Resend = mod.Resend || mod.default || mod;
   if (process.env.RESEND_API_KEY) {
     resendClient = new Resend(process.env.RESEND_API_KEY);
   }
-} catch {}
+} catch (_) {
+  // Resend non installato o non configurato: useremo SMTP
+}
 
 const nodemailer = require('nodemailer');
 
 async function sendWithResend({ from, to, subject, html, text }) {
   if (!resendClient) throw new Error('RESEND non configurato');
   const res = await resendClient.emails.send({ from, to, subject, html, text });
-  if (res.error) throw new Error(res.error.message || 'Errore Resend');
+  if (res?.error) throw new Error(res.error.message || 'Errore Resend');
   return res;
 }
 
@@ -30,8 +33,7 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
     auth: user && pass ? { user, pass } : undefined,
   });
 
-  const info = await transporter.sendMail({ from, to, subject, html, text });
-  return info;
+  return transporter.sendMail({ from, to, subject, html, text });
 }
 
 async function sendMail(opts) {
@@ -40,7 +42,7 @@ async function sendMail(opts) {
   } catch (e) {
     console.warn('Resend fallito, passo a SMTP:', e.message);
   }
-  return await sendWithSMTP(opts);
+  return sendWithSMTP(opts);
 }
 
 module.exports = { sendMail };
