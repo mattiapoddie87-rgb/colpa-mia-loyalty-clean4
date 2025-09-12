@@ -1,29 +1,30 @@
-// Invio email: Resend se disponibile, fallback SMTP. Log chiari.
+// Invio email robusto: HTTP Resend diretto → fallback SMTP
 const nodemailer = require('nodemailer');
 
+const RESEND_API_KEY = process.env.RESEND_API_KEY || '';
 const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
 
-async function getResendClient() {
-  if (FORCE_SMTP) return null;
-  try {
-    if (!process.env.RESEND_API_KEY) return null;
-    // ESM-safe. Il modulo deve essere esternalizzato nel bundle (vedi netlify.toml).
-    const mod = await import('resend');
-    const Resend = mod.Resend || mod.default || mod;
-    return new Resend(process.env.RESEND_API_KEY);
-  } catch (e) {
-    console.warn('Resend non disponibile:', e.message);
-    return null;
-  }
-}
+async function sendWithResendHTTP({ from, to, subject, html, text }) {
+  if (FORCE_SMTP) throw new Error('Forzato SMTP');
+  if (!RESEND_API_KEY) throw new Error('RESEND_API_KEY mancante');
 
-async function sendWithResend({ from, to, subject, html, text }) {
-  const client = await getResendClient();
-  if (!client) throw new Error('RESEND non configurato');
-  const res = await client.emails.send({ from, to, subject, html, text });
-  if (res?.error) throw new Error(res.error.message || 'Errore Resend');
-  console.log('Resend OK', { id: res.id, to });
-  return res;
+  const resp = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ from, to, subject, html, text }),
+  });
+
+  if (!resp.ok) {
+    const body = await resp.text();
+    throw new Error(`Resend ${resp.status}: ${body}`);
+  }
+
+  const data = await resp.json(); // { id: "..." }
+  console.log('Resend OK', { id: data.id, to });
+  return data;
 }
 
 async function sendWithSMTP({ from, to, subject, html, text }) {
@@ -32,6 +33,7 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
   const secure = (process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
+
   if (!host) throw new Error('SMTP_HOST mancante');
 
   const transporter = nodemailer.createTransport({
@@ -46,8 +48,7 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
 
 async function sendMail(opts) {
   try {
-    const r = await sendWithResend(opts);
-    return r;
+    return await sendWithResendHTTP(opts);
   } catch (e) {
     console.warn('Resend fallito:', e.message);
   }
