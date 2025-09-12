@@ -1,177 +1,292 @@
 // netlify/functions/stripe-webhook.js
+// Webhook Stripe per Netlify – senza "micro"
+// - Verifica firma usando event.body (raw / base64)
+// - Invia l'email al cliente (Resend)
+// - Accumula minuti nel wallet (@netlify/blobs)
+// - Nessuna scusa automatica per i pacchetti "COLPA_*"
+
 const Stripe = require('stripe');
-const { buffer } = require('micro');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const { Resend } = require('resend');
+const { getStore } = require('@netlify/blobs');
 
-// Usa il tuo modulo di generazione testi.
-// Se non esiste/va in errore, useremo un fallback.
-let ai;
-try { ai = require('./ai-excuse'); } catch { ai = null; }
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: '2024-06-20',
+});
 
-const FROM_NAME = 'COLPA MIA';
-const FROM_EMAIL = 'no-reply@colpamia.com';
-const REPLY_TO  = 'colpamiaconsulenze@proton.me';
+const RESEND = new Resend(process.env.RESEND_API_KEY);
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Stripe-Signature'
-};
-const json = (s,b)=>({ statusCode:s, headers:{ 'Content-Type':'application/json', ...CORS }, body:JSON.stringify(b) });
+// ---- utility --------------------------------------------------------------
 
-// Sanitize/escape HTML min.
-const esc = (s)=>String(s)
-  .replace(/&/g,'&amp;').replace(/</g,'&lt;')
-  .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <no-reply@colpamia.com>';
+const MAIL_REPLY = 'colpamiaconsulenze@proton.me';
+const WEBHOOK_SECRET = process.env.STRIPE_WEBHOOK_SECRET;
 
-function coerceLines(arr) {
-  // accetta stringhe o oggetti {text: "..."}
-  return (arr || []).map(v => {
-    if (typeof v === 'string') return v;
-    if (v && typeof v.text === 'string') return v.text;
-    if (v && typeof v.msg  === 'string') return v.msg;
-    return String(v);
-  });
+// Mappa titoli (facoltativa) per mostrare un nome umano
+function getTitleBySku(sku) {
+  const map = safeJSON(process.env.PRICE_BY_SKU_JSON);
+  if (map && typeof map === 'object') {
+    // Se vuoi mostrare il titolo uguale allo SKU, basta fare return sku;
+    // Qui proviamo a derivarlo leggendo map e facendo un nome "amichevole".
+    // Esempio: SCUSA_BASE -> "Scusa Base"
+    if (sku) {
+      return sku
+        .replace(/_/g, ' ')
+        .toLowerCase()
+        .replace(/(^|\s)\S/g, (t) => t.toUpperCase());
+    }
+  }
+  return sku || 'Prodotto';
 }
 
-async function sendEmailViaResend(to, subject, html, text) {
-  // Resend API semplice via fetch
-  const key = process.env.RESEND_API_KEY;
-  if (!key) throw new Error('missing RESEND_API_KEY');
+// Mappa regole minuti per wallet
+function getMinutesForSku(sku) {
+  // Lettura da env PRICE_RULES_JSON (o fallback)
+  const rules =
+    safeJSON(process.env.PRICE_RULES_JSON) ||
+    safeJSON(process.env.PRICE_RULES_JSON?.toLowerCase?.()) ||
+    safeJSON(process.env.PRICE_RULES) ||
+    {};
 
-  const r = await fetch('https://api.resend.com/emails', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${key}`,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify({
-      from: `${FROM_NAME} <${FROM_EMAIL}>`,
-      to: [to],
-      subject,
-      html,
-      text,
-      reply_to: REPLY_TO
-    })
-  });
+  // Fallback sensato se non trovato
+  const fallback = {
+    SCUSA_BASE: 10,
+    SCUSA_DELUXE: 60,
+    CONNESSIONE: 20,
+    TRAFFICO: 20,
+    RIUNIONE: 15,
+    COLPA_LIGHT: 30,
+    COLPA_FULL: 60,
+    COLPA_DELUXE: 90,
+  };
 
-  if (!r.ok) {
-    const body = await r.text().catch(()=> '');
-    throw new Error(`resend_failed: ${r.status} ${body}`);
+  if (rules && rules[sku] && typeof rules[sku].minutes === 'number') {
+    return rules[sku].minutes;
+  }
+  return fallback[sku] || 0;
+}
+
+function safeJSON(s) {
+  try {
+    if (!s) return null;
+    return JSON.parse(s);
+  } catch {
+    return null;
   }
 }
+
+async function addWalletMinutes(email, delta) {
+  if (!email || !delta) return { before: 0, after: 0 };
+  const store = getStore('wallet'); // namespace "wallet"
+  const key = `wallet:${email.toLowerCase()}`;
+  const currStr = await store.get(key);
+  const before = parseInt(currStr || '0', 10) || 0;
+  const after = before + delta;
+  await store.set(key, String(after));
+  return { before, after };
+}
+
+// Carica testo scusa via ai-excuse (se presente), altrimenti fallback
+async function buildExcuse({ kind, context, variants = 1 }) {
+  let lines = [];
+  try {
+    const ai = require('./ai-excuse'); // deve esportare una funzione/oggetto
+    if (typeof ai.generate === 'function') {
+      lines = await ai.generate({ kind, context, variants });
+    } else if (typeof ai === 'function') {
+      lines = await ai({ kind, context, variants });
+    }
+  } catch (e) {
+    // Fallback molto semplice
+    if (kind === 'CONNESSIONE') {
+      lines = [
+        'Ciao, ho problemi di connessione e non riesco a collegarmi. Ti aggiorno appena rientra la linea.',
+      ];
+    } else if (kind === 'TRAFFICO') {
+      lines = [
+        'Ciao, sono bloccato nel traffico per un incidente. Appena ho un orario credibile, ti scrivo.',
+      ];
+    } else if (kind === 'RIUNIONE') {
+      lines = [
+        'Ciao, la riunione sta sforando e non riesco a liberarmi. Ti aggiorno a breve con orari aggiornati.',
+      ];
+    } else {
+      lines = [
+        'Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.',
+      ];
+    }
+    if (variants > 1) lines = Array(variants).fill(lines[0]);
+  }
+  if (!Array.isArray(lines)) lines = [String(lines || '')];
+  return lines.filter(Boolean).slice(0, variants);
+}
+
+async function sendEmail({ to, subject, html }) {
+  if (!to) return { id: null, status: 'skipped' };
+  const r = await RESEND.emails.send({
+    from: MAIL_FROM,
+    to,
+    reply_to: MAIL_REPLY,
+    subject,
+    html,
+  });
+  return { id: r?.id || null, status: r?.id ? 'sent' : 'error' };
+}
+
+// ---- handler --------------------------------------------------------------
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return json(204,{});
+  // Stripe firma il "raw body": se Netlify lo passa base64, decodifichiamo.
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body || '', 'base64').toString('utf8')
+    : (event.body || '');
+
+  const sig = event.headers['stripe-signature'] || event.headers['Stripe-Signature'];
+
+  let stripeEvent;
   try {
-    const sig = event.headers['stripe-signature'];
-    const raw = Buffer.from(event.body || '', 'utf8');
-    const whSecret = process.env.STRIPE_WEBHOOK_SECRET;
-    let stripeEvent;
+    stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, WEBHOOK_SECRET);
+  } catch (err) {
+    return {
+      statusCode: 400,
+      headers: { 'Content-Type': 'text/plain' },
+      body: `Webhook Error: ${err.message}`,
+    };
+  }
 
-    try {
-      stripeEvent = stripe.webhooks.constructEvent(raw, sig, whSecret);
-    } catch (e) {
-      return json(400, { error: 'invalid_signature', detail: String(e.message || e) });
-    }
+  // Gestiamo solo checkout.session.completed
+  if (stripeEvent.type !== 'checkout.session.completed') {
+    return { statusCode: 200, body: JSON.stringify({ ok: true, ignored: stripeEvent.type }) };
+  }
 
-    if (stripeEvent.type !== 'checkout.session.completed') {
-      return json(200, { ok:true, ignored: stripeEvent.type });
-    }
+  try {
+    const sessionId = stripeEvent.data.object.id;
 
-    const session = stripeEvent.data.object;
+    // Recuperiamo sessione completa per email, line_items, ecc.
+    const session = await stripe.checkout.sessions.retrieve(sessionId, {
+      expand: ['line_items', 'customer'],
+    });
 
-    // email cliente
+    const sku = session.client_reference_id || '';
+    const title = getTitleBySku(sku);
     const email =
-      session.customer_details?.email ||
+      (session.customer_details && session.customer_details.email) ||
       session.customer_email ||
-      session.metadata?.email ||
       null;
 
-    // SKU
-    const sku = session.client_reference_id || session.metadata?.sku || 'UNKNOWN';
-
-    // Recupero il contesto dal campo custom "need"
+    // Campo personalizzato "need" (contesto)
     let contextUsed = '';
     try {
-      const f = (session.custom_fields || []).find(x => x.key === 'need');
-      contextUsed = f?.text?.value || '';
+      const cf = Array.isArray(session.custom_fields) ? session.custom_fields : [];
+      const need = cf.find((f) => f.key === 'need' && f.text && f.text.value);
+      contextUsed = need ? String(need.text.value || '') : '';
     } catch {}
 
-    // Calcolo minuti wallet per SKU
-    const ruleMap = JSON.parse(process.env.PRICE_RULES_JSON || '{}');
-    const rule = ruleMap[sku] || {};
-    const minutes = parseInt(rule.minutes || 0, 10) || 0;
+    const minutes = getMinutesForSku(sku) || 0;
 
-    // Generazione testi scuse (usa ai-excuse se disponibile)
-    let title = 'La tua Scusa';
-    let lines = [];
-    try {
-      if (ai && typeof ai.generateExcuse === 'function') {
-        const out = await ai.generateExcuse({ sku, context: contextUsed });
-        title = out?.title || title;
-        lines = coerceLines(out?.variants || out?.lines || []);
-      }
-    } catch {}
+    // Pacchetti "prendo io la colpa": non inviamo scusa automatica
+    const isColpa = /^COLPA_/i.test(sku);
 
-    // fallback se vuoto
-    if (!lines.length) {
-      if (sku === 'SCUSA_BASE') {
-        lines = [`Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.`];
-        title = 'Scusa Base';
-      } else if (sku === 'SCUSA_DELUXE') {
-        lines = [
-          `Ciao, piccolo imprevisto ma ho già un piano: ti scrivo tra poco con orari aggiornati.`,
-          `Sto chiudendo una cosa urgente. Preferisco darti orari credibili appena li ho.`,
-          `Piccolo intoppo organizzativo, mi rimetto in carreggiata e ti aggiorno a breve.`
-        ];
-        title = 'Scusa Deluxe';
+    // 1) Wallet
+    let walletAfter = null;
+    if (email && minutes > 0) {
+      const { after } = await addWalletMinutes(email, minutes);
+      walletAfter = after;
+    }
+
+    // 2) Email
+    let emailInfo = { status: 'skipped', id: null };
+    if (email) {
+      if (isColpa) {
+        // Email di presa in carico: nessuna scusa automatica
+        const html = `
+          <h1>Prendo io la colpa — ${title}</h1>
+          <p>Ciao! Il pagamento è andato a buon fine. Nessuna scusa automatica è stata inviata.</p>
+          <p>Rispondi a questa email spiegandomi <b>in breve la situazione</b> (chi, dove, quando) e ti preparo il messaggio migliore.</p>
+          ${
+            minutes > 0
+              ? `<p>Accreditati <b>${minutes} minuti</b> sul tuo wallet.</p>`
+              : ''
+          }
+          <p>Se serve, scrivimi pure a <a href="mailto:${MAIL_REPLY}">${MAIL_REPLY}</a>.</p>
+        `;
+        emailInfo = await sendEmail({
+          to: email,
+          subject: `Preso in carico — ${title}`,
+          html,
+        });
       } else {
-        lines = [`Ciao, ho avuto un imprevisto. Ti aggiorno a breve.`];
+        // Generiamo scusa/e
+        const variantsWanted = sku === 'SCUSA_DELUXE' ? 3 : 1;
+        const kind =
+          sku === 'CONNESSIONE' ? 'CONNESSIONE' :
+          sku === 'TRAFFICO' ? 'TRAFFICO' :
+          sku === 'RIUNIONE' ? 'RIUNIONE' :
+          'BASE';
+
+        const lines = await buildExcuse({
+          kind,
+          context: contextUsed,
+          variants: variantsWanted,
+        });
+
+        const listHtml = lines
+          .map((t, i) => `<li>${escapeHTML(t)}</li>`)
+          .join('');
+
+        const html = `
+          <h1>La tua Scusa</h1>
+          <ol>${listHtml}</ol>
+          ${
+            minutes > 0
+              ? `<p>Accreditati <b>${minutes} minuti</b> sul tuo wallet.</p>`
+              : ''
+          }
+          <p>Se ti serve un ritocco, rispondi a questa email (ti leggo da <b>${MAIL_REPLY}</b>).</p>
+        `;
+
+        emailInfo = await sendEmail({
+          to: email,
+          subject: `La tua Scusa — ${title}`,
+          html,
+        });
       }
     }
 
-    // Se BASE → una sola scusa
-    if (sku === 'SCUSA_BASE') lines = [ lines[0] ];
+    // (WhatsApp opzionale: qui potresti integrare Twilio. Per ora: skipped)
+    const waStatus = 'skipped';
 
-    // Accredita wallet (retrocompatibile, salva per email)
-    let walletAfter = null;
-    try {
-      if (email && minutes > 0) {
-        const kv = globalThis.__WALLETS__ ||= new Map(); // semplice store in-memory (se vuoi, sostituisci con KV esterno)
-        const cur = parseInt(kv.get(email) || 0, 10) || 0;
-        walletAfter = cur + minutes;
-        kv.set(email, walletAfter);
-      }
-    } catch {}
-
-    // Email finale
-    const ol = '<ol>' + lines.map(s => `<li>${esc(s)}</li>`).join('') + '</ol>';
-    const html = `
-      <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif">
-        <h2 style="margin:0 0 8px">${esc(title)}</h2>
-        ${ol}
-        ${minutes>0 ? `<p style="margin-top:16px">Accreditati <b>${minutes}</b> minuti sul tuo wallet.</p>` : ''}
-        <p style="margin-top:16px;font-size:12px;color:#667">
-          In caso di problemi rispondi a <a href="mailto:${esc(REPLY_TO)}">${esc(REPLY_TO)}</a>.
-        </p>
-      </div>
-    `;
-    const text = `${title}\n\n${lines.map((s,i)=>`${i+1}. ${s}`).join('\n')}\n\n${minutes>0 ? `Accreditati ${minutes} minuti sul tuo wallet.`:''}`;
-
-    if (email) await sendEmailViaResend(email, title, html, text);
-
-    return json(200, {
-      ok: true,
-      session_id: session.id,
-      sku,
-      title,
-      email,
-      credited: minutes,
-      wallet_after: walletAfter,
-      context_used: contextUsed
-    });
-  } catch (e) {
-    return json(500, { error: 'unhandled', detail: String(e.message || e) });
+    // Risposta OK
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ok: true,
+        session_id: sessionId,
+        sku,
+        title,
+        email: email || null,
+        credited: minutes,
+        wallet_after: walletAfter,
+        email_sent: emailInfo.status,
+        email_id: emailInfo.id,
+        waStatus,
+        context_used: contextUsed || null,
+      }),
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'handle_failed', detail: String(err && err.message || err) }),
+    };
   }
 };
+
+// ---- helpers --------------------------------------------------------------
+
+function escapeHTML(s = '') {
+  return String(s)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
