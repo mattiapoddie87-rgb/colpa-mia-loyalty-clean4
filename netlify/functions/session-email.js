@@ -1,5 +1,6 @@
 // netlify/functions/session-email.js
-// Usa modelli interni + piccola variazione GPT-4o. Nessuna dipendenza da altre funzioni.
+// Modelli interni + leggera variazione GPT-4o.
+// 1) Mappa SKU -> modello. 2) Se non basta, deduce dal need. 3) Fallback generico.
 
 const https = require('https');
 const { sendMail } = require('./send-utils');
@@ -8,7 +9,7 @@ const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <noreply@colpamia.com>';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL_ || 'gpt-4o-mini';
 
-// --- NORMALIZZA CONTESTO ---
+// ---------- NORMALIZZA CONTESTO ----------
 function normNeed(s = '') {
   const t = String(s).toLowerCase();
   if (/aper|spritz|drink/.test(t)) return 'APERITIVO';
@@ -23,7 +24,7 @@ function normNeed(s = '') {
   return '';
 }
 
-// --- MODELLI ---
+// ---------- MODELLI TESTO ----------
 const MODELLI = {
   CENA: [
     'Ciao, grazie mille per l’invito: mi fa davvero piacere. Purtroppo quella sera ho già un impegno e non riesco a unirmi.',
@@ -72,77 +73,83 @@ const MODELLI = {
   ESAME: [
     'Ciao, mi dispiace per il ritardo: sono rimasto bloccato nel traffico per un incidente e non sono riuscito ad arrivare prima.',
     'Ciao, mi dispiace per il ritardo: sono rimasta bloccata nel traffico per un incidente e non sono riuscita ad arrivare prima.'
+  ],
+  // per SKU che non chiedono contesto
+  TRAFFICO: [
+    'Sono in ritardo per un blocco di traffico imprevisto. Mi prendo la responsabilità: arrivo e recupero il tempo, oppure riprogrammiamo oggi stesso in un orario utile per te.'
+  ],
+  RIUNIONE: [
+    'La riunione precedente è sforata e ha impattato il nostro appuntamento. Errore mio di pianificazione: propongo nuovo slot oggi con agenda compressa e materiali in anticipo.'
+  ],
+  CONNESSIONE: [
+    'Problemi di connessione hanno interrotto l’appuntamento. Ho già predisposto rete di backup. Propongo nuova sessione oggi con recap scritto a seguire.'
   ]
 };
 
-// --- COSTRUISCI VARIANTI DAL MODELLO ---
-function buildFromModels({ sku = '', need = '' }) {
-  const S = String(sku).toUpperCase().trim();
-  const deluxe = S === 'SCUSA_DELUXE';
-  const ctx = normNeed(need);
-  const pool = MODELLI[ctx] || [
-    'Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.'
-  ];
-  const take = deluxe ? Math.min(3, pool.length) : 1;
-  return { ctx: ctx || S, base: pool.slice(0, take) };
+// SKU -> CONTEX (priorità allo SKU)
+const SKU2CTX = (()=>{
+  const base = {};
+  Object.keys(MODELLI).forEach(k => { base[k] = k; base[`SCUSA_${k}`] = k; });
+  base.SCUSA_BASE = null; // usa parsing need
+  return base;
+})();
+
+// ---------- RISOLUZIONE MODELLO ----------
+function resolveCtxBySkuOrNeed({ sku, need }) {
+  const S = String(sku || '').toUpperCase().trim();
+  const fromSku = SKU2CTX[S] ?? SKU2CTX[S.replace(/^SCUSA_/, '')];
+  if (fromSku && MODELLI[fromSku]) return fromSku;
+
+  const fromNeed = normNeed(need);
+  if (fromNeed && MODELLI[fromNeed]) return fromNeed;
+
+  return null;
 }
 
-// --- HTTP JSON ---
+// ---------- HTTP ----------
 function httpsJson(method, url, headers, body) {
   const u = new URL(url);
   const payload = Buffer.from(JSON.stringify(body || {}));
-  const opts = {
-    method, hostname: u.hostname, port: 443, path: u.pathname + (u.search || ''),
-    headers: { 'Content-Type': 'application/json', 'Content-Length': payload.length, ...headers },
-    timeout: 15000
-  };
-  return new Promise((resolve, reject) => {
-    const req = https.request(opts, res => {
-      let data = ''; res.on('data', c => (data += c));
-      res.on('end', () => {
-        if (res.statusCode < 200 || res.statusCode >= 300) return reject(new Error(`HTTP ${res.statusCode}: ${data}`));
-        try { resolve(data ? JSON.parse(data) : {}); } catch { resolve({}); }
-      });
-    });
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error('HTTP timeout')));
+  const opts = { method, hostname:u.hostname, port:443, path:u.pathname+(u.search||''), headers:{'Content-Type':'application/json','Content-Length':payload.length,...headers}, timeout:15000 };
+  return new Promise((resolve,reject)=>{
+    const req = https.request(opts, res=>{ let data=''; res.on('data',c=>data+=c);
+      res.on('end',()=>{ if(res.statusCode<200||res.statusCode>=300) return reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+        try{ resolve(data?JSON.parse(data):{});}catch{ resolve({}); } });});
+    req.on('error',reject); req.on('timeout',()=>req.destroy(new Error('HTTP timeout')));
     req.write(payload); req.end();
   });
 }
 
-// --- VARIAZIONE LEGGERA GPT-4o (SAFE) ---
-async function varyLight(text) {
+// ---------- VARIAZIONE LEGGERA GPT ----------
+async function varyLight(text){
   if (!OPENAI_API_KEY) return text;
-  const system = 'Parafrasa leggermente in italiano. Mantieni significato e tono. 1-3 frasi, ±15% lunghezza. Niente emoji/saluti. Rispondi solo col testo.';
+  const system = 'Parafrasa leggermente in italiano. Mantieni significato e tono. 1-3 frasi, ±15% lunghezza. Niente emoji o saluti. Rispondi solo col testo.';
   const user = `Testo base:\n"""${text}"""`;
-  try {
+  try{
     const r = await httpsJson('POST','https://api.openai.com/v1/chat/completions',
       { Authorization:`Bearer ${OPENAI_API_KEY}` },
       { model: OPENAI_MODEL, temperature:0.3, max_tokens:160,
         messages:[{role:'system',content:system},{role:'user',content:user}] });
     return r?.choices?.[0]?.message?.content?.trim() || text;
-  } catch {
-    return text;
-  }
+  }catch{ return text; }
 }
 
-// --- UTILI SESSIONE ---
+// ---------- SESSION UTILS ----------
 function getNeed(session){
   if (session?.metadata?.need) return String(session.metadata.need).trim();
   const cf = Array.isArray(session?.custom_fields)? session.custom_fields : [];
-  const f = cf.find(x => x?.key==='need' && x?.type==='text' && x?.text?.value);
+  const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
   if (f?.text?.value) return String(f.text.value).trim();
-  return (session?.client_reference_id || session?.metadata?.sku || 'SCUSA_BASE').toString().trim();
+  return '';
 }
 function getSKU(session){
-  return (session?.metadata?.sku || session?.client_reference_id || 'SCUSA_BASE')
-    .toString().trim().toUpperCase();
+  return (session?.metadata?.sku || session?.client_reference_id || '').toString().trim().toUpperCase();
 }
 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
 
-// --- RENDER ---
+// ---------- RENDER ----------
 function renderHtml({ ctx, variants }){
-  const items = variants.map(t => `<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
+  const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
   return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
   <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:24px">
     <h1 style="font-size:20px;margin:0 0 12px">La tua scusa è pronta</h1>
@@ -156,7 +163,7 @@ function renderText({ ctx, variants }){
   return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`;
 }
 
-// --- ENTRY USATA DAL WEBHOOK ---
+// ---------- ENTRY DAL WEBHOOK ----------
 async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
   const to = overrideTo || session?.customer_details?.email || session?.customer_email;
   if (!to) throw new Error('destinatario mancante');
@@ -164,9 +171,11 @@ async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
   const need = getNeed(session);
   const sku  = getSKU(session);
 
-  const { ctx, base } = buildFromModels({ sku, need }); // modelli fissi
+  const ctx = resolveCtxBySkuOrNeed({ sku, need }) || 'SCUSA_BASE';
+  const pool = MODELLI[ctx] || ['Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.'];
+
   const variants = [];
-  for (const t of base) variants.push(await varyLight(t)); // variazione leggera
+  for (const t of pool) variants.push(await varyLight(t)); // variazione leggera
 
   const subject = `La tua scusa • ${ctx}`;
   const html = renderHtml({ ctx, variants });
@@ -177,4 +186,3 @@ async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
 }
 
 module.exports = { sendCheckoutEmail };
-  
