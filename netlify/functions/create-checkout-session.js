@@ -1,23 +1,11 @@
-// netlify/functions/create-checkout-session.js
+ // Crea Checkout Session senza campo "Contesto" per SCUSA_BASE, TRAFFICO, RIUNIONE, CONNESSIONE
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
-
 const SITE = process.env.SITE_URL || 'https://colpamia.com';
 
-// SKU che NON devono mostrare il campo "Contesto"
-function noContextSKU(sku) {
-  const s = String(sku || '').toUpperCase();
-  return s.includes('TRAFFICO') || s.includes('RIUNIONE') || s.includes('CONNESSIONE');
-}
+const NO_CONTEXT = new Set(['SCUSA_BASE','TRAFFICO','RIUNIONE','CONNESSIONE']);
 
-// se il menu a tendina ha già deciso il contesto, non chiedere nulla
-function shouldAskContext(sku, presetNeed) {
-  if (noContextSKU(sku)) return false;
-  if (presetNeed && String(presetNeed).trim().length >= 4) return false;
-  return true;
-}
-
-function customFieldsFor(sku, presetNeed) {
+function customFieldsFor(sku) {
   const fields = [
     {
       key: 'phone',
@@ -27,7 +15,8 @@ function customFieldsFor(sku, presetNeed) {
       text: { maximum_length: 20 }
     }
   ];
-  if (shouldAskContext(sku, presetNeed)) {
+  // niente "need" per tutti gli SKU sopra
+  if (!NO_CONTEXT.has(String(sku || '').toUpperCase())) {
     fields.push({
       key: 'need',
       label: { type: 'custom', custom: 'Contesto (obbligatorio: 4–120 caratteri)' },
@@ -46,14 +35,9 @@ function getPriceIdForSKU(sku) {
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
-
-  let body = {};
-  try { body = JSON.parse(event.body || '{}'); } catch {}
+  let body = {}; try { body = JSON.parse(event.body || '{}'); } catch {}
   const sku = String(body.sku || 'SCUSA_BASE');
   const qty = Number(body.quantity || 1);
-
-  // dal menu a tendina: body.need oppure body.context
-  const presetNeed = (body.need || body.context || '').trim();
 
   const priceId = getPriceIdForSKU(sku);
   if (!priceId) return { statusCode: 400, body: `SKU non valido: ${sku}` };
@@ -67,13 +51,13 @@ exports.handler = async (event) => {
     customer_creation: 'always',
     phone_number_collection: { enabled: true },
     client_reference_id: sku,
-    metadata: { sku }
+    metadata: { sku },
+    custom_fields: customFieldsFor(sku)
   };
 
-  // se il contesto è già deciso, lo salvo in metadata e NON mostro il campo
-  if (presetNeed) params.metadata.need = presetNeed;
-
-  params.custom_fields = customFieldsFor(sku, presetNeed);
+  // se il front-end passa già un contesto (menu), lo salvo in metadata e NON comparirà
+  const preset = (body.need || body.context || '').trim();
+  if (preset) params.metadata.need = preset;
 
   try {
     const session = await stripe.checkout.sessions.create(params);
@@ -83,3 +67,4 @@ exports.handler = async (event) => {
     return { statusCode: 500, body: 'create_session_failed' };
   }
 };
+   
