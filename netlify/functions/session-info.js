@@ -26,20 +26,19 @@ exports.handler = async (event)=>{
     const id = (event.queryStringParameters?.id || '').trim();
     if(!id) return json(400,{error:'missing_id'});
 
-    const sess = await stripe.checkout.sessions.retrieve(id);
+    const s = await stripe.checkout.sessions.retrieve(id);
 
-    const sku   = sess.client_reference_id || sess.metadata?.sku || '';
-    const title = TITLE[sku] || (sku ? sku : 'Prodotto');
-    const email = sess.customer_details?.email || '';
-    const amount = typeof sess.amount_total === 'number' ? sess.amount_total : null;
-    const currency = (sess.currency || '').toUpperCase();
+    const sku   = s.client_reference_id || s.metadata?.sku || '';
+    const title = TITLE[sku] || (sku || 'Prodotto');
+    const amount = Number.isFinite(s.amount_total) ? s.amount_total : null;
+    const currency = (s.currency || '').toUpperCase();
 
     return json(200,{
-      id: sess.id,
+      id: s.id,
       sku,
       title,
-      email,
-      amount_total: amount,   // in centesimi
+      email: s.customer_details?.email || '',
+      amount_total: amount,   // centesimi
       currency
     });
   }catch(e){
