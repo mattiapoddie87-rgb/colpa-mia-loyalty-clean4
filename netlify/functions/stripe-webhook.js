@@ -1,4 +1,4 @@
-// Stripe Webhook -> invio email + salvataggio opzionale su Netlify Blobs
+// Stripe Webhook -> invio email + dedupe opzionale con Netlify Blobs
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -24,33 +24,72 @@ exports.handler = async (event) => {
     ? Buffer.from(event.body || '', 'base64')
     : Buffer.from(event.body || '', 'utf8');
 
-  let stripeEvent;
+  let evt;
   try {
-    stripeEvent = stripe.webhooks.constructEvent(raw, sig, endpointSecret);
+    evt = stripe.webhooks.constructEvent(raw, sig, endpointSecret);
   } catch (err) {
     console.error('Firma Stripe non valida:', err.message);
     return { statusCode: 400, body: `Webhook Error: ${err.message}` };
   }
 
-  if (stripeEvent.type === 'checkout.session.completed') {
-    const session = stripeEvent.data.object;
+  if (evt.type === 'checkout.session.completed') {
+    const session = evt.data.object;
 
-    // 1) Persistenza NON bloccante
+    // Dedupe opzionale: evita doppie email se Stripe ritenta
+    const store = await getBlobsStore();
+    const dedupeKey = `mailed:${evt.id}`;
     try {
-      const store = await getBlobsStore();
-      if (store) await store.set(`${session.id}.json`, JSON.stringify(session));
+      if (store) {
+        const already = await store.get(dedupeKey);
+        if (already) {
+          console.log('Email già inviata per', evt.id);
+          return { statusCode: 200, body: 'ok' };
+        }
+      }
     } catch (e) {
-      console.warn('Scrittura Blobs saltata:', e.message);
+      console.warn('Dedupe non disponibile:', e.message);
     }
 
-    // 2) Email al cliente
+    // Ricava destinatario con fallback a Customer
+    let to =
+      session?.customer_details?.email ||
+      session?.customer_email ||
+      session?.metadata?.email ||
+      null;
+    if (!to && session?.customer) {
+      try {
+        const cust = await stripe.customers.retrieve(session.customer);
+        to = cust?.email || null;
+      } catch (e) {
+        console.warn('Lookup customer email fallito:', e.message);
+      }
+    }
+
+    // Line items non bloccanti
+    let lineItems = [];
     try {
-      const lineItems = await stripe.checkout.sessions.listLineItems(session.id, { limit: 50 });
+      const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 50 });
+      lineItems = li.data || [];
+    } catch (e) {
+      console.warn('Line items non disponibili:', e.message);
+    }
+
+    // Invio email
+    try {
       const { sendCheckoutEmail } = require('./session-email');
-      await sendCheckoutEmail({ session, lineItems: lineItems.data });
+      await sendCheckoutEmail({ session, lineItems, overrideTo: to });
+      if (store) await store.set(dedupeKey, '1');
+      console.log('Email inviata per', session.id, 'a', to || 'N/D');
     } catch (e) {
       console.error('Invio email fallito:', e.message);
-      // Non propagare. Il pagamento resta confermato, il webhook risponde 200.
+      // Non rompere il webhook:
+    }
+
+    // Persistenza session opzionale
+    try {
+      if (store) await store.set(`${session.id}.json`, JSON.stringify(session));
+    } catch (e) {
+      console.warn('Scrittura session saltata:', e.message);
     }
   }
 
