@@ -1,4 +1,4 @@
-// Stripe Webhook -> invio email + dedupe opzionale con Netlify Blobs
+// Stripe webhook: invio email certo, dedupe opzionale su Netlify Blobs, nessun 500.
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -11,7 +11,8 @@ async function getBlobsStore() {
     const { createClient } = await import('@netlify/blobs');
     const client = createClient({ token, siteID });
     return client.getStore('checkouts');
-  } catch {
+  } catch (e) {
+    console.warn('Blobs non disponibile:', e.message);
     return null;
   }
 }
@@ -34,28 +35,26 @@ exports.handler = async (event) => {
 
   if (evt.type === 'checkout.session.completed') {
     const session = evt.data.object;
-
-    // Dedupe opzionale: evita doppie email se Stripe ritenta
     const store = await getBlobsStore();
+
+    // dedupe per evitare doppie mail se Stripe ritenta
     const dedupeKey = `mailed:${evt.id}`;
     try {
-      if (store) {
-        const already = await store.get(dedupeKey);
-        if (already) {
-          console.log('Email già inviata per', evt.id);
-          return { statusCode: 200, body: 'ok' };
-        }
+      if (store && (await store.get(dedupeKey))) {
+        console.log('Skip email: già inviata per', evt.id);
+        return { statusCode: 200, body: 'ok' };
       }
     } catch (e) {
       console.warn('Dedupe non disponibile:', e.message);
     }
 
-    // Ricava destinatario con fallback a Customer
+    // destinatario robusto
     let to =
       session?.customer_details?.email ||
       session?.customer_email ||
       session?.metadata?.email ||
       null;
+
     if (!to && session?.customer) {
       try {
         const cust = await stripe.customers.retrieve(session.customer);
@@ -65,7 +64,7 @@ exports.handler = async (event) => {
       }
     }
 
-    // Line items non bloccanti
+    // line items non bloccanti
     let lineItems = [];
     try {
       const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 50 });
@@ -74,22 +73,23 @@ exports.handler = async (event) => {
       console.warn('Line items non disponibili:', e.message);
     }
 
-    // Invio email
+    // invio email
     try {
       const { sendCheckoutEmail } = require('./session-email');
+      console.log('Invio email', { evtId: evt.id, sessionId: session.id, to });
       await sendCheckoutEmail({ session, lineItems, overrideTo: to });
       if (store) await store.set(dedupeKey, '1');
-      console.log('Email inviata per', session.id, 'a', to || 'N/D');
+      console.log('Email marcata come inviata', { evtId: evt.id });
     } catch (e) {
       console.error('Invio email fallito:', e.message);
-      // Non rompere il webhook:
+      // non bloccare il webhook
     }
 
-    // Persistenza session opzionale
+    // persistenza session opzionale
     try {
       if (store) await store.set(`${session.id}.json`, JSON.stringify(session));
     } catch (e) {
-      console.warn('Scrittura session saltata:', e.message);
+      console.warn('Persistenza session fallita:', e.message);
     }
   }
 
