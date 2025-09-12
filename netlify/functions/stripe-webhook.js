@@ -1,4 +1,3 @@
-// netlify/functions/stripe-webhook.js
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
@@ -22,47 +21,31 @@ exports.handler = async (event) => {
                                    : Buffer.from(event.body || '', 'utf8');
 
   let evt;
-  try {
-    evt = stripe.webhooks.constructEvent(raw, sig, endpointSecret);
-  } catch (err) {
-    console.error('Firma Stripe non valida:', err.message);
-    return { statusCode: 400, body: `Webhook Error: ${err.message}` };
-  }
+  try { evt = stripe.webhooks.constructEvent(raw, sig, endpointSecret); }
+  catch (err) { console.error('Firma Stripe non valida:', err.message); return { statusCode: 400, body: `Webhook Error: ${err.message}` }; }
 
   if (evt.type === 'checkout.session.completed') {
     const session = evt.data.object;
     const store = await getBlobsStore();
-
-    // dedupe SOLO dopo invio riuscito
     const dedupeKey = `mailed:${evt.id}`;
-    try {
-      if (store && (await store.get(dedupeKey))) {
-        console.log('Skip email: già inviata per', evt.id);
-        return { statusCode: 200, body: 'ok' };
-      }
-    } catch {}
 
-    // destinatario robusto
+    try { if (store && await store.get(dedupeKey)) { console.log('Skip email: già inviata', evt.id); return { statusCode: 200, body: 'ok' }; } } catch {}
+
     let to = session?.customer_details?.email || session?.customer_email || session?.metadata?.email || null;
     if (!to && session?.customer) {
-      try {
-        const cust = await stripe.customers.retrieve(session.customer);
-        to = cust?.email || null;
-      } catch (e) { console.warn('Lookup customer email fallito:', e.message); }
+      try { const cust = await stripe.customers.retrieve(session.customer); to = cust?.email || null; }
+      catch (e) { console.warn('Lookup customer email fallito:', e.message); }
     }
 
-    // line items non bloccanti
     let lineItems = [];
-    try {
-      const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 50 });
-      lineItems = li.data || [];
-    } catch (e) { console.warn('Line items non disponibili:', e.message); }
+    try { const li = await stripe.checkout.sessions.listLineItems(session.id, { limit: 50 }); lineItems = li.data || []; }
+    catch (e) { console.warn('Line items non disponibili:', e.message); }
 
     try {
       const { sendCheckoutEmail } = require('./session-email');
       console.log('Invio email', { evtId: evt.id, sessionId: session.id, to });
       await sendCheckoutEmail({ session, lineItems, overrideTo: to });
-      if (store) await store.set(dedupeKey, '1'); // marca solo dopo OK
+      if (store) await store.set(dedupeKey, '1');
       console.log('Email marcata come inviata', { evtId: evt.id });
     } catch (e) {
       console.error('Invio email fallito:', e.message);
