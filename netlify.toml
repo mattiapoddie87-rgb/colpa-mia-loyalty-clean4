@@ -1,8 +1,5 @@
 [functions]
 directory = "netlify/functions"
 node_bundler = "esbuild"
-external_node_modules = ["@netlify/blobs", "resend", "nodemailer"]
+external_node_modules = ["@netlify/blobs", "nodemailer"]
 
-# opzionale: lascia il plugin solo se lo usi davvero
-[[plugins]]
-package = "@netlify/plugin-lighthouse"
