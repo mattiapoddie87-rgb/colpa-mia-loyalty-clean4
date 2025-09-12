@@ -1,4 +1,4 @@
-// Invio email affidabile: Resend se disponibile, fallback SMTP. Log chiari.
+// Invio email: Resend se disponibile, fallback SMTP. Log chiari.
 const nodemailer = require('nodemailer');
 
 const FORCE_SMTP = (process.env.FORCE_SMTP || '').toLowerCase() === 'true';
@@ -7,7 +7,8 @@ async function getResendClient() {
   if (FORCE_SMTP) return null;
   try {
     if (!process.env.RESEND_API_KEY) return null;
-    const mod = await import('resend'); // ESM-safe su Netlify
+    // ESM-safe. Il modulo deve essere esternalizzato nel bundle (vedi netlify.toml).
+    const mod = await import('resend');
     const Resend = mod.Resend || mod.default || mod;
     return new Resend(process.env.RESEND_API_KEY);
   } catch (e) {
@@ -31,7 +32,6 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
   const secure = (process.env.SMTP_SECURE || '').toLowerCase() === 'true' || port === 465;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-
   if (!host) throw new Error('SMTP_HOST mancante');
 
   const transporter = nodemailer.createTransport({
@@ -45,7 +45,6 @@ async function sendWithSMTP({ from, to, subject, html, text }) {
 }
 
 async function sendMail(opts) {
-  // prova Resend → fallback SMTP
   try {
     const r = await sendWithResend(opts);
     return r;
