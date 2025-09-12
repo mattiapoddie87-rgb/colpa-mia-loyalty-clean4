@@ -1,6 +1,6 @@
 // netlify/functions/session-email.js
-// Modelli interni + leggera variazione GPT-4o.
-// 1) Mappa SKU -> modello. 2) Se non basta, deduce dal need. 3) Fallback generico.
+// Modelli fissi + piccola variazione GPT-4o.
+// Risolve il contesto da: SKU, client_reference_id, line items, testo "need".
 
 const https = require('https');
 const { sendMail } = require('./send-utils');
@@ -9,22 +9,7 @@ const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <noreply@colpamia.com>';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL_ || 'gpt-4o-mini';
 
-// ---------- NORMALIZZA CONTESTO ----------
-function normNeed(s = '') {
-  const t = String(s).toLowerCase();
-  if (/aper|spritz|drink/.test(t)) return 'APERITIVO';
-  if (/cena|ristor/.test(t)) return 'CENA';
-  if (/evento|party|festa|concerto/.test(t)) return 'EVENTO';
-  if (/lavor|ufficio|meeting|report/.test(t)) return 'LAVORO';
-  if (/calcett|partita|calcetto/.test(t)) return 'CALCETTO';
-  if (/famigl|figli|marit|mogli|genit|madre|padre|nonna|nonno/.test(t)) return 'FAMIGLIA';
-  if (/salute|febbre|medic|dott|tosse|allerg/.test(t)) return 'SALUTE';
-  if (/appunt|conseg/.test(t)) return 'APPUNTAMENTO';
-  if (/esame|lezion|prof/.test(t)) return 'ESAME';
-  return '';
-}
-
-// ---------- MODELLI TESTO ----------
+// ------------ MODELLI ------------
 const MODELLI = {
   CENA: [
     'Ciao, grazie mille per l’invito: mi fa davvero piacere. Purtroppo quella sera ho già un impegno e non riesco a unirmi.',
@@ -74,7 +59,6 @@ const MODELLI = {
     'Ciao, mi dispiace per il ritardo: sono rimasto bloccato nel traffico per un incidente e non sono riuscito ad arrivare prima.',
     'Ciao, mi dispiace per il ritardo: sono rimasta bloccata nel traffico per un incidente e non sono riuscita ad arrivare prima.'
   ],
-  // per SKU che non chiedono contesto
   TRAFFICO: [
     'Sono in ritardo per un blocco di traffico imprevisto. Mi prendo la responsabilità: arrivo e recupero il tempo, oppure riprogrammiamo oggi stesso in un orario utile per te.'
   ],
@@ -86,30 +70,79 @@ const MODELLI = {
   ]
 };
 
-// SKU -> CONTEX (priorità allo SKU)
-const SKU2CTX = (()=>{
-  const base = {};
-  Object.keys(MODELLI).forEach(k => { base[k] = k; base[`SCUSA_${k}`] = k; });
-  base.SCUSA_BASE = null; // usa parsing need
-  return base;
-})();
+// pattern per riconoscere il contesto in qualsiasi stringa
+const CTX_PAT = {
+  CALCETTO: /(calcett|partita|calcetto)/i,
+  TRAFFICO: /(traffico|coda|incidente|blocco)/i,
+  RIUNIONE: /(riunion|meeting)/i,
+  CONNESSIONE: /(connession|internet|rete|wifi)/i,
+  CENA: /(cena|ristor)/i,
+  APERITIVO: /(aper|spritz|drink)/i,
+  EVENTO: /(evento|party|festa|concerto)/i,
+  LAVORO: /(lavor|ufficio|report)/i,
+  FAMIGLIA: /(famigl|figli|marit|mogli|genit|madre|padre|nonna|nonno)/i,
+  SALUTE: /(salute|febbre|medic|dott|tosse|allerg)/i,
+  APPUNTAMENTO: /(appunt|conseg)/i,
+  ESAME: /(esame|lezion|prof)/i
+};
 
-// ---------- RISOLUZIONE MODELLO ----------
-function resolveCtxBySkuOrNeed({ sku, need }) {
-  const S = String(sku || '').toUpperCase().trim();
-  const fromSku = SKU2CTX[S] ?? SKU2CTX[S.replace(/^SCUSA_/, '')];
-  if (fromSku && MODELLI[fromSku]) return fromSku;
+// ------------ UTIL ------------
+function getNeed(session){
+  if (session?.metadata?.need) return String(session.metadata.need).trim();
+  const cf = Array.isArray(session?.custom_fields)? session.custom_fields : [];
+  const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
+  if (f?.text?.value) return String(f.text.value).trim();
+  return '';
+}
+function getSKU(session){
+  return (session?.metadata?.sku || session?.client_reference_id || '').toString().trim().toUpperCase();
+}
+function looksDeluxe(sku){ return /\bDELUXE\b/i.test(String(sku)); }
 
-  const fromNeed = normNeed(need);
-  if (fromNeed && MODELLI[fromNeed]) return fromNeed;
+function extractHints(session, lineItems){
+  const hints = [];
+  const push = v => { if (v) hints.push(String(v)); };
+  push(session?.client_reference_id);
+  push(session?.metadata?.sku);
+  push(session?.metadata?.category);
+  push(session?.mode);
+  // line items
+  const items = Array.isArray(lineItems?.data) ? lineItems.data : [];
+  for (const it of items){
+    push(it?.description);
+    push(it?.price?.nickname);
+    push(it?.price?.metadata?.sku);
+    push(it?.price?.product?.name);
+  }
+  // testo need
+  push(getNeed(session));
+  return hints.filter(Boolean);
+}
 
+// risolve contesto da hints e need
+function resolveContext(session, lineItems){
+  const sku = getSKU(session);
+  const candidates = extractHints(session, lineItems);
+  candidates.unshift(sku); // priorità assoluta allo SKU
+
+  for (const val of candidates){
+    const U = String(val).toUpperCase();
+    // match diretto su nome modello o su "SCUSA_<MODELLO>"
+    for (const ctx of Object.keys(MODELLI)){
+      if (U.includes(ctx) || U.includes(`SCUSA_${ctx}`)) return ctx;
+    }
+    // match via pattern
+    for (const [ctx, rx] of Object.entries(CTX_PAT)){
+      if (rx.test(val)) return ctx;
+    }
+  }
   return null;
 }
 
-// ---------- HTTP ----------
-function httpsJson(method, url, headers, body) {
+// ------------ GPT variazione leggera ------------
+function httpsJson(method, url, headers, body){
   const u = new URL(url);
-  const payload = Buffer.from(JSON.stringify(body || {}));
+  const payload = Buffer.from(JSON.stringify(body||{}));
   const opts = { method, hostname:u.hostname, port:443, path:u.pathname+(u.search||''), headers:{'Content-Type':'application/json','Content-Length':payload.length,...headers}, timeout:15000 };
   return new Promise((resolve,reject)=>{
     const req = https.request(opts, res=>{ let data=''; res.on('data',c=>data+=c);
@@ -119,8 +152,6 @@ function httpsJson(method, url, headers, body) {
     req.write(payload); req.end();
   });
 }
-
-// ---------- VARIAZIONE LEGGERA GPT ----------
 async function varyLight(text){
   if (!OPENAI_API_KEY) return text;
   const system = 'Parafrasa leggermente in italiano. Mantieni significato e tono. 1-3 frasi, ±15% lunghezza. Niente emoji o saluti. Rispondi solo col testo.';
@@ -134,20 +165,8 @@ async function varyLight(text){
   }catch{ return text; }
 }
 
-// ---------- SESSION UTILS ----------
-function getNeed(session){
-  if (session?.metadata?.need) return String(session.metadata.need).trim();
-  const cf = Array.isArray(session?.custom_fields)? session.custom_fields : [];
-  const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
-  if (f?.text?.value) return String(f.text.value).trim();
-  return '';
-}
-function getSKU(session){
-  return (session?.metadata?.sku || session?.client_reference_id || '').toString().trim().toUpperCase();
-}
+// ------------ render ------------
 function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-
-// ---------- RENDER ----------
 function renderHtml({ ctx, variants }){
   const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
   return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
@@ -159,23 +178,21 @@ function renderHtml({ ctx, variants }){
     <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email con le istruzioni.</p>
   </div></body></html>`;
 }
-function renderText({ ctx, variants }){
-  return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`;
-}
+function renderText({ ctx, variants }){ return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`; }
 
-// ---------- ENTRY DAL WEBHOOK ----------
+// ------------ entry usata dal webhook ------------
 async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
   const to = overrideTo || session?.customer_details?.email || session?.customer_email;
   if (!to) throw new Error('destinatario mancante');
 
-  const need = getNeed(session);
-  const sku  = getSKU(session);
+  const ctx = resolveContext(session, lineItems) || 'CENA'; // fallback sensato
+  const deluxe = looksDeluxe(getSKU(session));
+  const pool = MODELLI[ctx];
+  const take = deluxe ? Math.min(3, pool.length) : 1;
 
-  const ctx = resolveCtxBySkuOrNeed({ sku, need }) || 'SCUSA_BASE';
-  const pool = MODELLI[ctx] || ['Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.'];
-
+  const base = pool.slice(0, take);
   const variants = [];
-  for (const t of pool) variants.push(await varyLight(t)); // variazione leggera
+  for (const t of base) variants.push(await varyLight(t));
 
   const subject = `La tua scusa • ${ctx}`;
   const html = renderHtml({ ctx, variants });
@@ -186,3 +203,5 @@ async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
 }
 
 module.exports = { sendCheckoutEmail };
+
+    
