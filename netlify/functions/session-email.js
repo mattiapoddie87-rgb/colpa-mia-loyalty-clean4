@@ -1,84 +1,86 @@
-// netlify/functions/session-email.js
-// Usa i modelli di ai-excuse.js per generare la scusa e inviarla via email.
+// Usa i template di excuse.js e li varia leggermente con GPT-4o.
+// Se l'AI fallisce, invia i template puri.
+const https = require('https');
 const { sendMail } = require('./send-utils');
-const aiExcuse = require('./ai-excuse'); // { handler }
+const { buildExcuse } = require('./excuse');
 
 const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <noreply@colpamia.com>';
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
+const OPENAI_MODEL = process.env.OPENAI_MODEL_ || 'gpt-4o-mini';
 
-// ---- helpers ----
-function getNeed(session) {
+// -------- util --------
+function getNeed(session){
   if (session?.metadata?.need) return String(session.metadata.need).trim();
-  const cf = Array.isArray(session?.custom_fields) ? session.custom_fields : [];
-  const found = cf.find(f => f?.key === 'need' && f?.type === 'text' && f?.text?.value);
-  if (found?.text?.value) return String(found.text.value).trim();
+  const cf = Array.isArray(session?.custom_fields)? session.custom_fields : [];
+  const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
+  if (f?.text?.value) return String(f.text.value).trim();
   return (session?.client_reference_id || session?.metadata?.sku || 'SCUSA_BASE').toString().trim();
 }
+function getSKU(session){
+  return (session?.metadata?.sku || session?.client_reference_id || 'SCUSA_BASE').toString().trim().toUpperCase();
+}
+function httpsJson(method, url, headers, body){
+  const u = new URL(url); const payload = Buffer.from(JSON.stringify(body||{}));
+  const opts = { method, hostname:u.hostname, port:443, path:u.pathname+(u.search||''), headers:{'Content-Type':'application/json','Content-Length':payload.length,...headers}, timeout:15000 };
+  return new Promise((resolve,reject)=>{
+    const req = https.request(opts, res=>{ let data=''; res.on('data',c=>data+=c);
+      res.on('end',()=>{ if(res.statusCode<200||res.statusCode>=300) return reject(new Error(`HTTP ${res.statusCode}: ${data}`));
+        try{ resolve(data?JSON.parse(data):{});}catch{ resolve({}); } });});
+    req.on('error',reject); req.on('timeout',()=>req.destroy(new Error('HTTP timeout')));
+    req.write(payload); req.end();
+  });
+}
+function escapeHtml(s){return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
 
-function getSKU(session) {
-  return (session?.metadata?.sku || session?.client_reference_id || 'SCUSA_BASE')
-    .toString().trim().toUpperCase();
+// -------- variazione leggera --------
+async function varyLight(text){
+  if (!OPENAI_API_KEY) return text; // fallback
+  const system = 'Parafrasa leggermente in italiano. Mantieni significato, tono e persona. 1-3 frasi. Lunghezza ±15%. Niente emoji, niente saluti aggiuntivi, niente fronzoli. Restituisci solo il testo.';
+  const user = `Testo base:\n"""${text}"""`;
+  try{
+    const r = await httpsJson('POST','https://api.openai.com/v1/chat/completions',
+      { Authorization:`Bearer ${OPENAI_API_KEY}` },
+      { model: OPENAI_MODEL, temperature:0.3, max_tokens:180, messages:[
+        { role:'system', content: system },
+        { role:'user', content: user }
+      ]}
+    );
+    const out = r?.choices?.[0]?.message?.content?.trim();
+    return out || text;
+  }catch{ return text; }
 }
 
-function escapeHtml(s) {
-  return String(s || '')
-    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-function renderHtml({ need, variants }) {
-  const items = variants.map((t, i) =>
-    `<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(`${t}`)}</div>`).join('');
-  return `<!doctype html><html lang="it"><meta charset="utf-8">
-<body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
+// -------- rendering --------
+function renderHtml({ ctx, variants }){
+  const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
+  return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
   <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:24px">
     <h1 style="font-size:20px;margin:0 0 12px">La tua scusa è pronta</h1>
-    <p style="margin:0 0 16px;font-size:14px;color:#555">Contesto: <strong>${escapeHtml(need)}</strong></p>
+    <p style="margin:0 0 16px;font-size:14px;color:#555">Contesto: <strong>${escapeHtml(ctx)}</strong></p>
     ${items}
     <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
-    <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email indicando correzioni o vincoli.</p>
-  </div>
-</body></html>`;
+    <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email con le istruzioni.</p>
+  </div></body></html>`;
+}
+function renderText({ ctx, variants }){
+  return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`;
 }
 
-function renderText({ need, variants }) {
-  const body = variants.map((t, i) => `${t}`).join('\n\n');
-  return `La tua scusa è pronta\nContesto: ${need}\n\n${body}\n`;
-}
-
-// ---- core: usa ai-excuse.js ----
-async function getExcuseVariants({ sku, need }) {
-  const event = {
-    httpMethod: 'POST',
-    body: JSON.stringify({ sku, need })
-  };
-  const res = await aiExcuse.handler(event);
-  if (!res || res.statusCode !== 200) {
-    throw new Error(`ai_excuse_error: ${res && res.body ? res.body : 'no_response'}`);
-  }
-  const payload = JSON.parse(res.body || '{}');
-  const variants = Array.isArray(payload.variants)
-    ? payload.variants.map(v => v && (v.text || v.whatsapp_text)).filter(Boolean)
-    : [];
-  if (!variants.length) throw new Error('ai_excuse_empty');
-  return variants;
-}
-
-// API usata dal webhook
-async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }) {
-  const to =
-    overrideTo ||
-    session?.customer_details?.email ||
-    session?.customer_email;
+// -------- entry usata dal webhook --------
+async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
+  const to = overrideTo || session?.customer_details?.email || session?.customer_email;
   if (!to) throw new Error('destinatario mancante');
 
   const need = getNeed(session);
-  const sku = getSKU(session);
+  const sku  = getSKU(session);
 
-  // prendi i testi direttamente da ai-excuse.js
-  const variants = await getExcuseVariants({ sku, need });
+  const { ctx, base } = buildExcuse({ sku, need });           // <- prende i MODELLI
+  const variants = [];
+  for (const t of base) variants.push(await varyLight(t));    // <- variazione leggera
 
-  const subject = `La tua scusa • ${need}`;
-  const html = renderHtml({ need, variants });
-  const text = renderText({ need, variants });
+  const subject = `La tua scusa • ${ctx}`;
+  const html = renderHtml({ ctx, variants });
+  const text = renderText({ ctx, variants });
 
   await sendMail({ from: MAIL_FROM, to, subject, html, text, replyTo });
   return { to, subject };
