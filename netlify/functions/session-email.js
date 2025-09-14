@@ -1,7 +1,4 @@
 // netlify/functions/session-email.js
-// Modelli fissi + piccola variazione GPT-4o.
-// Risolve il contesto da: SKU, client_reference_id, line items, testo "need".
-
 const https = require('https');
 const { sendMail } = require('./send-utils');
 
@@ -9,7 +6,7 @@ const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <noreply@colpamia.com>';
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 const OPENAI_MODEL = process.env.OPENAI_MODEL_ || 'gpt-4o-mini';
 
-// ------------ MODELLI ------------
+// ---- MODELLI ----
 const MODELLI = {
   CENA: [
     'Ciao, grazie mille per l’invito: mi fa davvero piacere. Purtroppo quella sera ho già un impegno e non riesco a unirmi.',
@@ -70,7 +67,6 @@ const MODELLI = {
   ]
 };
 
-// pattern per riconoscere il contesto in qualsiasi stringa
 const CTX_PAT = {
   CALCETTO: /(calcett|partita|calcetto)/i,
   TRAFFICO: /(traffico|coda|incidente|blocco)/i,
@@ -86,60 +82,71 @@ const CTX_PAT = {
   ESAME: /(esame|lezion|prof)/i
 };
 
-// ------------ UTIL ------------
+// ---- util ----
+function arr(x){ return Array.isArray(x) ? x : (x && x.data ? x.data : []); }
 function getNeed(session){
   if (session?.metadata?.need) return String(session.metadata.need).trim();
   const cf = Array.isArray(session?.custom_fields)? session.custom_fields : [];
   const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
-  if (f?.text?.value) return String(f.text.value).trim();
-  return '';
+  return f?.text?.value ? String(f.text.value).trim() : '';
 }
-function getSKU(session){
-  return (session?.metadata?.sku || session?.client_reference_id || '').toString().trim().toUpperCase();
+function skuFrom(session){ return (session?.metadata?.sku || session?.client_reference_id || '').toString(); }
+function deluxeFlag(session, lineItems){
+  const hints = collectHints(session, lineItems).map(s=>String(s).toUpperCase());
+  return hints.some(h => /\bDELUXE\b/.test(h));
 }
-function looksDeluxe(sku){ return /\bDELUXE\b/i.test(String(sku)); }
 
-function extractHints(session, lineItems){
-  const hints = [];
-  const push = v => { if (v) hints.push(String(v)); };
-  push(session?.client_reference_id);
+function collectHints(session, lineItems){
+  const out = [];
+  const push = v=>{ if (v) out.push(String(v)); };
+  push(session?.metadata?.ctx);                  // 1. priorità assoluta
+  push(session?.client_reference_id);            // es. SCUSA_CALCETTO
   push(session?.metadata?.sku);
-  push(session?.metadata?.category);
-  push(session?.mode);
-  // line items
-  const items = Array.isArray(lineItems?.data) ? lineItems.data : [];
+  push(getNeed(session));
+  const items = arr(lineItems);
   for (const it of items){
     push(it?.description);
     push(it?.price?.nickname);
-    push(it?.price?.metadata?.sku);
     push(it?.price?.product?.name);
+    push(it?.price?.metadata?.sku);
+    push(it?.price?.product?.metadata?.sku);
   }
-  // testo need
-  push(getNeed(session));
-  return hints.filter(Boolean);
+  return out.filter(Boolean);
 }
 
-// risolve contesto da hints e need
-function resolveContext(session, lineItems){
-  const sku = getSKU(session);
-  const candidates = extractHints(session, lineItems);
-  candidates.unshift(sku); // priorità assoluta allo SKU
+function resolveCtx(session, lineItems){
+  const hints = collectHints(session, lineItems);
 
-  for (const val of candidates){
-    const U = String(val).toUpperCase();
-    // match diretto su nome modello o su "SCUSA_<MODELLO>"
+  // match diretto "SCUSA_<CTX>" o "<CTX>"
+  for (const h of hints){
+    const U = String(h).toUpperCase();
     for (const ctx of Object.keys(MODELLI)){
-      if (U.includes(ctx) || U.includes(`SCUSA_${ctx}`)) return ctx;
-    }
-    // match via pattern
-    for (const [ctx, rx] of Object.entries(CTX_PAT)){
-      if (rx.test(val)) return ctx;
+      if (U.includes(`SCUSA_${ctx}`) || U.includes(ctx)) return ctx;
     }
   }
-  return null;
+  // pattern
+  for (const h of hints){
+    for (const [ctx, rx] of Object.entries(CTX_PAT)){ if (rx.test(h)) return ctx; }
+  }
+  return 'SCUSA_BASE';
 }
 
-// ------------ GPT variazione leggera ------------
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderHtml({ ctx, variants }){
+  const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
+  return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
+  <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:24px">
+    <h1 style="font-size:20px;margin:0 0 12px">La tua scusa è pronta</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:#555">Contesto: <strong>${escapeHtml(ctx)}</strong></p>
+    ${items}
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+    <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email con le istruzioni.</p>
+  </div></body></html>`;
+}
+function renderText({ ctx, variants }){ return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`; }
+
+// ---- GPT variazione leggera ----
 function httpsJson(method, url, headers, body){
   const u = new URL(url);
   const payload = Buffer.from(JSON.stringify(body||{}));
@@ -154,7 +161,7 @@ function httpsJson(method, url, headers, body){
 }
 async function varyLight(text){
   if (!OPENAI_API_KEY) return text;
-  const system = 'Parafrasa leggermente in italiano. Mantieni significato e tono. 1-3 frasi, ±15% lunghezza. Niente emoji o saluti. Rispondi solo col testo.';
+  const system = 'Parafrasa leggermente in italiano. Mantieni significato e tono. 1-3 frasi, ±15% lunghezza. Nessun saluto. Solo testo.';
   const user = `Testo base:\n"""${text}"""`;
   try{
     const r = await httpsJson('POST','https://api.openai.com/v1/chat/completions',
@@ -165,31 +172,16 @@ async function varyLight(text){
   }catch{ return text; }
 }
 
-// ------------ render ------------
-function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function renderHtml({ ctx, variants }){
-  const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
-  return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
-  <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:24px">
-    <h1 style="font-size:20px;margin:0 0 12px">La tua scusa è pronta</h1>
-    <p style="margin:0 0 16px;font-size:14px;color:#555">Contesto: <strong>${escapeHtml(ctx)}</strong></p>
-    ${items}
-    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
-    <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email con le istruzioni.</p>
-  </div></body></html>`;
-}
-function renderText({ ctx, variants }){ return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`; }
-
-// ------------ entry usata dal webhook ------------
+// ---- entry usata dal webhook ----
 async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
   const to = overrideTo || session?.customer_details?.email || session?.customer_email;
   if (!to) throw new Error('destinatario mancante');
 
-  const ctx = resolveContext(session, lineItems) || 'CENA'; // fallback sensato
-  const deluxe = looksDeluxe(getSKU(session));
-  const pool = MODELLI[ctx];
-  const take = deluxe ? Math.min(3, pool.length) : 1;
+  const ctx = resolveCtx(session, lineItems);
+  const deluxe = deluxeFlag(session, lineItems);
+  const pool = MODELLI[ctx] || ['Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.'];
 
+  const take = deluxe ? Math.min(3, pool.length) : 1;
   const base = pool.slice(0, take);
   const variants = [];
   for (const t of base) variants.push(await varyLight(t));
