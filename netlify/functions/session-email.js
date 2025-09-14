@@ -1,6 +1,5 @@
 // netlify/functions/session-email.js
-// Modelli fissi + piccola variazione GPT-4o.
-// Risolve il contesto da: SKU, client_reference_id, line items, testo "need".
+// Modelli fissi + piccola variazione GPT-4o. Risoluzione contesto robusta.
 
 const https = require('https');
 const { sendMail } = require('./send-utils');
@@ -16,7 +15,7 @@ const MODELLI = {
     'Ciao, mi dispiace ma mi è capitato un imprevisto e stasera non riesco proprio a venire.',
     'Ciao, onestamente non me la sento di uscire: ho bisogno di una serata tranquilla a casa. Spero capirai.',
     'Ciao, ho già mangiato e sto seguendo la dieta: stasera passo, ma organizziamo presto.',
-    'Ciao, non so se riesco a venire: ti aggiorno più tardi se ce la faccio.',
+    'Ciao, non so se riesco a venere: ti aggiorno più tardi se ce la faccio.',
     'Ciao, spero vi divertiate un sacco! Organizziamoci presto per vederci.'
   ],
   APERITIVO: [
@@ -70,7 +69,6 @@ const MODELLI = {
   ]
 };
 
-// pattern per riconoscere il contesto in qualsiasi stringa
 const CTX_PAT = {
   CALCETTO: /(calcett|partita|calcetto)/i,
   TRAFFICO: /(traffico|coda|incidente|blocco)/i,
@@ -87,57 +85,76 @@ const CTX_PAT = {
 };
 
 // ------------ UTIL ------------
-function getNeed(session){
+function arr(x){ return Array.isArray(x) ? x : (x && x.data ? x.data : []); }
+function needFrom(session){
   if (session?.metadata?.need) return String(session.metadata.need).trim();
   const cf = Array.isArray(session?.custom_fields)? session.custom_fields : [];
   const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
   if (f?.text?.value) return String(f.text.value).trim();
   return '';
 }
-function getSKU(session){
+function skuFrom(session){
   return (session?.metadata?.sku || session?.client_reference_id || '').toString().trim().toUpperCase();
 }
-function looksDeluxe(sku){ return /\bDELUXE\b/i.test(String(sku)); }
-
-function extractHints(session, lineItems){
-  const hints = [];
-  const push = v => { if (v) hints.push(String(v)); };
-  push(session?.client_reference_id);
-  push(session?.metadata?.sku);
+function collectHints(session, lineItems){
+  const out = [];
+  const push = v=>{ if (v) out.push(String(v)); };
+  push(skuFrom(session));
   push(session?.metadata?.category);
-  push(session?.mode);
-  // line items
-  const items = Array.isArray(lineItems?.data) ? lineItems.data : [];
+  push(needFrom(session));
+  const items = arr(lineItems);
   for (const it of items){
     push(it?.description);
     push(it?.price?.nickname);
-    push(it?.price?.metadata?.sku);
     push(it?.price?.product?.name);
+    push(it?.price?.metadata?.sku);
+    push(it?.price?.product?.metadata?.sku);
   }
-  // testo need
-  push(getNeed(session));
-  return hints.filter(Boolean);
+  return out.filter(Boolean);
 }
-
-// risolve contesto da hints e need
-function resolveContext(session, lineItems){
-  const sku = getSKU(session);
-  const candidates = extractHints(session, lineItems);
-  candidates.unshift(sku); // priorità assoluta allo SKU
-
-  for (const val of candidates){
-    const U = String(val).toUpperCase();
-    // match diretto su nome modello o su "SCUSA_<MODELLO>"
+function resolveCtx(session, lineItems){
+  const hints = collectHints(session, lineItems);
+  // 1) match diretto su chiave modello, anche con prefisso SCUSA_
+  for (const h of hints){
+    const U = h.toUpperCase();
     for (const ctx of Object.keys(MODELLI)){
       if (U.includes(ctx) || U.includes(`SCUSA_${ctx}`)) return ctx;
     }
-    // match via pattern
+  }
+  // 2) pattern
+  for (const h of hints){
     for (const [ctx, rx] of Object.entries(CTX_PAT)){
-      if (rx.test(val)) return ctx;
+      if (rx.test(h)) return ctx;
     }
+  }
+  // 3) ultimo tentativo dal need puro
+  const n = needFrom(session);
+  for (const [ctx, rx] of Object.entries(CTX_PAT)){
+    if (rx.test(n)) return ctx;
   }
   return null;
 }
+function isDeluxe(session, lineItems){
+  const hints = collectHints(session, lineItems).map(s=>s.toUpperCase());
+  if (hints.some(h => h.includes('DELUXE'))) return true;
+  const sku = skuFrom(session);
+  return /\bDELUXE\b/.test(sku);
+}
+
+function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function renderHtml({ ctx, variants }){
+  const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
+  return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
+  <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:24px">
+    <h1 style="font-size:20px;margin:0 0 12px">La tua scusa è pronta</h1>
+    <p style="margin:0 0 16px;font-size:14px;color:#555">Contesto: <strong>${escapeHtml(ctx)}</strong></p>
+    ${items}
+    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
+    <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email con le istruzioni.</p>
+  </div></body></html>`;
+}
+function renderText({ ctx, variants }){ return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`; }
 
 // ------------ GPT variazione leggera ------------
 function httpsJson(method, url, headers, body){
@@ -165,32 +182,18 @@ async function varyLight(text){
   }catch{ return text; }
 }
 
-// ------------ render ------------
-function escapeHtml(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function renderHtml({ ctx, variants }){
-  const items = variants.map(t=>`<div style="margin:12px 0;white-space:pre-wrap">${escapeHtml(t)}</div>`).join('');
-  return `<!doctype html><html lang="it"><meta charset="utf-8"><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;color:#111;line-height:1.5;margin:0;padding:24px;background:#fafafa">
-  <div style="max-width:640px;margin:auto;background:#fff;border:1px solid #eee;border-radius:12px;padding:24px">
-    <h1 style="font-size:20px;margin:0 0 12px">La tua scusa è pronta</h1>
-    <p style="margin:0 0 16px;font-size:14px;color:#555">Contesto: <strong>${escapeHtml(ctx)}</strong></p>
-    ${items}
-    <hr style="border:none;border-top:1px solid #eee;margin:20px 0">
-    <p style="font-size:12px;color:#777">Per modifiche, rispondi a questa email con le istruzioni.</p>
-  </div></body></html>`;
-}
-function renderText({ ctx, variants }){ return `La tua scusa è pronta\nContesto: ${ctx}\n\n${variants.join('\n\n')}\n`; }
-
-// ------------ entry usata dal webhook ------------
+// ------------ ENTRY USATA DAL WEBHOOK ------------
 async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
   const to = overrideTo || session?.customer_details?.email || session?.customer_email;
   if (!to) throw new Error('destinatario mancante');
 
-  const ctx = resolveContext(session, lineItems) || 'CENA'; // fallback sensato
-  const deluxe = looksDeluxe(getSKU(session));
-  const pool = MODELLI[ctx];
-  const take = deluxe ? Math.min(3, pool.length) : 1;
+  const ctx = resolveCtx(session, lineItems) || 'SCUSA_BASE';
+  const deluxe = isDeluxe(session, lineItems);
+  const pool = MODELLI[ctx] || ['Ciao, ho un imprevisto reale: mi riorganizzo e ti aggiorno a breve con orari aggiornati.'];
 
+  const take = deluxe ? Math.min(3, pool.length) : 1;
   const base = pool.slice(0, take);
+
   const variants = [];
   for (const t of base) variants.push(await varyLight(t));
 
@@ -198,10 +201,11 @@ async function sendCheckoutEmail({ session, lineItems, overrideTo, replyTo }){
   const html = renderHtml({ ctx, variants });
   const text = renderText({ ctx, variants });
 
+  // debug minimale
+  console.log('email_ctx', { ctx, deluxe, take });
+
   await sendMail({ from: MAIL_FROM, to, subject, html, text, replyTo });
   return { to, subject };
 }
 
 module.exports = { sendCheckoutEmail };
-
-    
