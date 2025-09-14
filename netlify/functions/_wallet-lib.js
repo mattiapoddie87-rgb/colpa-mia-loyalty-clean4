@@ -1,47 +1,56 @@
-// _wallet-lib.js — wallet minuti per email (idempotente), fallback Blobs manuale
-
+// _wallet-lib.js — Wallet minuti persistito su Netlify Blobs con fallback
 function now() { return Math.floor(Date.now() / 1000); }
-const keyEmail = (e) => `u:${String(e || '').trim().toLowerCase()}`;
-const keyTx    = (id) => `tx:${String(id || '').trim()}`;
+const kEmail = (e) => `u:${String(e || '').trim().toLowerCase()}`;
+const kTx    = (id) => `tx:${String(id || '').trim()}`;
 
 async function getStore() {
-  const blobs = await import('@netlify/blobs');
+  const mod = await import('@netlify/blobs');
 
-  // 1) tentativo auto-config (Blobs abilitati nel sito)
-  if (typeof blobs.getStore === 'function') {
-    try {
-      return blobs.getStore('wallets'); // può lanciare se l'env non è configurato
-    } catch (_) { /* fallback sotto */ }
+  // 1) tentativo auto-config
+  if (typeof mod.getStore === 'function') {
+    try { return mod.getStore('wallets'); } catch { /* fallback */ }
   }
 
-  // 2) fallback manuale con env
+  // 2) client manuale: gestisci tutte le varianti dell’SDK
   const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
   const token  = process.env.NETLIFY_BLOBS_TOKEN;
   if (siteID && token) {
-    return blobs.createClient({ siteID, token }).getStore('wallets');
+    let client = null;
+
+    if (typeof mod.createClient === 'function') {
+      client = mod.createClient({ siteID, token });
+    } else if (mod && typeof mod.BlobsClient === 'function') {
+      client = new mod.BlobsClient({ siteID, token });
+    } else if (mod.default && typeof mod.default.createClient === 'function') {
+      client = mod.default.createClient({ siteID, token });
+    }
+
+    if (client && typeof client.getStore === 'function') {
+      return client.getStore('wallets');
+    }
   }
 
-  // 3) ultimo fallback: no-op store (non persistente) per NON rompere le altre funzioni
-  console.warn('Blobs non configurati: usa NETLIFY_SITE_ID e NETLIFY_BLOBS_TOKEN o abilita Blobs nel sito.');
+  // 3) fallback in-memory per non rompere il sito
+  console.warn('Blobs non configurati o SDK diverso: uso store in-memory.');
   const mem = new Map();
   return {
-    async get(k){ return mem.get(k) || null; },
+    async get(k){ return mem.get(k) ?? null; },
     async set(k,v){ mem.set(k, v); },
   };
 }
 
-async function getWallet(email) {
+async function load(email) {
   const store = await getStore();
-  const js = await store.get(keyEmail(email));
-  if (!js) return { email: String(email||'').toLowerCase(), minutes: 0, history: [], updatedAt: now() };
-  try { return JSON.parse(js); }
+  const raw = await store.get(kEmail(email));
+  if (!raw) return { email: String(email||'').toLowerCase(), minutes: 0, history: [], updatedAt: now() };
+  try { return JSON.parse(raw); }
   catch { return { email: String(email||'').toLowerCase(), minutes: 0, history: [], updatedAt: now() }; }
 }
 
-async function saveWallet(w) {
+async function save(w) {
   const store = await getStore();
   w.updatedAt = now();
-  await store.set(keyEmail(w.email), JSON.stringify(w));
+  await store.set(kEmail(w.email), JSON.stringify(w));
   return w;
 }
 
@@ -50,33 +59,33 @@ async function creditMinutes({ email, minutes, reason, meta = {}, txKey }) {
   const store = await getStore();
 
   if (txKey) {
-    const seen = await store.get(keyTx(txKey));
-    if (seen) return getWallet(email); // idempotenza
+    const seen = await store.get(kTx(txKey));
+    if (seen) return load(email);
   }
 
-  const w = await getWallet(email);
+  const w = await load(email);
   const delta = Math.max(0, parseInt(minutes || 0, 10));
   if (delta <= 0) return w;
 
   w.minutes = (w.minutes || 0) + delta;
   w.history = w.history || [];
   w.history.unshift({ ts: now(), delta, reason: reason || 'credit', meta });
-  await saveWallet(w);
+  await save(w);
 
-  if (txKey) await store.set(keyTx(txKey), '1');
+  if (txKey) await store.set(kTx(txKey), '1');
   return w;
 }
 
 async function redeemMinutes({ email, minutes, reason, meta = {} }) {
-  const w = await getWallet(email);
+  const w = await load(email);
   const delta = Math.max(0, parseInt(minutes || 0, 10));
   if (delta <= 0) throw new Error('minuti non validi');
   if ((w.minutes || 0) < delta) throw new Error('saldo insufficiente');
   w.minutes -= delta;
   w.history = w.history || [];
   w.history.unshift({ ts: now(), delta: -delta, reason: reason || 'redeem', meta });
-  await saveWallet(w);
+  await save(w);
   return w;
 }
 
-module.exports = { getWallet, creditMinutes, redeemMinutes };
+module.exports = { getWallet: load, creditMinutes, redeemMinutes };
