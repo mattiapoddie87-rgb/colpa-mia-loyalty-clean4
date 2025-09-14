@@ -1,27 +1,41 @@
-// _wallet-lib.js — storage minuti per email, idempotente
+// _wallet-lib.js — wallet minuti per email (idempotente), fallback Blobs manuale
 
 function now() { return Math.floor(Date.now() / 1000); }
 const keyEmail = (e) => `u:${String(e || '').trim().toLowerCase()}`;
 const keyTx    = (id) => `tx:${String(id || '').trim()}`;
 
 async function getStore() {
-  // Dentro Netlify Functions: getStore() è auto-configurato.
   const blobs = await import('@netlify/blobs');
-  if (typeof blobs.getStore === 'function') return blobs.getStore('wallets');
 
-  // Fallback manuale con token+siteID (per CLI o se Blobs non abilitati sul sito)
-  const token  = process.env.NETLIFY_BLOBS_TOKEN;
+  // 1) tentativo auto-config (Blobs abilitati nel sito)
+  if (typeof blobs.getStore === 'function') {
+    try {
+      return blobs.getStore('wallets'); // può lanciare se l'env non è configurato
+    } catch (_) { /* fallback sotto */ }
+  }
+
+  // 2) fallback manuale con env
   const siteID = process.env.NETLIFY_SITE_ID || process.env.SITE_ID;
-  if (!token || !siteID) throw new Error('Blobs non configurati');
-  return blobs.createClient({ token, siteID }).getStore('wallets');
+  const token  = process.env.NETLIFY_BLOBS_TOKEN;
+  if (siteID && token) {
+    return blobs.createClient({ siteID, token }).getStore('wallets');
+  }
+
+  // 3) ultimo fallback: no-op store (non persistente) per NON rompere le altre funzioni
+  console.warn('Blobs non configurati: usa NETLIFY_SITE_ID e NETLIFY_BLOBS_TOKEN o abilita Blobs nel sito.');
+  const mem = new Map();
+  return {
+    async get(k){ return mem.get(k) || null; },
+    async set(k,v){ mem.set(k, v); },
+  };
 }
 
 async function getWallet(email) {
   const store = await getStore();
   const js = await store.get(keyEmail(email));
-  if (!js) return { email: String(email || '').toLowerCase(), minutes: 0, history: [], updatedAt: now() };
+  if (!js) return { email: String(email||'').toLowerCase(), minutes: 0, history: [], updatedAt: now() };
   try { return JSON.parse(js); }
-  catch { return { email: String(email || '').toLowerCase(), minutes: 0, history: [], updatedAt: now() }; }
+  catch { return { email: String(email||'').toLowerCase(), minutes: 0, history: [], updatedAt: now() }; }
 }
 
 async function saveWallet(w) {
