@@ -32,16 +32,16 @@
         <div class="title">SCUSA BASE</div>
         <div class="price">Prezzo come da listino</div>
         <label for="ctx-base"><small>Contesto</small></label>
-        <select id="ctx-base">
+        <select id="ctx-base" name="ctx">
           <option value="CENA">CENA</option>
           <option value="APERITIVO">APERITIVO</option>
           <option value="EVENTO">EVENTO</option>
           <option value="LAVORO">LAVORO</option>
-          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="CALCETTO">PARTITA A CALCETTO</option>
           <option value="FAMIGLIA">FAMIGLIA</option>
           <option value="SALUTE">SALUTE</option>
-          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+          <option value="APPUNTAMENTO">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME">ESAME/LEZIONE</option>
         </select>
         <button
           data-sku="SCUSA_BASE"
@@ -55,16 +55,16 @@
         <div class="title">SCUSA DELUXE</div>
         <div class="price">Prezzo come da listino</div>
         <label for="ctx-deluxe"><small>Contesto</small></label>
-        <select id="ctx-deluxe">
+        <select id="ctx-deluxe" name="ctx">
           <option value="CENA">CENA</option>
           <option value="APERITIVO">APERITIVO</option>
           <option value="EVENTO">EVENTO</option>
           <option value="LAVORO">LAVORO</option>
-          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="CALCETTO">PARTITA A CALCETTO</option>
           <option value="FAMIGLIA">FAMIGLIA</option>
           <option value="SALUTE">SALUTE</option>
-          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+          <option value="APPUNTAMENTO">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME">ESAME/LEZIONE</option>
         </select>
         <button
           data-sku="SCUSA_DELUXE"
@@ -110,7 +110,7 @@
           <li>1 messaggio WhatsApp</li>
           <li>Report di consegna</li>
         </ul>
-        <div class="checkrow">
+      <div class="checkrow">
           <input id="cons-light" type="checkbox">
           <label for="cons-light" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
         </div>
@@ -177,51 +177,31 @@
   </div>
 
   <script>
-    const SUCCESS = location.origin + '/success.html';
-    const CANCEL  = location.origin + '/cancel.html';
-
+    // Checkout SCUSA_* con ctx dal menu
     async function startCheckout(btn){
       const sku = btn.dataset.sku;
       if(!sku){ alert('SKU mancante'); return; }
 
-      // (NOVITÀ) Salvo il titolo per mostrarlo su success.html
       const title = btn.getAttribute('data-title')
         || btn.closest('.card')?.querySelector('.title')?.textContent
         || sku;
       sessionStorage.setItem('last_checkout_title', title);
 
-      // Per BASE/DELUXE legge la tendina; per gli altri, contesto vuoto
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-      if (sel && sel.value) ctx = String(sel.value).trim();
-
-      const payload = {
-        sku,
-        success_url: SUCCESS + '?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: CANCEL,
-        need_default: ctx || '',
-        context_hint: ctx || ''
-      };
+      if (sel && sel.value) ctx = String(sel.value).toUpperCase().trim(); // valori già normalizzati
 
       btn.disabled = true;
       try{
         const r = await fetch('/.netlify/functions/create-checkout-session', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ sku, ctx })
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error||'stripe_create_failed');
-
-        // (NOVITÀ) salvo anche la session_id (se presente nella risposta)
         if (data.id) sessionStorage.setItem('last_session_id', data.id);
-
-        if (data.url) {
-          location.href = data.url;
-        } else {
-          // Fallback
-          location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id||'');
-        }
+        location.href = data.url || '/success.html';
       }catch(e){
         alert('Errore checkout: ' + (e.message||e));
       }finally{
@@ -229,7 +209,6 @@
       }
     }
 
-    // Acquisto scuse standard
     document.querySelectorAll('button[data-sku]').forEach(b=>{
       b.addEventListener('click', ()=> startCheckout(b));
     });
@@ -251,12 +230,11 @@ Ecco i dettagli del caso (contesto, persone coinvolte, obiettivo, tempistiche, e
 - 
 Grazie!`
         );
-        // apre il client di posta
         location.href = `mailto:${to}?subject=${subj}&body=${body}`;
       });
     });
 
-    // Wallet & Premium
+    // Wallet: mostra minuti corretti
     (function(){
       const $ = s=>document.querySelector(s);
       const out = $('#wallet-result');
@@ -267,7 +245,8 @@ Grazie!`
         try{
           const r = await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
           const data = await r.json();
-          out.textContent = r.ok ? `Saldo: ${data.wallet||0} minuti` : (data.error||'Errore');
+          const minutes = (data && (data.minutes ?? data.wallet)) || 0;
+          out.textContent = r.ok ? `Saldo: ${minutes} minuti` : (data.error||'Errore');
         }catch{ out.textContent='Errore'; }
       };
 
@@ -284,7 +263,9 @@ Grazie!`
             });
             const data = await r.json();
             if(!r.ok) throw new Error(data.error||'redeem_failed');
-            out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
+            const remaining = (data && (data.minutes ?? data.remaining)) ?? '';
+            const code = data.promo_code || '';
+            out.innerHTML = code ? `Codice: <b>${code}</b> — minuti rimanenti: ${remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>` : `Minuti rimanenti: ${remaining}`;
           }catch(e){ alert('Errore: '+(e.message||e)); }
           finally{ btn.disabled=false; }
         };
