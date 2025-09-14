@@ -1,67 +1,32 @@
-// public/shop.js — v2 robusto
-(() => {
-  console.log('[CM] shop.js v2 loaded');
+// public/shop.js
+(async () => {
+  const API = '/.netlify/functions/create-checkout-session';
 
-  const grid = document.getElementById('catalogo-grid');
-  const msg  = document.getElementById('catalogo-msg');
-  if (!grid) { console.warn('[CM] #catalogo-grid non trovato'); return; }
-
-  // SKU ammessi: SCUSA_ENTRY, SCUSA_BASE, SCUSA_TRIPLA, SCUSA_DELUXE, CONS_KO, RIUNIONE, TRAFFICO
-  const CATALOG = [
-    { sku:'SCUSA_ENTRY',  name:'Prima Scusa -50%',     minutes:10, price:0.50 },
-    { sku:'SCUSA_BASE',   name:'Scusa Base',          minutes:10, price:1.00 },
-    { sku:'SCUSA_TRIPLA', name:'Scusa Tripla',        minutes:30, price:2.50 },
-    { sku:'SCUSA_DELUXE', name:'Scusa Deluxe',        minutes:60, price:4.50 },
-    { sku:'CONS_KO',      name:'Connessione KO',      minutes:30, price:null },
-    { sku:'RIUNIONE',     name:'Riunione improvvisa', minutes:15, price:null },
-    { sku:'TRAFFICO',     name:'Traffico assurdo',    minutes:20, price:null },
-  ];
-
-  function priceLabel(p){ return typeof p === 'number' ? `€ ${p.toFixed(2)}` : 'Vedi al checkout'; }
-
-  // Render
-  try {
-    grid.innerHTML = CATALOG.map(p => `
-      <article class="card">
-        <div class="row"><b>${p.name}</b><span class="tag">${p.minutes} min</span></div>
-        <div class="row">
-          <span>${priceLabel(p.price)}</span>
-          <button class="btn" data-sku="${p.sku}">Acquista</button>
-        </div>
-      </article>`).join('');
-  } catch (err) {
-    console.error('[CM] Render catalogo error:', err);
-    if (msg) msg.textContent = `Errore catalogo: ${err.message || 'render'}`;
-    return;
+  function pickCtx(btn) {
+    const card = btn.closest('.card, .box, .product, .sku, .panel') || document;
+    const sel = card.querySelector('select[name="ctx"]');
+    return (sel && sel.value ? String(sel.value).toUpperCase().trim() : '');
   }
 
-  // Checkout
-  document.addEventListener('click', async (e) => {
-    const b = e.target.closest('button[data-sku]');
-    if (!b) return;
+  async function buy(sku, ctx) {
+    const r = await fetch(API, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sku: String(sku).toUpperCase(), ctx })
+    });
+    const j = await r.json();
+    if (!r.ok || j.error) throw new Error(j.error || r.statusText);
+    location.href = j.url; // vai a Stripe
+  }
 
-    const sku = b.getAttribute('data-sku');
-    b.disabled = true;
-    if (msg) msg.textContent = '';
-    try {
-      const r = await fetch('/.netlify/functions/create-checkout-session', {
-        method:'POST', headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ sku })
-      });
-      const data = await r.json().catch(() => ({}));
-
-      if (r.ok && data?.url) { window.location.href = data.url; return; }
-
-      const m = data?.error || `HTTP ${r.status}`;
-      console.error('[CM] Checkout error:', m);
-      if (msg) msg.textContent = `Errore checkout: ${m}`;
-      alert(`Checkout KO: ${m}`);
-    } catch (e2) {
-      console.error('[CM] Network error:', e2);
-      if (msg) msg.textContent = 'Errore di rete.';
-      alert('Checkout KO: rete/non raggiungibile');
-    } finally {
-      b.disabled = false;
-    }
+  // Bottoni “Acquista” devono avere data-buy="SCUSA_BASE" | "SCUSA_DELUXE" | "TRAFFICO" | ...
+  document.querySelectorAll('[data-buy]').forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const sku = btn.dataset.buy || '';
+      const ctx = pickCtx(btn); // vuoto per TRAFFICO/RIUNIONE/CONNESSIONE o se non c’è select
+      try { await buy(sku, ctx); }
+      catch (err) { alert('Errore: ' + (err.message || err)); }
+    });
   });
 })();
