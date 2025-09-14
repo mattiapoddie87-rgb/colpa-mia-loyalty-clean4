@@ -1,101 +1,147 @@
-// Webhook Stripe: accredito wallet idempotente + invio email (non bloccante)
+// Webhook Stripe: invia email e accreditare minuti wallet per email cliente
 const Stripe = require('stripe');
 const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
 const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-const { creditMinutes } = require('./_wallet-lib');
 const { sendCheckoutEmail } = require('./session-email');
+const { creditMinutes } = require('./_wallet-lib.js');
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type,Stripe-Signature'
+// ---- mapping minuti configurabile via ENV ----
+function loadMinutesMap() {
+  try { return JSON.parse(process.env.WALLET_MINUTES_JSON || '{}'); } catch { return {}; }
+}
+const MIN_MAP = Object.assign({
+  CALCETTO: 10,
+  CENA: 5,
+  APERITIVO: 5,
+  EVENTO: 5,
+  LAVORO: 5,
+  FAMIGLIA: 5,
+  SALUTE: 5,
+  APPUNTAMENTO: 5,
+  ESAME: 5,
+  TRAFFICO: 5,
+  RIUNIONE: 5,
+  CONNESSIONE: 5,
+  SCUSA_BASE: 5,
+  SCUSA_DELUXE: 15
+}, loadMinutesMap());
+
+const CTX_PAT = {
+  CALCETTO: /(calcett|partita|calcetto)/i,
+  TRAFFICO: /(traffico|coda|incidente|blocco)/i,
+  RIUNIONE: /(riunion|meeting)/i,
+  CONNESSIONE: /(connession|internet|rete|wifi)/i,
+  CENA: /(cena|ristor)/i,
+  APERITIVO: /(aper|spritz|drink)/i,
+  EVENTO: /(evento|party|festa|concerto)/i,
+  LAVORO: /(lavor|ufficio|report)/i,
+  FAMIGLIA: /(famigl|figli|marit|mogli|genit|madre|padre|nonna|nonno)/i,
+  SALUTE: /(salute|febbre|medic|dott|tosse|allerg)/i,
+  APPUNTAMENTO: /(appunt|conseg)/i,
+  ESAME: /(esame|lezion|prof)/i
 };
-const ok = (b)=>({ statusCode:200, headers:{'Content-Type':'application/json',...CORS}, body:JSON.stringify(b||{}) });
-const no = (s,b)=>({ statusCode:s, headers:{'Content-Type':'application/json',...CORS}, body:JSON.stringify(b||{}) });
 
-// minuti per SKU e fallback per contesto
-const MINUTES_BY_SKU = {
-  SCUSA_BASE: 50,
-  SCUSA_DELUXE: 80,
-  TRAFFICO: 20,
-  RIUNIONE: 20,
-  CONNESSIONE: 20,
-};
-const MINUTES_BY_CTX = {
-  CALCETTO: 10, CENA: 5, APERITIVO: 5, EVENTO: 5, LAVORO: 5,
-  FAMIGLIA: 5, SALUTE: 5, APPUNTAMENTO: 5, ESAME: 5
-};
+function arr(x){ return Array.isArray(x) ? x : (x && x.data ? x.data : []); }
+function looksDeluxeText(s){ return /\bDELUXE\b/i.test(String(s||'')); }
+function resolveEmail(session){ return session?.customer_details?.email || session?.customer_email || null; }
 
-function norm(s){ return String(s||'').trim(); }
-function upper(s){ return norm(s).toUpperCase(); }
-function resolveEmail(s){ return s?.customer_details?.email || s?.customer_email || null; }
-
-function resolveSKU(session){
-  return upper(session?.metadata?.sku || session?.client_reference_id || '');
+function extractHints(session, lineItems){
+  const hints = [];
+  const push = v => { if (v) hints.push(String(v)); };
+  push(session?.client_reference_id);
+  push(session?.metadata?.sku);
+  push(session?.metadata?.category);
+  const items = arr(lineItems);
+  for (const it of items){
+    push(it?.description);
+    push(it?.price?.nickname);
+    push(it?.price?.product?.name);
+    push(it?.price?.metadata?.sku);
+    push(it?.price?.product?.metadata?.sku);
+  }
+  // include need testo
+  const cf = Array.isArray(session?.custom_fields) ? session.custom_fields : [];
+  const f = cf.find(x=>x?.key==='need' && x?.type==='text' && x?.text?.value);
+  if (f?.text?.value) push(f.text.value);
+  return hints.filter(Boolean);
 }
 
-function resolveContext(session){
-  const h =
-    session?.metadata?.context_hint ||
-    session?.metadata?.context ||
-    '';
-  return upper(h);
+function resolveContext(session, lineItems){
+  const hints = extractHints(session, lineItems);
+  // match diretto su chiave modello o su SCUSA_<CHIAVE>
+  for (const h of hints){
+    const U = h.toUpperCase();
+    for (const ctx of Object.keys(CTX_PAT)){
+      if (U.includes(ctx) || U.includes(`SCUSA_${ctx}`)) return ctx;
+    }
+  }
+  // pattern
+  for (const h of hints){
+    for (const [ctx, rx] of Object.entries(CTX_PAT)){ if (rx.test(h)) return ctx; }
+  }
+  return 'SCUSA_BASE';
+}
+
+async function listLineItemsSafe(sessionId){
+  try {
+    const li = await stripe.checkout.sessions.listLineItems(sessionId, { limit: 50 });
+    return li;
+  } catch { return { data: [] }; }
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod === 'OPTIONS') return ok({});
-  if (event.httpMethod !== 'POST') return no(405,{error:'method_not_allowed'});
-  if (!endpointSecret) return no(500,{error:'missing_webhook_secret'});
+  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
+
+  const sig = event.headers['stripe-signature'] || event.headers['Stripe-Signature'];
+  const raw = event.isBase64Encoded ? Buffer.from(event.body || '', 'base64') : Buffer.from(event.body || '', 'utf8');
 
   let evt;
   try {
-    const raw = event.isBase64Encoded
-      ? Buffer.from(event.body||'', 'base64')
-      : Buffer.from(event.body||'', 'utf8');
-    const sig = event.headers['stripe-signature'] || event.headers['Stripe-Signature'];
     evt = stripe.webhooks.constructEvent(raw, sig, endpointSecret);
-  } catch (e) {
-    return no(400,{ error:'invalid_signature', detail:String(e.message||e) });
+  } catch (err) {
+    console.error('Firma Stripe non valida:', err.message);
+    return { statusCode: 400, body: `Webhook Error: ${err.message}` };
   }
 
-  if (evt.type !== 'checkout.session.completed') return ok({ignored:true});
+  if (evt.type === 'checkout.session.completed') {
+    const session = evt.data.object;
+    if (session.payment_status !== 'paid') return { statusCode: 200, body: 'ignored_unpaid' };
 
-  const session = evt.data.object;
-  if (session?.payment_status !== 'paid') return ok({ignored:'unpaid'});
+    // line items e contesto
+    const lineItems = await listLineItemsSafe(session.id);
+    const ctx = resolveContext(session, lineItems);
+    const isDeluxe = looksDeluxeText(session?.metadata?.sku) ||
+                     looksDeluxeText(session?.client_reference_id) ||
+                     arr(lineItems).some(it => looksDeluxeText(it?.description) || looksDeluxeText(it?.price?.nickname) || looksDeluxeText(it?.price?.product?.name));
 
-  // 1) Accredito wallet prima di tutto, idempotente
-  try {
+    // invio email
+    try { await sendCheckoutEmail({ session, lineItems }); }
+    catch (e) { console.error('Invio email fallito:', e.message); return { statusCode: 500, body: 'email_send_failed' }; }
+
+    // accredito minuti wallet (idempotente su event.id)
     const email = resolveEmail(session);
-    const sku = resolveSKU(session);
-    const ctx = resolveContext(session);
-
-    let minutes = 0;
-    if (MINUTES_BY_SKU[sku] != null) {
-      minutes = MINUTES_BY_SKU[sku];
-    } else if (MINUTES_BY_CTX[ctx] != null) {
-      minutes = MINUTES_BY_CTX[ctx];
+    if (email) {
+      // minuti: mappa specifica > deluxe > default
+      let minutes = MIN_MAP[ctx] ?? MIN_MAP.SCUSA_BASE;
+      if (isDeluxe) minutes = Math.max(minutes, MIN_MAP.SCUSA_DELUXE || 15);
+      try {
+        await creditMinutes({
+          email,
+          minutes,
+          reason: 'checkout',
+          meta: { ctx, sessionId: session.id, eventId: evt.id },
+          txKey: `stripe:${evt.id}`
+        });
+        console.log('wallet_credit', { email, minutes, ctx, deluxe: isDeluxe });
+      } catch (e) {
+        console.error('wallet_credit_failed', e.message);
+        // non blocco l’OK a Stripe per non generare retry su accredito
+      }
     } else {
-      minutes = MINUTES_BY_SKU.SCUSA_BASE; // fallback
+      console.warn('wallet_skip_email_missing', { sessionId: session.id });
     }
-
-    if (email && minutes > 0) {
-      await creditMinutes({
-        email,
-        minutes,
-        reason: `purchase_${sku||ctx||'UNK'}`,
-        meta: { session_id: session.id, sku, ctx },
-        txKey: `evt:${evt.id}` // idempotenza per retry Stripe
-      });
-    }
-  } catch (e) {
-    // log solo: non bloccare la 200 a Stripe
-    console.error('wallet_credit_error', e.message);
   }
 
-  // 2) Invio email non bloccante
-  try { await sendCheckoutEmail({ session }); }
-  catch (e) { console.error('email_send_error', e.message); }
-
-  return ok({received:true});
+  return { statusCode: 200, body: 'ok' };
 };
