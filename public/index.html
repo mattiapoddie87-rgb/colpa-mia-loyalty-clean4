@@ -3,292 +3,368 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>COLPA MIA — Catalogo</title>
+  <title>COLPA MIA — Marketplace di Scuse</title>
+  <meta name="theme-color" content="#0b0f16" />
   <style>
-    /* base */
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
-    .wrap{max-width:980px;margin:0 auto;padding:24px}
-    .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
-    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;display:flex;flex-direction:column;gap:12px}
-    .title{font-weight:700;font-size:18px}
-    .price{color:#a5b4fc}
-    .row{display:flex;gap:8px;align-items:center}
-    select,button,input[type="text"]{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
-    button{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
-    button:disabled{opacity:.6;cursor:not-allowed}
-    small{color:#9aa3b2}
-    a{color:#93c5fd}
-    .muted{color:#9aa3b2;font-size:12px}
-    .checkrow{display:flex;gap:8px;align-items:center}
-    section{margin:24px 0}
+    :root{
+      --bg:#0b0f16;
+      --panel:#101724;
+      --panel-2:#0f1623;
+      --muted:#a9b4c6;
+      --brand:#37c9ff;
+      --brand-2:#8a6dff;
+      --line:#142033;
+      --ok:#28d381;
+      --err:#ff6b6b;
+      color-scheme:dark;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
 
-    /* richieste nuove */
-    .hero{padding:48px 0}
+    /* --- Futuristic background lines (super leggeri) --- */
+    .fx{
+      position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;
+      background:
+        repeating-linear-gradient(90deg, transparent 0 98px, rgba(255,255,255,.03) 98px 99px, transparent 99px 100px),
+        repeating-linear-gradient(0deg,  transparent 0 98px, rgba(255,255,255,.02) 98px 99px, transparent 99px 100px);
+      animation:bgShiftX 32s linear infinite, bgShiftY 48s linear infinite;
+      filter:blur(.2px);
+    }
+    @keyframes bgShiftX{to{background-position:1200px 0, 0 0}}
+    @keyframes bgShiftY{to{background-position:0 0, 0 900px}}
+
+    /* --- Header stile “marketplace” --- */
+    .topbar{
+      position:sticky; top:0; z-index:50;
+      background:#0c1220; border-bottom:1px solid #15213a;
+    }
+    .row{display:flex;align-items:center;gap:12px}
+    .wrap{max-width:1200px;margin:0 auto;padding:10px 16px}
+    .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff}
+    .brand img{width:40px;height:40px;object-fit:contain}
+    .brand span{font-weight:800;letter-spacing:.5px}
+    .search{flex:1;display:flex;gap:8px}
+    .search input{flex:1;padding:12px 14px;border-radius:10px;border:1px solid #1e2b48;background:#0a1324;color:#e9eef5}
+    .search button{padding:12px 14px;border-radius:10px;border:0;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;font-weight:700}
+    .actions a{color:#d7e5ff;text-decoration:none;opacity:.9}
+    .actions{gap:14px}
+
+    .navcats{background:#0b1322;border-bottom:1px solid #15213a}
+    .navcats .wrap{display:flex;gap:18px;flex-wrap:wrap}
+    .navcats a{color:#cfe5ff;text-decoration:none;padding:10px 0;font-size:.95rem;opacity:.9}
+    .navcats a:hover{opacity:1}
+
+    /* --- Hero banner --- */
+    .hero{
+      position:relative; margin:18px auto 8px; max-width:1200px; border-radius:16px;
+      background:linear-gradient(135deg,#152036,#0f1b2f 60%,#132b4a);
+      border:1px solid #1f2a44; padding:28px; overflow:hidden;
+    }
     .hero h1{font-size:clamp(28px,5vw,56px);margin:0 0 .25em}
-    .hero p{max-width:56ch;opacity:.9}
-    .cta{display:flex;gap:.75rem;margin-top:1rem}
-    .btn{display:inline-block;text-decoration:none;padding:.75rem 1rem;border-radius:12px;border:1px solid #222;background:transparent;color:#e6e6e6}
-    .btn.primary,.btn-primary{background:#1ea9ff;color:#061018;border:none}
-    details summary{cursor:pointer}
-    #come-funziona ol{margin:0;padding-left:20px}
+    .hero p{max-width:62ch;opacity:.9;margin:0 0 14px}
+    .cta{display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap}
+    .btn{padding:.75rem 1rem;border-radius:12px;border:1px solid #222;background:#121a2b;color:#e9eef5;text-decoration:none}
+    .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;border:none;font-weight:800}
+
+    /* --- Vetrina / Griglie --- */
+    h2.section{max-width:1200px;margin:18px auto 10px;padding:0 16px;font-size:1.2rem;opacity:.95}
+    .grid{
+      display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(260px,1fr));
+      max-width:1200px; margin:0 auto; padding:0 16px 8px;
+    }
+    .card{
+      background:var(--panel); border:1px solid #1f2b46; border-radius:16px; overflow:hidden;
+      display:flex; flex-direction:column; min-height:260px;
+    }
+    .card .media{
+      position:relative;height:160px;background:#0d1423;overflow:hidden
+    }
+    .card .media img{width:100%;height:100%;object-fit:cover;display:block;opacity:.95}
+    .card .body{padding:14px;display:flex;flex-direction:column;gap:10px}
+    .title{font-weight:800}
+    .muted{color:var(--muted);font-size:.9rem}
+    select, button, input[type="text"], input[type="email"]{
+      padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;width:100%;
+    }
+    button.cta{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
+    button.cta:hover{filter:brightness(1.05)}
+    .badge{display:inline-block;padding:.25rem .5rem;border-radius:999px;background:#13243d;color:#a9d8ff;font-size:.75rem;border:1px solid #1e3861}
+
+    /* --- Wallet & footer --- */
+    .panel{max-width:1200px;margin:18px auto;padding:16px;border:1px solid #1f2b46;border-radius:16px;background:var(--panel);}
+    .rowflex{display:flex;gap:10px;flex-wrap:wrap}
+    .rowflex>*{flex:1 1 240px}
+    .msg{margin-top:8px;font-size:.95rem}
+    .ok{color:var(--ok)} .err{color:var(--err)}
+
+    footer{margin:24px 0 40px;color:#9fb0c9;text-align:center;font-size:.9rem}
+    .note{color:#9fb0c9;font-size:.9rem}
+
+    /* Small helpers */
+    .chip{display:inline-flex;align-items:center;gap:6px;padding:.25rem .5rem;border:1px solid #234063;border-radius:999px;background:#0e1a2b;color:#bfe7ff;font-size:.75rem}
   </style>
 </head>
 <body>
-  <div class="wrap">
+  <div class="fx" aria-hidden="true"></div>
 
-    <!-- HERO -->
-    <section class="hero">
-      <h1>Dal punto al punto a capo.</h1>
-      <p>Con COLPA MIA la scusa non chiude. Apre un dialogo, ricostruisce fiducia e trasforma l’errore in continuità.</p>
-      <div class="cta">
-        <a href="#catalogo" class="btn primary">Acquista una scusa</a>
-        <a href="#prendo-io-la-colpa" class="btn">Prendo io la colpa</a>
-      </div>
-    </section>
-
-    <!-- SUB HERO -->
-    <section id="come-funziona" class="card">
-      <h2 style="margin:0 0 8px">Come funziona lo switch</h2>
-      <ol>
-        <li>Tu generi la scusa o deleghi COLPA MIA.</li>
-        <li>Il destinatario riceve una pagina ufficiale con scusa e opzioni di rimedio.</li>
-        <li>La scelta riapre il dialogo: non più un punto fermo, sempre un punto a capo.</li>
-      </ol>
-    </section>
-
-    <!-- CATALOGO MICRO-COPY -->
-    <section id="catalogo" class="card">
-      <h2 style="margin:0 0 8px">Catalogo</h2>
-      <article>
-        <h3>Scusa Base</h3>
-        <p>Una scusa scritta per riaprire il dialogo.</p>
-      </article>
-      <article>
-        <h3>Scusa Deluxe</h3>
-        <p>Tre varianti, tre possibilità di ricominciare.</p>
-      </article>
-      <article>
-        <h3>Scenari Fissi</h3>
-        <p>Scuse pronte all’uso, ideali per sbloccare subito la conversazione.</p>
-      </article>
-    </section>
-
-    <!-- PRODOTTI -->
-    <div class="grid">
-      <!-- SCUSA BASE -->
-      <div class="card">
-        <div class="title">SCUSA BASE</div>
-        <div class="price">Prezzo come da listino</div>
-        <label for="ctx-base"><small>Contesto</small></label>
-        <select id="ctx-base" name="ctx">
-          <option value="CENA">CENA</option>
-          <option value="APERITIVO">APERITIVO</option>
-          <option value="EVENTO">EVENTO</option>
-          <option value="LAVORO">LAVORO</option>
-          <option value="CALCETTO">PARTITA A CALCETTO</option>
-          <option value="FAMIGLIA">FAMIGLIA</option>
-          <option value="SALUTE">SALUTE</option>
-          <option value="APPUNTAMENTO">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME">ESAME/LEZIONE</option>
-        </select>
-        <button
-          data-sku="SCUSA_BASE"
-          data-title="Scusa Base"
-          data-context-select="#ctx-base">Acquista</button>
-        <div class="muted">Nota: SCUSA BASE consegna una sola scusa.</div>
-      </div>
-
-      <!-- SCUSA DELUXE -->
-      <div class="card">
-        <div class="title">SCUSA DELUXE</div>
-        <div class="price">Prezzo come da listino</div>
-        <label for="ctx-deluxe"><small>Contesto</small></label>
-        <select id="ctx-deluxe" name="ctx">
-          <option value="CENA">CENA</option>
-          <option value="APERITIVO">APERITIVO</option>
-          <option value="EVENTO">EVENTO</option>
-          <option value="LAVORO">LAVORO</option>
-          <option value="CALCETTO">PARTITA A CALCETTO</option>
-          <option value="FAMIGLIA">FAMIGLIA</option>
-          <option value="SALUTE">SALUTE</option>
-          <option value="APPUNTAMENTO">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME">ESAME/LEZIONE</option>
-        </select>
-        <button
-          data-sku="SCUSA_DELUXE"
-          data-title="Scusa Deluxe"
-          data-context-select="#ctx-deluxe">Acquista</button>
-        <div class="muted">Nota: DELUXE consegna tre varianti.</div>
-      </div>
-
-      <!-- CONNESSIONE -->
-      <div class="card">
-        <div class="title">CONNESSIONE KO</div>
-        <div class="price">Prezzo come da listino</div>
-        <small>Scenario fisso: “connessione/linea/VPN KO”. Contesto non richiesto.</small>
-        <button data-sku="CONNESSIONE" data-title="Connessione KO">Acquista</button>
-      </div>
-
-      <!-- TRAFFICO -->
-      <div class="card">
-        <div class="title">TRAFFICO</div>
-        <div class="price">Prezzo come da listino</div>
-        <small>Scenario fisso: “traffico/incidente/coda”. Contesto non richiesto.</small>
-        <button data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
-      </div>
-
-      <!-- RIUNIONE -->
-      <div class="card">
-        <div class="title">RIUNIONE IMPROVVISA</div>
-        <div class="price">Prezzo come da listino</div>
-        <small>Scenario fisso: “riunione/call che sfora”. Contesto non richiesto.</small>
-        <button data-sku="RIUNIONE" data-title="Riunione Improvvisa">Acquista</button>
+  <!-- Topbar -->
+  <header class="topbar">
+    <div class="wrap row">
+      <a class="brand" href="/">
+        <img src="/assets/colpamia-logo.png" alt="COLPA MIA" />
+        <span>COLPA MIA</span>
+      </a>
+      <form class="search" onsubmit="event.preventDefault()">
+        <input type="search" placeholder="Cerca scuse, scenari, pacchetti…" />
+        <button type="submit">Cerca</button>
+      </form>
+      <div class="actions row">
+        <a href="#wallet">Wallet</a>
+        <a href="/responsabilita.js">Responsabilità</a>
       </div>
     </div>
+    <nav class="navcats">
+      <div class="wrap">
+        <a href="#catalogo">Catalogo</a>
+        <a href="#prendo-io-la-colpa">Prendo io la colpa</a>
+        <a href="#wallet">Premium & Minuti</a>
+        <a href="#faq">FAQ</a>
+      </div>
+    </nav>
+  </header>
 
-    <!-- PRENDO IO LA COLPA (testo) -->
-    <section id="prendo-io-la-colpa" class="card">
-      <h2 style="margin:0 0 8px">Prendiamo noi la responsabilità</h2>
-      <div class="tier" style="margin-bottom:8px">
-        <h3>Light – €9,90</h3>
-        <p>Colpa presa e comunicata in forma standard. Ideale per errori semplici.</p>
-      </div>
-      <div class="tier" style="margin-bottom:8px">
-        <h3>Full – €19,90</h3>
-        <p>Colpa presa, comunicata e accompagnata da una prova di esecuzione.</p>
-      </div>
-      <div class="tier">
-        <h3>Deluxe – €39,90</h3>
-        <p>Colpa presa, gestita e risolta con interazione diretta. Il destinatario riceve scusa, opzioni e ricevuta finale.</p>
-      </div>
-      <p class="note" style="margin-top:8px">Ogni pacchetto include una pagina ufficiale COLPA MIA che trasforma l’errore in un nuovo inizio.</p>
-    </section>
-
-    <!-- TIER CON MAILTO (funzionalità invariata) -->
-    <div class="grid">
-      <div class="card">
-        <div class="title">Prendo io la colpa — Light</div>
-        <small>€9,90 IVA inclusa</small>
-        <ul class="muted" style="margin:0 0 8px 16px">
-          <li>1 messaggio WhatsApp</li>
-          <li>Report di consegna</li>
-        </ul>
-        <div class="checkrow">
-          <input id="cons-light" type="checkbox">
-          <label for="cons-light" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
-        </div>
-        <button class="mailto-btn" data-tier="LIGHT" data-title="Prendo io la colpa — Light" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
-      </div>
-
-      <div class="card">
-        <div class="title">Prendo io la colpa — Full</div>
-        <small>€19,90 IVA inclusa</small>
-        <ul class="muted" style="margin:0 0 8px 16px">
-          <li>Testo personalizzato, fino a 3 tentativi in 24h</li>
-          <li>1 revisione del testo</li>
-          <li>Prova di consegna</li>
-        </ul>
-        <div class="checkrow">
-          <input id="cons-full" type="checkbox">
-          <label for="cons-full" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
-        </div>
-        <button class="mailto-btn" data-tier="FULL" data-title="Prendo io la colpa — Full" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
-      </div>
-
-      <div class="card">
-        <div class="title">Prendo io la colpa — Deluxe</div>
-        <small>€39,90 IVA inclusa</small>
-        <ul class="muted" style="margin:0 0 8px 16px">
-          <li>Strategia + varianti + follow-up programmato</li>
-          <li>Fino a 2 revisioni</li>
-          <li>Report finale</li>
-        </ul>
-        <div class="checkrow">
-          <input id="cons-deluxe" type="checkbox">
-          <label for="cons-deluxe" class="muted">Accetto la <a href="/manleva.html" target="_blank">manleva del servizio “ColpaMia”.</a></label>
-        </div>
-        <button class="mailto-btn" data-tier="DELUXE" data-title="Prendo io la colpa — Deluxe" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
-      </div>
+  <!-- Hero -->
+  <section class="hero">
+    <h1>Dal punto al punto a capo.</h1>
+    <p>Con COLPA MIA la scusa non chiude. Apre un dialogo, ricostruisce fiducia e trasforma l’errore in continuità.</p>
+    <div class="cta">
+      <a href="#catalogo" class="btn primary">Acquista una scusa</a>
+      <a href="#prendo-io-la-colpa" class="btn">Prendo io la colpa</a>
     </div>
+    <div style="position:absolute;inset:auto -40px -40px auto;opacity:.08;pointer-events:none;font-size:160px;font-weight:900;letter-spacing:2px">CM</div>
+  </section>
 
-    <!-- WALLET INTRO -->
-    <section id="wallet" class="card">
-      <h2 style="margin:0 0 8px">Minuti di Vita</h2>
-      <p>Ogni scusa COLPA MIA ti fa risparmiare tempo prezioso. Accumula Minuti di Vita, sblocca pacchetti gratuiti e trasforma le scuse in nuove opportunità.</p>
-    </section>
-
-    <!-- WALLET & PREMIUM (funzionalità) -->
-    <section class="card" style="margin-top:0">
-      <h2 style="margin:0 0 10px">Wallet & Premium</h2>
-      <p><small>Controlla il saldo dei tuoi “minuti di vita risparmiati” e riscattali.</small></p>
-      <div class="row">
-        <input id="wallet-email" type="text" placeholder="La tua email" style="flex:1"/>
-        <button id="btn-wallet-check" style="width:auto">Vedi saldo</button>
-      </div>
-      <p id="wallet-result" style="margin-top:8px"></p>
-
-      <div class="grid" style="margin-top:12px">
-        <div class="card">
-          <div class="title">Scusa Base GRATIS</div>
-          <small>Riscatta <b>50 min</b> → codice sconto 100% (1 uso, 14 giorni).</small>
-          <button data-reward="BASE_FREE">Riscatta 50 min</button>
-        </div>
-        <div class="card">
-          <div class="title">Deluxe −50%</div>
-          <small>Riscatta <b>80 min</b> → codice sconto −50% (1 uso, 14 giorni).</small>
-          <button data-reward="DELUXE_50">Riscatta 80 min</button>
-        </div>
-      </div>
-      <p class="muted" style="margin-top:8px">Leggi la <a href="/manleva.html" target="_blank">manleva del servizio</a>.</p>
-    </section>
-
-    <!-- FAQ -->
-    <section id="faq-switch" class="card">
-      <h2 style="margin:0 0 8px">FAQ</h2>
-      <details>
-        <summary>Cos’è il Responsibility Switch?</summary>
-        <p>È il sistema che trasforma la scusa in un punto a capo: il destinatario riceve una pagina dedicata e può scegliere come continuare il dialogo.</p>
-      </details>
-      <details>
-        <summary>Cosa significa SLA?</summary>
-        <p>Tempo massimo entro cui COLPA MIA si impegna a gestire la tua scusa. Se superato, applichiamo rimborso/sostituzione del servizio.</p>
-      </details>
-      <details>
-        <summary>Cos’è la prova di consegna?</summary>
-        <p>Ricevuta digitale con timestamp e cronologia azioni, garanzia che l’errore è stato preso in carico.</p>
-      </details>
-    </section>
-
+  <!-- Come funziona -->
+  <h2 class="section">Come funziona lo switch</h2>
+  <div class="panel">
+    <ol style="margin:0 0 0 18px;line-height:1.8">
+      <li>Tu generi la scusa o deleghi COLPA MIA.</li>
+      <li>Il destinatario riceve una pagina ufficiale con scusa e opzioni di rimedio.</li>
+      <li>La scelta riapre il dialogo: non più un punto fermo, sempre un punto a capo.</li>
+    </ol>
   </div>
 
+  <!-- CATALOGO -->
+  <h2 id="catalogo" class="section">Catalogo</h2>
+  <div class="grid">
+    <!-- SCUSA BASE -->
+    <article class="card">
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1546410531-bb4caa6b424d?q=80&w=1200&auto=format&fit=crop" alt="Scusa Base">
+      </div>
+      <div class="body">
+        <div class="title">Scusa Base <span class="badge">1 variante</span></div>
+        <div class="muted">Una scusa scritta per riaprire il dialogo.</div>
+        <label class="muted">Contesto</label>
+        <select id="ctx-base">
+          <option value="CENA">CENA</option>
+          <option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option>
+          <option value="LAVORO">LAVORO</option>
+          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="FAMIGLIA">FAMIGLIA</option>
+          <option value="SALUTE">SALUTE</option>
+          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+        </select>
+        <button class="cta" data-sku="SCUSA_BASE" data-title="Scusa Base" data-context-select="#ctx-base">Acquista</button>
+      </div>
+    </article>
+
+    <!-- SCUSA DELUXE -->
+    <article class="card">
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1532635331754-0f8b1d0f16ae?q=80&w=1200&auto=format&fit=crop" alt="Scusa Deluxe">
+      </div>
+      <div class="body">
+        <div class="title">Scusa Deluxe <span class="badge">3 varianti</span></div>
+        <div class="muted">Tre varianti, tre possibilità di ricominciare.</div>
+        <label class="muted">Contesto</label>
+        <select id="ctx-deluxe">
+          <option value="CENA">CENA</option>
+          <option value="APERITIVO">APERITIVO</option>
+          <option value="EVENTO">EVENTO</option>
+          <option value="LAVORO">LAVORO</option>
+          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+          <option value="FAMIGLIA">FAMIGLIA</option>
+          <option value="SALUTE">SALUTE</option>
+          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
+        </select>
+        <button class="cta" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe" data-context-select="#ctx-deluxe">Acquista</button>
+      </div>
+    </article>
+
+    <!-- Scenari fissi -->
+    <article class="card">
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1501706362039-c06b2d715385?q=80&w=1200&auto=format&fit=crop" alt="Traffico">
+      </div>
+      <div class="body">
+        <div class="title">Traffico <span class="badge">Scenario fisso</span></div>
+        <div class="muted">Scusa pronta all’uso: traffico/incidente/coda.</div>
+        <button class="cta" data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1496096265110-f83ad7f96608?q=80&w=1200&auto=format&fit=crop" alt="Riunione Improvvisa">
+      </div>
+      <div class="body">
+        <div class="title">Riunione Improvvisa <span class="badge">Scenario fisso</span></div>
+        <div class="muted">Riunione/call che sfora. Pronta subito.</div>
+        <button class="cta" data-sku="RIUNIONE" data-title="Riunione Improvvisa">Acquista</button>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="media">
+        <img src="https://images.unsplash.com/photo-1510511336377-1a9caa095849?q=80&w=1200&auto=format&fit=crop" alt="Connessione KO">
+      </div>
+      <div class="body">
+        <div class="title">Connessione KO <span class="badge">Scenario fisso</span></div>
+        <div class="muted">Linea/VPN/Internet non disponibile.</div>
+        <button class="cta" data-sku="CONNESSIONE" data-title="Connessione KO">Acquista</button>
+      </div>
+    </article>
+  </div>
+
+  <!-- Prendo io la colpa -->
+  <h2 id="prendo-io-la-colpa" class="section">Prendiamo noi la responsabilità</h2>
+  <div class="grid">
+    <article class="card">
+      <div class="media"><img src="https://images.unsplash.com/photo-1522071901873-411886a10004?q=80&w=1200&auto=format&fit=crop" alt=""></div>
+      <div class="body">
+        <div class="title">Light – €9,90</div>
+        <div class="muted">Colpa presa e comunicata in forma standard. Ideale per errori semplici.</div>
+        <label class="chip"><input type="checkbox" id="cons-light" style="accent-color:#37c9ff"> Accetto la manleva</label>
+        <button class="cta mailto-btn" data-tier="LIGHT" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="media"><img src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=1200&auto=format&fit=crop" alt=""></div>
+      <div class="body">
+        <div class="title">Full – €19,90</div>
+        <div class="muted">Colpa presa, comunicata e accompagnata da una prova di esecuzione.</div>
+        <label class="chip"><input type="checkbox" id="cons-full" style="accent-color:#37c9ff"> Accetto la manleva</label>
+        <button class="cta mailto-btn" data-tier="FULL" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
+      </div>
+    </article>
+
+    <article class="card">
+      <div class="media"><img src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1200&auto=format&fit=crop" alt=""></div>
+      <div class="body">
+        <div class="title">Deluxe – €39,90</div>
+        <div class="muted">Colpa presa, gestita e risolta con interazione diretta. Ricevuta finale inclusa.</div>
+        <label class="chip"><input type="checkbox" id="cons-deluxe" style="accent-color:#37c9ff"> Accetto la manleva</label>
+        <button class="cta mailto-btn" data-tier="DELUXE" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
+      </div>
+    </article>
+  </div>
+  <div class="panel note">Ogni pacchetto include una pagina ufficiale COLPA MIA che trasforma l’errore in un nuovo inizio.</div>
+
+  <!-- Wallet & Premium -->
+  <h2 id="wallet" class="section">Minuti di Vita</h2>
+  <section class="panel">
+    <p>Ogni scusa COLPA MIA ti fa risparmiare tempo prezioso. Accumula Minuti di Vita, sblocca pacchetti gratuiti e trasforma le scuse in nuove opportunità.</p>
+    <div class="rowflex" style="margin-top:10px">
+      <input id="wallet-email" type="email" placeholder="La tua email">
+      <button id="btn-wallet-check" class="cta" style="width:auto">Vedi saldo</button>
+    </div>
+    <div id="wallet-result" class="msg"></div>
+
+    <div class="grid" style="margin-top:12px">
+      <article class="card">
+        <div class="body">
+          <div class="title">Scusa Base GRATIS</div>
+          <div class="muted">Riscatta <b>50 min</b> → codice sconto 100% (1 uso, 14 giorni).</div>
+          <button data-reward="BASE_FREE" class="cta">Riscatta 50 min</button>
+        </div>
+      </article>
+      <article class="card">
+        <div class="body">
+          <div class="title">Deluxe −50%</div>
+          <div class="muted">Riscatta <b>80 min</b> → codice sconto −50% (1 uso, 14 giorni).</div>
+          <button data-reward="DELUXE_50" class="cta">Riscatta 80 min</button>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- FAQ -->
+  <h2 id="faq" class="section">FAQ</h2>
+  <section class="panel">
+    <details>
+      <summary>Cos’è il Responsibility Switch?</summary>
+      <p>È il sistema che trasforma la scusa in un punto a capo: il destinatario riceve una pagina dedicata e può scegliere come continuare il dialogo.</p>
+    </details>
+    <details>
+      <summary>Cosa significa SLA?</summary>
+      <p>Tempo massimo entro cui COLPA MIA si impegna a gestire la tua scusa. Se superato, applichiamo rimborso/sostituzione del servizio.</p>
+    </details>
+    <details>
+      <summary>Cos’è la prova di consegna?</summary>
+      <p>Ricevuta digitale con timestamp e cronologia azioni, garanzia che l’errore è stato preso in carico.</p>
+    </details>
+  </section>
+
+  <footer>© COLPA MIA — Trasformiamo gli errori in continuità.</footer>
+
   <script>
-    // Checkout: invia SOLO { sku, ctx } al backend
+    // ----------------------------------------------------
+    // Checkout: mantiene compatibilità con le funzioni già deployate
+    // ----------------------------------------------------
+    const SUCCESS = location.origin + '/success.html';
+    const CANCEL  = location.origin + '/cancel.html';
+
     async function startCheckout(btn){
       const sku = btn.dataset.sku;
       if(!sku){ alert('SKU mancante'); return; }
 
-      // titolo informativo
+      // Salvo il titolo per success.html
       const title = btn.getAttribute('data-title')
         || btn.closest('.card')?.querySelector('.title')?.textContent
         || sku;
       sessionStorage.setItem('last_checkout_title', title);
 
-      // ctx dal select del card se presente
+      // Per BASE/DELUXE legge la tendina; scenari fissi = contesto vuoto
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-      if (sel && sel.value) ctx = String(sel.value).toUpperCase().trim();
+      if (sel && sel.value) ctx = String(sel.value).trim();
+
+      const payload = {
+        sku,
+        success_url: SUCCESS + '?session_id={CHECKOUT_SESSION_ID}',
+        cancel_url: CANCEL,
+        need_default: ctx || '',
+        context_hint: ctx || ''
+      };
 
       btn.disabled = true;
       try{
         const r = await fetch('/.netlify/functions/create-checkout-session', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify({ sku, ctx })
+          body: JSON.stringify(payload)
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error||'stripe_create_failed');
+
         if (data.id) sessionStorage.setItem('last_session_id', data.id);
-        location.href = data.url || '/success.html';
+        location.href = data.url || (SUCCESS + '?session_id=' + encodeURIComponent(data.id||''));
       }catch(e){
         alert('Errore checkout: ' + (e.message||e));
       }finally{
@@ -296,17 +372,19 @@
       }
     }
 
-    // bind acquisto
     document.querySelectorAll('button[data-sku]').forEach(b=>{
       b.addEventListener('click', ()=> startCheckout(b));
     });
 
-    // “Prendo io la colpa” (mailto) invariato
+    // ----------------------------------------------------
+    // “Prendo io la colpa” → mailto con consenso
+    // ----------------------------------------------------
     document.querySelectorAll('.mailto-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
-        const card = btn.closest('.card');
-        const chk  = card.querySelector('input[type="checkbox"]');
+        const id = btn.dataset.tier?.toLowerCase();
+        const chk = document.querySelector('#cons-'+id);
         if (!chk || !chk.checked) { alert('Per procedere devi accettare la manleva.'); return; }
+
         const tier = btn.dataset.tier || 'LIGHT';
         const to   = btn.dataset.mail || 'colpamiaconsulenze@proton.me';
         const subj = encodeURIComponent(`[${tier}] Prendo io la colpa — richiesta`);
@@ -314,27 +392,49 @@
 `Ciao,
 ti scrivo per il pacchetto "${tier}".
 Ecco i dettagli del caso (contesto, persone coinvolte, obiettivo, tempistiche, eventuale orario credibile):
--
+- 
 Grazie!`
         );
         location.href = `mailto:${to}?subject=${subj}&body=${body}`;
       });
     });
 
-    // Wallet: mostra "minutes" (fallback a "wallet")
+    // ----------------------------------------------------
+    // Wallet & Premium
+    // ----------------------------------------------------
     (function(){
       const $ = s=>document.querySelector(s);
       const out = $('#wallet-result');
 
-      $('#btn-wallet-check')?.addEventListener('click', async ()=>{
-        const email = ($('#wallet-email')?.value||'').trim();
+      $('#btn-wallet-check').onclick = async ()=>{
+        const email = ($('#wallet-email').value||'').trim();
         if(!email){ alert('Inserisci la tua email'); return; }
         try{
           const r = await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
           const data = await r.json();
-          const minutes = (data && (data.minutes ?? data.wallet)) || 0;
-          out.textContent = r.ok ? `Saldo: ${minutes} minuti` : (data.error||'Errore');
-        }catch{ out.textContent='Errore'; }
+          out.textContent = r.ok ? `Saldo: ${data.wallet||0} minuti` : (data.error||'Errore');
+          out.className = 'msg ' + (r.ok ? 'ok' : 'err');
+        }catch{ out.textContent='Errore'; out.className='msg err'; }
+      };
+
+      document.querySelectorAll('button[data-reward]').forEach(btn=>{
+        btn.onclick = async ()=>{
+          const email = ($('#wallet-email').value||'').trim();
+          if(!email){ alert('Inserisci la tua email'); return; }
+          btn.disabled=true;
+          try{
+            const r = await fetch('/.netlify/functions/wallet-redeem',{
+              method:'POST',
+              headers:{'Content-Type':'application/json'},
+              body: JSON.stringify({ email, reward: btn.dataset.reward })
+            });
+            const data = await r.json();
+            if(!r.ok) throw new Error(data.error||'redeem_failed');
+            out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
+            out.className = 'msg ok';
+          }catch(e){ out.textContent='Errore: '+(e.message||e); out.className='msg err'; }
+          finally{ btn.disabled=false; }
+        };
       });
     })();
   </script>
