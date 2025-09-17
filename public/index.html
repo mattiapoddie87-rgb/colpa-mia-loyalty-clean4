@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>COLPA MIA — Catalogo</title>
   <style>
-    /* --- Stili esistenti --- */
+    /* base */
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
     .wrap{max-width:980px;margin:0 auto;padding:24px}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
@@ -20,26 +20,23 @@
     a{color:#93c5fd}
     .muted{color:#9aa3b2;font-size:12px}
     .checkrow{display:flex;gap:8px;align-items:center}
+    section{margin:24px 0}
 
-    /* --- NUOVO: CSS minimo richiesto --- */
+    /* richieste nuove */
     .hero{padding:48px 0}
     .hero h1{font-size:clamp(28px,5vw,56px);margin:0 0 .25em}
     .hero p{max-width:56ch;opacity:.9}
     .cta{display:flex;gap:.75rem;margin-top:1rem}
     .btn{display:inline-block;text-decoration:none;padding:.75rem 1rem;border-radius:12px;border:1px solid #222;background:transparent;color:#e6e6e6}
-    /* supporto sia "btn primary" che "btn-primary" */
-    .btn.primary, .btn-primary{background:#1ea9ff;color:#061018;border:none}
+    .btn.primary,.btn-primary{background:#1ea9ff;color:#061018;border:none}
     details summary{cursor:pointer}
-
-    /* separatori di sezione */
-    section{margin:24px 0}
     #come-funziona ol{margin:0;padding-left:20px}
   </style>
 </head>
 <body>
   <div class="wrap">
 
-    <!-- ============ HERO ============ -->
+    <!-- HERO -->
     <section class="hero">
       <h1>Dal punto al punto a capo.</h1>
       <p>Con COLPA MIA la scusa non chiude. Apre un dialogo, ricostruisce fiducia e trasforma l’errore in continuità.</p>
@@ -49,7 +46,7 @@
       </div>
     </section>
 
-    <!-- ============ SUB-HERO: COME FUNZIONA ============ -->
+    <!-- SUB HERO -->
     <section id="come-funziona" class="card">
       <h2 style="margin:0 0 8px">Come funziona lo switch</h2>
       <ol>
@@ -59,7 +56,7 @@
       </ol>
     </section>
 
-    <!-- ============ MICRO-COPY CATALOGO ============ -->
+    <!-- CATALOGO MICRO-COPY -->
     <section id="catalogo" class="card">
       <h2 style="margin:0 0 8px">Catalogo</h2>
       <article>
@@ -76,14 +73,14 @@
       </article>
     </section>
 
-    <!-- ============ CARD PRODOTTI (funzionalità invariata) ============ -->
+    <!-- PRODOTTI -->
     <div class="grid">
       <!-- SCUSA BASE -->
       <div class="card">
         <div class="title">SCUSA BASE</div>
         <div class="price">Prezzo come da listino</div>
         <label for="ctx-base"><small>Contesto</small></label>
-        <select id="ctx-base">
+        <select id="ctx-base" name="ctx">
           <option value="CENA">CENA</option>
           <option value="APERITIVO">APERITIVO</option>
           <option value="EVENTO">EVENTO</option>
@@ -106,7 +103,7 @@
         <div class="title">SCUSA DELUXE</div>
         <div class="price">Prezzo come da listino</div>
         <label for="ctx-deluxe"><small>Contesto</small></label>
-        <select id="ctx-deluxe">
+        <select id="ctx-deluxe" name="ctx">
           <option value="CENA">CENA</option>
           <option value="APERITIVO">APERITIVO</option>
           <option value="EVENTO">EVENTO</option>
@@ -124,7 +121,7 @@
         <div class="muted">Nota: DELUXE consegna tre varianti.</div>
       </div>
 
-      <!-- CONNESSIONE KO -->
+      <!-- CONNESSIONE -->
       <div class="card">
         <div class="title">CONNESSIONE KO</div>
         <div class="price">Prezzo come da listino</div>
@@ -140,7 +137,7 @@
         <button data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
       </div>
 
-      <!-- RIUNIONE IMPROVVISA -->
+      <!-- RIUNIONE -->
       <div class="card">
         <div class="title">RIUNIONE IMPROVVISA</div>
         <div class="price">Prezzo come da listino</div>
@@ -149,31 +146,26 @@
       </div>
     </div>
 
-    <!-- ============ MICRO-COPY “PRENDO IO LA COLPA” ============ -->
+    <!-- PRENDO IO LA COLPA (testo) -->
     <section id="prendo-io-la-colpa" class="card">
       <h2 style="margin:0 0 8px">Prendiamo noi la responsabilità</h2>
-
       <div class="tier" style="margin-bottom:8px">
         <h3>Light – €9,90</h3>
         <p>Colpa presa e comunicata in forma standard. Ideale per errori semplici.</p>
       </div>
-
       <div class="tier" style="margin-bottom:8px">
         <h3>Full – €19,90</h3>
         <p>Colpa presa, comunicata e accompagnata da una prova di esecuzione.</p>
       </div>
-
       <div class="tier">
         <h3>Deluxe – €39,90</h3>
         <p>Colpa presa, gestita e risolta con interazione diretta. Il destinatario riceve scusa, opzioni e ricevuta finale.</p>
       </div>
-
       <p class="note" style="margin-top:8px">Ogni pacchetto include una pagina ufficiale COLPA MIA che trasforma l’errore in un nuovo inizio.</p>
     </section>
 
-    <!-- ============ TIER “PRENDO IO LA COLPA” (funzionalità invariata) ============ -->
+    <!-- TIER CON MAILTO (funzionalità invariata) -->
     <div class="grid">
-      <!-- COLPA LIGHT -->
       <div class="card">
         <div class="title">Prendo io la colpa — Light</div>
         <small>€9,90 IVA inclusa</small>
@@ -188,7 +180,6 @@
         <button class="mailto-btn" data-tier="LIGHT" data-title="Prendo io la colpa — Light" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
       </div>
 
-      <!-- COLPA FULL -->
       <div class="card">
         <div class="title">Prendo io la colpa — Full</div>
         <small>€19,90 IVA inclusa</small>
@@ -204,7 +195,6 @@
         <button class="mailto-btn" data-tier="FULL" data-title="Prendo io la colpa — Full" data-mail="colpamiaconsulenze@proton.me">Contattami via email</button>
       </div>
 
-      <!-- COLPA DELUXE -->
       <div class="card">
         <div class="title">Prendo io la colpa — Deluxe</div>
         <small>€39,90 IVA inclusa</small>
@@ -221,13 +211,13 @@
       </div>
     </div>
 
-    <!-- ============ WALLET INTRO (testo) ============ -->
+    <!-- WALLET INTRO -->
     <section id="wallet" class="card">
       <h2 style="margin:0 0 8px">Minuti di Vita</h2>
       <p>Ogni scusa COLPA MIA ti fa risparmiare tempo prezioso. Accumula Minuti di Vita, sblocca pacchetti gratuiti e trasforma le scuse in nuove opportunità.</p>
     </section>
 
-    <!-- ============ WALLET & PREMIUM (funzionalità invariata) ============ -->
+    <!-- WALLET & PREMIUM (funzionalità) -->
     <section class="card" style="margin-top:0">
       <h2 style="margin:0 0 10px">Wallet & Premium</h2>
       <p><small>Controlla il saldo dei tuoi “minuti di vita risparmiati” e riscattali.</small></p>
@@ -252,20 +242,17 @@
       <p class="muted" style="margin-top:8px">Leggi la <a href="/manleva.html" target="_blank">manleva del servizio</a>.</p>
     </section>
 
-    <!-- ============ FAQ ============ -->
+    <!-- FAQ -->
     <section id="faq-switch" class="card">
       <h2 style="margin:0 0 8px">FAQ</h2>
-
       <details>
         <summary>Cos’è il Responsibility Switch?</summary>
         <p>È il sistema che trasforma la scusa in un punto a capo: il destinatario riceve una pagina dedicata e può scegliere come continuare il dialogo.</p>
       </details>
-
       <details>
         <summary>Cosa significa SLA?</summary>
         <p>Tempo massimo entro cui COLPA MIA si impegna a gestire la tua scusa. Se superato, applichiamo rimborso/sostituzione del servizio.</p>
       </details>
-
       <details>
         <summary>Cos’è la prova di consegna?</summary>
         <p>Ricevuta digitale con timestamp e cronologia azioni, garanzia che l’errore è stato preso in carico.</p>
@@ -274,45 +261,34 @@
 
   </div>
 
-  <!-- ========= Script esistente (checkout + mailto + wallet) ========= -->
   <script>
-    const SUCCESS = location.origin + '/success.html';
-    const CANCEL  = location.origin + '/cancel.html';
-
+    // Checkout: invia SOLO { sku, ctx } al backend
     async function startCheckout(btn){
       const sku = btn.dataset.sku;
       if(!sku){ alert('SKU mancante'); return; }
 
+      // titolo informativo
       const title = btn.getAttribute('data-title')
         || btn.closest('.card')?.querySelector('.title')?.textContent
         || sku;
       sessionStorage.setItem('last_checkout_title', title);
 
+      // ctx dal select del card se presente
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-      if (sel && sel.value) ctx = String(sel.value).trim();
-
-      const payload = {
-        sku,
-        success_url: SUCCESS + '?session_id={CHECKOUT_SESSION_ID}',
-        cancel_url: CANCEL,
-        need_default: ctx || '',
-        context_hint: ctx || ''
-      };
+      if (sel && sel.value) ctx = String(sel.value).toUpperCase().trim();
 
       btn.disabled = true;
       try{
         const r = await fetch('/.netlify/functions/create-checkout-session', {
           method: 'POST',
           headers: { 'Content-Type':'application/json' },
-          body: JSON.stringify(payload)
+          body: JSON.stringify({ sku, ctx })
         });
         const data = await r.json();
         if (!r.ok) throw new Error(data?.error||'stripe_create_failed');
-
         if (data.id) sessionStorage.setItem('last_session_id', data.id);
-        if (data.url) location.href = data.url;
-        else location.href = SUCCESS + '?session_id=' + encodeURIComponent(data.id||'');
+        location.href = data.url || '/success.html';
       }catch(e){
         alert('Errore checkout: ' + (e.message||e));
       }finally{
@@ -320,16 +296,17 @@
       }
     }
 
+    // bind acquisto
     document.querySelectorAll('button[data-sku]').forEach(b=>{
       b.addEventListener('click', ()=> startCheckout(b));
     });
 
+    // “Prendo io la colpa” (mailto) invariato
     document.querySelectorAll('.mailto-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const card = btn.closest('.card');
         const chk  = card.querySelector('input[type="checkbox"]');
         if (!chk || !chk.checked) { alert('Per procedere devi accettare la manleva.'); return; }
-
         const tier = btn.dataset.tier || 'LIGHT';
         const to   = btn.dataset.mail || 'colpamiaconsulenze@proton.me';
         const subj = encodeURIComponent(`[${tier}] Prendo io la colpa — richiesta`);
@@ -344,37 +321,20 @@ Grazie!`
       });
     });
 
+    // Wallet: mostra "minutes" (fallback a "wallet")
     (function(){
       const $ = s=>document.querySelector(s);
       const out = $('#wallet-result');
 
-      $('#btn-wallet-check').onclick = async ()=>{
-        const email = ($('#wallet-email').value||'').trim();
+      $('#btn-wallet-check')?.addEventListener('click', async ()=>{
+        const email = ($('#wallet-email')?.value||'').trim();
         if(!email){ alert('Inserisci la tua email'); return; }
         try{
           const r = await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
           const data = await r.json();
-          out.textContent = r.ok ? `Saldo: ${data.wallet||0} minuti` : (data.error||'Errore');
+          const minutes = (data && (data.minutes ?? data.wallet)) || 0;
+          out.textContent = r.ok ? `Saldo: ${minutes} minuti` : (data.error||'Errore');
         }catch{ out.textContent='Errore'; }
-      };
-
-      document.querySelectorAll('button[data-reward]').forEach(btn=>{
-        btn.onclick = async ()=>{
-          const email = ($('#wallet-email').value||'').trim();
-          if(!email){ alert('Inserisci la tua email'); return; }
-          btn.disabled=true;
-          try{
-            const r = await fetch('/.netlify/functions/wallet-redeem',{
-              method:'POST',
-              headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ email, reward: btn.dataset.reward })
-            });
-            const data = await r.json();
-            if(!r.ok) throw new Error(data.error||'redeem_failed');
-            out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
-          }catch(e){ alert('Errore: '+(e.message||e)); }
-          finally{ btn.disabled=false; }
-        };
       });
     })();
   </script>
