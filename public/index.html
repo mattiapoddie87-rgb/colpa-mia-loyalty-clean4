@@ -22,9 +22,9 @@
     html,body{height:100%}
     body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
 
-    /* --- Futuristic background lines (super leggeri) --- */
+    /* --- Futuristic background lines --- */
     .fx{
-      position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;
+      position:fixed; inset:0; z-index:-2; pointer-events:none; overflow:hidden;
       background:
         repeating-linear-gradient(90deg, transparent 0 98px, rgba(255,255,255,.03) 98px 99px, transparent 99px 100px),
         repeating-linear-gradient(0deg,  transparent 0 98px, rgba(255,255,255,.02) 98px 99px, transparent 99px 100px);
@@ -33,6 +33,12 @@
     }
     @keyframes bgShiftX{to{background-position:1200px 0, 0 0}}
     @keyframes bgShiftY{to{background-position:0 0, 0 900px}}
+
+    /* Particellari */
+    #fx-parts{
+      position:fixed; inset:0; z-index:-1; pointer-events:none;
+      opacity:.28; filter:saturate(.9) brightness(.9);
+    }
 
     /* --- Header stile “marketplace” --- */
     .topbar{
@@ -77,9 +83,7 @@
       background:var(--panel); border:1px solid #1f2b46; border-radius:16px; overflow:hidden;
       display:flex; flex-direction:column; min-height:260px;
     }
-    .card .media{
-      position:relative;height:160px;background:#0d1423;overflow:hidden
-    }
+    .card .media{position:relative;height:160px;background:#0d1423;overflow:hidden}
     .card .media img{width:100%;height:100%;object-fit:cover;display:block;opacity:.95}
     .card .body{padding:14px;display:flex;flex-direction:column;gap:10px}
     .title{font-weight:800}
@@ -91,8 +95,15 @@
     button.cta:hover{filter:brightness(1.05)}
     .badge{display:inline-block;padding:.25rem .5rem;border-radius:999px;background:#13243d;color:#a9d8ff;font-size:.75rem;border:1px solid #1e3861}
 
-    /* --- Wallet & footer --- */
+    /* --- Context bar --- */
     .panel{max-width:1200px;margin:18px auto;padding:16px;border:1px solid #1f2b46;border-radius:16px;background:var(--panel);}
+    .ctxbar{display:flex;flex-wrap:wrap;gap:8px}
+    .chip{
+      display:inline-flex;align-items:center;gap:6px;padding:.4rem .7rem;border:1px solid #234063;border-radius:999px;
+      background:#0e1a2b;color:#bfe7ff;font-size:.8rem;cursor:pointer;user-select:none
+    }
+    .chip.active{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;border-color:transparent;font-weight:800}
+
     .rowflex{display:flex;gap:10px;flex-wrap:wrap}
     .rowflex>*{flex:1 1 240px}
     .msg{margin-top:8px;font-size:.95rem}
@@ -100,13 +111,11 @@
 
     footer{margin:24px 0 40px;color:#9fb0c9;text-align:center;font-size:.9rem}
     .note{color:#9fb0c9;font-size:.9rem}
-
-    /* Small helpers */
-    .chip{display:inline-flex;align-items:center;gap:6px;padding:.25rem .5rem;border:1px solid #234063;border-radius:999px;background:#0e1a2b;color:#bfe7ff;font-size:.75rem}
   </style>
 </head>
 <body>
   <div class="fx" aria-hidden="true"></div>
+  <canvas id="fx-parts" aria-hidden="true"></canvas>
 
   <!-- Topbar -->
   <header class="topbar">
@@ -155,6 +164,17 @@
     </ol>
   </div>
 
+  <!-- Context bar (vale per SCUSA BASE / DELUXE) -->
+  <div class="panel">
+    <div class="row" style="justify-content:space-between;gap:12px">
+      <strong>Contesto selezionato</strong>
+      <small class="muted">Seleziona qui il contesto: verrà applicato a Scusa Base/Deluxe</small>
+    </div>
+    <div id="ctxbar" class="ctxbar" style="margin-top:10px">
+      <!-- Chip generate via JS per avere una singola source of truth -->
+    </div>
+  </div>
+
   <!-- CATALOGO -->
   <h2 id="catalogo" class="section">Catalogo</h2>
   <div class="grid">
@@ -166,19 +186,7 @@
       <div class="body">
         <div class="title">Scusa Base <span class="badge">1 variante</span></div>
         <div class="muted">Una scusa scritta per riaprire il dialogo.</div>
-        <label class="muted">Contesto</label>
-        <select id="ctx-base">
-          <option value="CENA">CENA</option>
-          <option value="APERITIVO">APERITIVO</option>
-          <option value="EVENTO">EVENTO</option>
-          <option value="LAVORO">LAVORO</option>
-          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
-          <option value="FAMIGLIA">FAMIGLIA</option>
-          <option value="SALUTE">SALUTE</option>
-          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
-        </select>
-        <button class="cta" data-sku="SCUSA_BASE" data-title="Scusa Base" data-context-select="#ctx-base">Acquista</button>
+        <button class="cta" data-sku="SCUSA_BASE" data-title="Scusa Base">Acquista</button>
       </div>
     </article>
 
@@ -190,19 +198,7 @@
       <div class="body">
         <div class="title">Scusa Deluxe <span class="badge">3 varianti</span></div>
         <div class="muted">Tre varianti, tre possibilità di ricominciare.</div>
-        <label class="muted">Contesto</label>
-        <select id="ctx-deluxe">
-          <option value="CENA">CENA</option>
-          <option value="APERITIVO">APERITIVO</option>
-          <option value="EVENTO">EVENTO</option>
-          <option value="LAVORO">LAVORO</option>
-          <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
-          <option value="FAMIGLIA">FAMIGLIA</option>
-          <option value="SALUTE">SALUTE</option>
-          <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
-          <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
-        </select>
-        <button class="cta" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe" data-context-select="#ctx-deluxe">Acquista</button>
+        <button class="cta" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe">Acquista</button>
       </div>
     </article>
 
@@ -324,9 +320,34 @@
   <footer>© COLPA MIA — Trasformiamo gli errori in continuità.</footer>
 
   <script>
-    // ----------------------------------------------------
-    // Checkout: mantiene compatibilità con le funzioni già deployate
-    // ----------------------------------------------------
+    // ---------------------------------------------
+    // Context chips (globali per SCUSA_* )
+    // ---------------------------------------------
+    const CTX_LIST = [
+      'CENA','APERITIVO','EVENTO','LAVORO',
+      'PARTITA A CALCETTO','FAMIGLIA','SALUTE',
+      'APPUNTAMENTO/CONSEGNA','ESAME/LEZIONE'
+    ];
+    let SELECTED_CTX = '';
+
+    (function mountCtxBar(){
+      const bar = document.getElementById('ctxbar');
+      CTX_LIST.forEach(ctx=>{
+        const el = document.createElement('span');
+        el.className = 'chip';
+        el.textContent = ctx;
+        el.dataset.ctx = ctx;
+        el.onclick = ()=>{
+          SELECTED_CTX = (SELECTED_CTX===ctx) ? '' : ctx;
+          [...bar.children].forEach(c=>c.classList.toggle('active', c.dataset.ctx===SELECTED_CTX));
+        };
+        bar.appendChild(el);
+      });
+    })();
+
+    // ---------------------------------------------
+    // Checkout
+    // ---------------------------------------------
     const SUCCESS = location.origin + '/success.html';
     const CANCEL  = location.origin + '/cancel.html';
 
@@ -334,16 +355,14 @@
       const sku = btn.dataset.sku;
       if(!sku){ alert('SKU mancante'); return; }
 
-      // Salvo il titolo per success.html
       const title = btn.getAttribute('data-title')
         || btn.closest('.card')?.querySelector('.title')?.textContent
         || sku;
       sessionStorage.setItem('last_checkout_title', title);
 
-      // Per BASE/DELUXE legge la tendina; scenari fissi = contesto vuoto
+      // Per SCUSA_* usa il contesto globale; scenari fissi -> vuoto
       let ctx = '';
-      const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
-      if (sel && sel.value) ctx = String(sel.value).trim();
+      if (sku === 'SCUSA_BASE' || sku === 'SCUSA_DELUXE') ctx = SELECTED_CTX;
 
       const payload = {
         sku,
@@ -376,9 +395,9 @@
       b.addEventListener('click', ()=> startCheckout(b));
     });
 
-    // ----------------------------------------------------
+    // ---------------------------------------------
     // “Prendo io la colpa” → mailto con consenso
-    // ----------------------------------------------------
+    // ---------------------------------------------
     document.querySelectorAll('.mailto-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const id = btn.dataset.tier?.toLowerCase();
@@ -392,16 +411,16 @@
 `Ciao,
 ti scrivo per il pacchetto "${tier}".
 Ecco i dettagli del caso (contesto, persone coinvolte, obiettivo, tempistiche, eventuale orario credibile):
-- 
+-
 Grazie!`
         );
         location.href = `mailto:${to}?subject=${subj}&body=${body}`;
       });
     });
 
-    // ----------------------------------------------------
+    // ---------------------------------------------
     // Wallet & Premium
-    // ----------------------------------------------------
+    // ---------------------------------------------
     (function(){
       const $ = s=>document.querySelector(s);
       const out = $('#wallet-result');
@@ -432,10 +451,63 @@ Grazie!`
             if(!r.ok) throw new Error(data.error||'redeem_failed');
             out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
             out.className = 'msg ok';
-          }catch(e){ out.textContent='Errore: '+(e.message||e); out.className='msg err'; }
+          }catch(e){ out.textContent='Errore: '+(e.message||e)); out.className='msg err'; }
           finally{ btn.disabled=false; }
         };
       });
+    })();
+
+    // ---------------------------------------------
+    // Particles (leggeri)
+    // ---------------------------------------------
+    (function(){
+      const c = document.getElementById('fx-parts');
+      const dpr = Math.min(window.devicePixelRatio||1, 2);
+      let w=0,h=0, ctx=null, pts=[];
+      function resize(){
+        w = c.width  = Math.floor(innerWidth * dpr);
+        h = c.height = Math.floor(innerHeight* dpr);
+        c.style.width  = innerWidth+'px';
+        c.style.height = innerHeight+'px';
+        ctx = c.getContext('2d');
+        make();
+      }
+      function make(){
+        const count = Math.floor((innerWidth*innerHeight)/38000);
+        pts = Array.from({length:Math.max(24,count)}, ()=>({
+          x: Math.random()*w, y: Math.random()*h,
+          vx:(Math.random()-.5)*0.12*dpr, vy:(Math.random()-.5)*0.12*dpr,
+          r: 0.8*dpr + Math.random()*1.2*dpr
+        }));
+      }
+      function step(){
+        if(!ctx) return requestAnimationFrame(step);
+        ctx.clearRect(0,0,w,h);
+        ctx.fillStyle='rgba(100,180,255,.35)';
+        ctx.strokeStyle='rgba(120,140,220,.15)';
+        ctx.lineWidth=1*dpr;
+        for(const p of pts){
+          p.x+=p.vx; p.y+=p.vy;
+          if(p.x<0||p.x>w) p.vx*=-1;
+          if(p.y<0||p.y>h) p.vy*=-1;
+          ctx.beginPath(); ctx.arc(p.x,p.y,p.r,0,Math.PI*2); ctx.fill();
+        }
+        // linee sottili tra punti vicini
+        for(let i=0;i<pts.length;i++){
+          for(let j=i+1;j<pts.length;j++){
+            const dx=pts[i].x-pts[j].x, dy=pts[i].y-pts[j].y;
+            const dist = Math.hypot(dx,dy);
+            if(dist<80*dpr){
+              ctx.globalAlpha = Math.max(0,(80*dpr-dist)/(80*dpr))*0.35;
+              ctx.beginPath(); ctx.moveTo(pts[i].x,pts[i].y); ctx.lineTo(pts[j].x,pts[j].y); ctx.stroke();
+              ctx.globalAlpha=1;
+            }
+          }
+        }
+        requestAnimationFrame(step);
+      }
+      window.addEventListener('resize', resize, {passive:true});
+      resize(); step();
     })();
   </script>
 </body>
