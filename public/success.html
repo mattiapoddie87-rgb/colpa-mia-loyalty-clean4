@@ -14,7 +14,7 @@
 </head>
 <body>
   <div class="wrap">
-    <h1 style="margin:0 0 16px">Grazie! 🎉</h1>
+    <h1 style="margin:0 0 16px">Grazie!</h1>
     <p>Pagamento ricevuto correttamente.</p>
 
     <div class="card">
@@ -26,12 +26,12 @@
     <div class="card">
       <h2 style="margin:0 0 8px">Consegna</h2>
       <p>
-        Ti abbiamo inviato la scusa via <b>email</b> (e via <b>WhatsApp</b> se hai inserito il numero). Controlla anche la cartella spam/promozioni.
-        Se non ricevi nulla entro qualche minuto, rispondi a
+        Ti abbiamo inviato la scusa via <b>email</b> (e via <b>WhatsApp</b> se hai inserito il numero). Controlla anche spam/promozioni.
+        Se non ricevi nulla entro qualche minuto, scrivi a
         <a href="mailto:colpamiaconsulenze@proton.me">colpamiaconsulenze@proton.me</a>.
       </p>
-      <p>Eventuali minuti previsti dal pacchetto sono stati accreditati sul tuo wallet.</p>
-      <p><a class="btn" href="/catalogo">Torna al catalogo</a></p>
+      <p>Gli eventuali minuti del pacchetto sono stati accreditati sul tuo wallet.</p>
+      <p><a class="btn" href="/#catalogo">Torna al catalogo</a></p>
     </div>
   </div>
 
@@ -43,8 +43,6 @@
         document.getElementById('sid').textContent = sid;
         sessionStorage.removeItem('last_session_id');
       }
-
-      // Prodotto: salvato prima del redirect
       const title = sessionStorage.getItem('last_checkout_title');
       if (title) {
         document.getElementById('p').textContent = title;
@@ -54,4 +52,3 @@
   </script>
 </body>
 </html>
-<p><a href="/#catalogo" class="btn">Torna al catalogo</a></p>
