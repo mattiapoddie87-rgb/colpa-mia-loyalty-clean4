@@ -1,54 +1,49 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>COLPA MIA — Marketplace di Scuse</title>
-  <meta name="theme-color" content="#0b0f16" />
+  <meta name="theme-color" content="#0b0f16"/>
   <style>
-    :root{
-      --bg:#0b0f16; --panel:#101724; --panel-2:#0f1623; --muted:#a9b4c6;
-      --brand:#37c9ff; --brand-2:#8a6dff; --line:#142033; --ok:#28d381; --err:#ff6b6b;
-      color-scheme:dark;
-    }
-    *{box-sizing:border-box} html,body{height:100%}
+    :root{--bg:#0b0f16;--panel:#101724;--muted:#a9b4c6;--brand:#37c9ff;--brand-2:#8a6dff;--ok:#28d381;--err:#ff6b6b;color-scheme:dark}
+    *{box-sizing:border-box}html,body{height:100%}
     body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
-    .fx{position:fixed;inset:0;z-index:-1;pointer-events:none;overflow:hidden;
-      background:
-        repeating-linear-gradient(90deg,transparent 0 98px,rgba(255,255,255,.03)98px 99px,transparent 99px 100px),
-        repeating-linear-gradient(0deg,transparent 0 98px,rgba(255,255,255,.02)98px 99px,transparent 99px 100px);
+    .fx{position:fixed;inset:0;z-index:-1;pointer-events:none;background:
+      repeating-linear-gradient(90deg,transparent 0 98px,rgba(255,255,255,.03)98px 99px,transparent 99px 100px),
+      repeating-linear-gradient(0deg,transparent 0 98px,rgba(255,255,255,.02)98px 99px,transparent 99px 100px);
       animation:bgx 32s linear infinite,bgy 48s linear infinite;filter:blur(.2px)}
-    @keyframes bgx{to{background-position:1200px 0,0 0}} @keyframes bgy{to{background-position:0 0,0 900px}}
+    @keyframes bgx{to{background-position:1200px 0,0 0}}@keyframes bgy{to{background-position:0 0,0 900px}}
     .topbar{position:sticky;top:0;z-index:50;background:#0c1220;border-bottom:1px solid #15213a}
-    .row{display:flex;align-items:center;gap:12px} .wrap{max-width:1200px;margin:0 auto;padding:10px 16px}
+    .row{display:flex;align-items:center;gap:12px}.wrap{max-width:1200px;margin:0 auto;padding:10px 16px}
     .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff}
-    .brand img{width:40px;height:40px;object-fit:contain} .brand span{font-weight:800;letter-spacing:.5px}
+    .brand img{width:40px;height:40px;object-fit:contain}.brand span{font-weight:800;letter-spacing:.5px}
     .search{flex:1;display:flex;gap:8px}
     .search input{flex:1;padding:12px 14px;border-radius:10px;border:1px solid #1e2b48;background:#0a1324;color:#e9eef5}
     .search button{padding:12px 14px;border-radius:10px;border:0;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;font-weight:700}
-    .actions a{color:#d7e5ff;text-decoration:none;opacity:.9} .actions{gap:14px}
+    .actions a{color:#d7e5ff;text-decoration:none;opacity:.9}.actions{gap:14px}
     .navcats{background:#0b1322;border-bottom:1px solid #15213a}
     .navcats .wrap{display:flex;gap:18px;flex-wrap:wrap}
-    .navcats a{color:#cfe5ff;text-decoration:none;padding:10px 0;font-size:.95rem;opacity:.9} .navcats a:hover{opacity:1}
+    .navcats a{color:#cfe5ff;text-decoration:none;padding:10px 0;font-size:.95rem;opacity:.9}.navcats a:hover{opacity:1}
     .hero{position:relative;margin:18px auto 8px;max-width:1200px;border-radius:16px;background:linear-gradient(135deg,#152036,#0f1b2f 60%,#132b4a);border:1px solid #1f2a44;padding:28px;overflow:hidden}
-    .hero h1{font-size:clamp(28px,5vw,56px);margin:0 0 .25em} .hero p{max-width:62ch;opacity:.9;margin:0 0 14px}
+    .hero h1{font-size:clamp(28px,5vw,56px);margin:0 0 .25em}.hero p{max-width:62ch;opacity:.9;margin:0 0 14px}
     .cta{display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap}
     .btn{padding:.75rem 1rem;border-radius:12px;border:1px solid #222;background:#121a2b;color:#e9eef5;text-decoration:none}
     .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;border:none;font-weight:800}
     h2.section{max-width:1200px;margin:18px auto 10px;padding:0 16px;font-size:1.2rem;opacity:.95}
     .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));max-width:1200px;margin:0 auto;padding:0 16px 8px}
     .card{background:var(--panel);border:1px solid #1f2b46;border-radius:16px;overflow:hidden;display:flex;flex-direction:column;min-height:260px}
-    .card .media{position:relative;height:160px;background:#0d1423;overflow:hidden}
-    .card .media img{width:100%;height:100%;object-fit:cover;display:block;opacity:.95}
-    .card .body{padding:14px;display:flex;flex-direction:column;gap:10px}
-    .title{font-weight:800} .muted{color:var(--muted);font-size:.9rem}
-    select,button,input[type="text"],input[type="email"]{padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;width:100%}
-    button.cta{cursor:pointer;background:#3b82f6;border-color:#3b82f6} button.cta:hover{filter:brightness(1.05)}
+    .media{position:relative;height:160px;background:#0d1423;overflow:hidden}
+    .media img{width:100%;height:100%;object-fit:cover;display:block;opacity:.95}
+    .body{padding:14px;display:flex;flex-direction:column;gap:10px}
+    .title{font-weight:800}.muted{color:var(--muted);font-size:.9rem}
+    select,button,input[type="email"]{padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;width:100%}
+    button.cta{cursor:pointer;background:#3b82f6;border-color:#3b82f6}button.cta:hover{filter:brightness(1.05)}
     .badge{display:inline-block;padding:.25rem .5rem;border-radius:999px;background:#13243d;color:#a9d8ff;font-size:.75rem;border:1px solid #1e3861}
     .panel{max-width:1200px;margin:18px auto;padding:16px;border:1px solid #1f2b46;border-radius:16px;background:var(--panel)}
-    .rowflex{display:flex;gap:10px;flex-wrap:wrap} .rowflex>*{flex:1 1 240px}
-    .msg{margin-top:8px;font-size:.95rem} .ok{color:var(--ok)} .err{color:var(--err)}
-    footer{margin:24px 0 40px;color:#9fb0c9;text-align:center;font-size:.9rem} .note{color:#9fb0c9;font-size:.9rem}
+    .rowflex{display:flex;gap:10px;flex-wrap:wrap}.rowflex>*{flex:1 1 240px}
+    .msg{margin-top:8px;font-size:.95rem}.ok{color:var(--ok)}.err{color:var(--err)}
+    footer{margin:24px 0 40px;color:#9fb0c9;text-align:center;font-size:.9rem}.note{color:#9fb0c9;font-size:.9rem}
     .chip{display:inline-flex;align-items:center;gap:6px;padding:.25rem .5rem;border:1px solid #234063;border-radius:999px;background:#0e1a2b;color:#bfe7ff;font-size:.75rem}
   </style>
 </head>
@@ -58,9 +53,9 @@
   <!-- Topbar -->
   <header class="topbar">
     <div class="wrap row">
-      <a class="brand" href="/"><img src="/assets/colpamia-logo.png" alt="COLPA MIA" /><span>COLPA MIA</span></a>
+      <a class="brand" href="/"><img src="/assets/colpamia-logo.png" alt="COLPA MIA"/><span>COLPA MIA</span></a>
       <form class="search" onsubmit="event.preventDefault()">
-        <input type="search" placeholder="Cerca scuse, scenari, pacchetti…" />
+        <input type="search" placeholder="Cerca scuse, scenari, pacchetti…"/>
         <button type="submit">Cerca</button>
       </form>
       <div class="actions row">
@@ -173,7 +168,7 @@
   <h2 id="prendo-io-la-colpa" class="section">Prendiamo noi la responsabilità</h2>
   <div class="grid">
     <article class="card">
-      <div class="media"><img src="https://images.unsplash.com/photo-1522071901873-411886a10004?q=80&w=1200&auto=format&fit=crop" alt=""></div>
+      <div class="media"><img src="/assets/colpa-light.webp" alt="Colpa Light" loading="lazy"></div>
       <div class="body">
         <div class="title">Light – €9,90</div>
         <div class="muted">Colpa presa e comunicata in forma standard. Ideale per errori semplici.</div>
@@ -183,7 +178,7 @@
     </article>
 
     <article class="card">
-      <div class="media"><img src="https://images.unsplash.com/photo-1521737604893-d14cc237f11d?q=80&w=1200&auto=format&fit=crop" alt=""></div>
+      <div class="media"><img src="/assets/colpa-full.webp" alt="Colpa Full" loading="lazy"></div>
       <div class="body">
         <div class="title">Full – €19,90</div>
         <div class="muted">Colpa presa, comunicata e accompagnata da una prova di esecuzione.</div>
@@ -193,7 +188,7 @@
     </article>
 
     <article class="card">
-      <div class="media"><img src="https://images.unsplash.com/photo-1504384308090-c894fdcc538d?q=80&w=1200&auto=format&fit=crop" alt=""></div>
+      <div class="media"><img src="/assets/colpa-deluxe.webp" alt="Colpa Deluxe" loading="lazy"></div>
       <div class="body">
         <div class="title">Deluxe – €39,90</div>
         <div class="muted">Colpa presa, gestita e risolta con interazione diretta. Ricevuta finale inclusa.</div>
@@ -256,15 +251,13 @@
     const CANCEL  = location.origin + '/cancel.html';
 
     async function startCheckout(btn){
-      const sku = btn.dataset.sku;
-      if(!sku){ alert('SKU mancante'); return; }
+      const sku = btn.dataset.sku; if(!sku){ alert('SKU mancante'); return; }
 
       const title = btn.getAttribute('data-title')
-        || btn.closest('.card')?.querySelector('.title')?.textContent
-        || sku;
+        || btn.closest('.card')?.querySelector('.title')?.textContent || sku;
       sessionStorage.setItem('last_checkout_title', title);
 
-      // Contesto preselezionato → non chiedere nel checkout
+      // contesto preselezionato → Stripe non deve chiederlo
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
       if (sel && sel.value) ctx = String(sel.value).trim();
@@ -275,20 +268,20 @@
         cancel_url: CANCEL,
         need_default: ctx || '',
         context_hint: ctx || '',
-        need_mode: 'locked' // backend: NON mostrare il campo "Contesto" su Stripe
+        need_mode: 'locked' // backend: NON mostrare "Contesto" su Stripe
       };
 
       btn.disabled = true;
       try{
-        const r = await fetch('/.netlify/functions/create-checkout-session', {
-          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+        const r = await fetch('/.netlify/functions/create-checkout-session',{
+          method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)
         });
         const data = await r.json();
         if(!r.ok) throw new Error(data?.error||'stripe_create_failed');
-        if (data.id) sessionStorage.setItem('last_session_id', data.id);
+        if(data.id) sessionStorage.setItem('last_session_id', data.id);
         location.href = data.url || (SUCCESS + '?session_id=' + encodeURIComponent(data.id||''));
-      }catch(e){ alert('Errore checkout: ' + (e.message||e)); }
-      finally{ btn.disabled = false; }
+      }catch(e){ alert('Errore checkout: '+(e.message||e)); }
+      finally{ btn.disabled=false; }
     }
 
     document.querySelectorAll('button[data-sku]').forEach(b=>{
@@ -313,35 +306,31 @@ Grazie!`);
       });
     });
 
+    // Wallet
     (function(){
-      const $ = s=>document.querySelector(s);
-      const out = $('#wallet-result');
-
-      $('#btn-wallet-check').onclick = async ()=>{
-        const email = ($('#wallet-email').value||'').trim();
-        if(!email){ alert('Inserisci la tua email'); return; }
+      const $=s=>document.querySelector(s); const out=$('#wallet-result');
+      $('#btn-wallet-check').onclick=async ()=>{
+        const email=($('#wallet-email').value||'').trim(); if(!email){alert('Inserisci la tua email');return;}
         try{
-          const r = await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
-          const data = await r.json();
+          const r=await fetch('/.netlify/functions/wallet-get?email='+encodeURIComponent(email));
+          const data=await r.json();
           out.textContent = r.ok ? `Saldo: ${data.wallet||0} minuti` : (data.error||'Errore');
           out.className = 'msg ' + (r.ok ? 'ok' : 'err');
         }catch{ out.textContent='Errore'; out.className='msg err'; }
       };
-
       document.querySelectorAll('button[data-reward]').forEach(btn=>{
-        btn.onclick = async ()=>{
-          const email = ($('#wallet-email').value||'').trim();
-          if(!email){ alert('Inserisci la tua email'); return; }
+        btn.onclick=async ()=>{
+          const email=($('#wallet-email').value||'').trim(); if(!email){alert('Inserisci la tua email');return;}
           btn.disabled=true;
           try{
-            const r = await fetch('/.netlify/functions/wallet-redeem',{
-              method:'POST', headers:{'Content-Type':'application/json'},
-              body: JSON.stringify({ email, reward: btn.dataset.reward })
+            const r=await fetch('/.netlify/functions/wallet-redeem',{
+              method:'POST',headers:{'Content-Type':'application/json'},
+              body:JSON.stringify({ email, reward: btn.dataset.reward })
             });
-            const data = await r.json();
+            const data=await r.json();
             if(!r.ok) throw new Error(data.error||'redeem_failed');
-            out.innerHTML = `Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
-            out.className = 'msg ok';
+            out.innerHTML=`Codice: <b>${data.promo_code}</b> — minuti rimanenti: ${data.remaining}.<br><small>Usalo al checkout nel campo “Codice promozionale”.</small>`;
+            out.className='msg ok';
           }catch(e){ out.textContent='Errore: '+(e.message||e); out.className='msg err'; }
           finally{ btn.disabled=false; }
         };
@@ -350,3 +339,4 @@ Grazie!`);
   </script>
 </body>
 </html>
+
