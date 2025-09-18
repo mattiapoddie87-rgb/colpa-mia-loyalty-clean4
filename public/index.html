@@ -4,8 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>COLPA MIA — Catalogo</title>
+  <link rel="icon" href="/assets/colpamia-logo.png" />
   <style>
-    /* base */
     body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
     .wrap{max-width:980px;margin:0 auto;padding:24px}
     .grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
@@ -21,7 +21,6 @@
     .muted{color:#9aa3b2;font-size:12px}
     .checkrow{display:flex;gap:8px;align-items:center}
     section{margin:24px 0}
-    /* hero + subhero */
     .hero{padding:48px 16px;border:1px solid #23283b;border-radius:16px;background:#0d1320}
     .hero h1{font-size:clamp(28px,5vw,56px);margin:0 0 .25em}
     .hero p{max-width:56ch;opacity:.9}
@@ -30,15 +29,11 @@
     .btn.primary{background:#1ea9ff;color:#061018;border:none}
     details summary{cursor:pointer}
     #come-funziona ol{margin:0;padding-left:20px}
-    /* immagini prodotto 4K */
     .prodimg{width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:12px;border:1px solid #1e2838;background:#0b1019}
-    /* stelle */
     .stars{color:#ffd166;font-size:14px}
     .rating{display:flex;align-items:center;gap:6px}
     .rating small{color:#9aa3b2}
-    /* badge */
     .badge{display:inline-block;padding:.25rem .5rem;border-radius:999px;background:#1b2030;border:1px solid #2a3148;font-size:.75rem;color:#bcd1ff}
-    /* recensioni */
     .reviews{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
     .rev{background:#121627;border:1px solid #242b44;border-radius:14px;padding:14px}
     .rev .name{font-weight:700}
@@ -70,34 +65,17 @@
     <!-- CATALOGO MICRO-COPY -->
     <section id="catalogo" class="card">
       <h2 style="margin:0 0 8px">Catalogo</h2>
-      <article>
-        <h3>Scusa Base</h3>
-        <p>Una scusa scritta per riaprire il dialogo.</p>
-      </article>
-      <article>
-        <h3>Scusa Deluxe</h3>
-        <p>Tre varianti, tre possibilità di ricominciare.</p>
-      </article>
-      <article>
-        <h3>Scenari Fissi</h3>
-        <p>Scuse pronte all’uso, ideali per sbloccare subito la conversazione.</p>
-      </article>
+      <article><h3>Scusa Base</h3><p>Una scusa scritta per riaprire il dialogo.</p></article>
+      <article><h3>Scusa Deluxe</h3><p>Tre varianti, tre possibilità di ricominciare.</p></article>
+      <article><h3>Scenari Fissi</h3><p>Scuse pronte all’uso, ideali per sbloccare subito la conversazione.</p></article>
     </section>
 
     <!-- PRODOTTI -->
     <div class="grid">
       <!-- SCUSA BASE -->
       <div class="card">
-        <img
-          class="prodimg"
-          alt="Scusa Base — lettera su scrivania"
-          loading="lazy" decoding="async"
-          srcset="
-            https://source.unsplash.com/1920x1440/?apology,letter,envelope,pen 1920w,
-            https://source.unsplash.com/2560x1920/?apology,letter,envelope,pen 2560w,
-            https://source.unsplash.com/3840x2160/?apology,letter,envelope,pen 3840w"
-          sizes="(max-width:600px) 100vw, 50vw"
-          src="https://source.unsplash.com/3840x2160/?apology,letter,envelope,pen" />
+        <img class="prodimg" alt="Scusa Base — lettera su scrivania"
+             src="/assets/base-4k.jpg" loading="lazy" decoding="async" />
         <div class="title">SCUSA BASE <span class="badge">1 variante</span></div>
         <div class="rating"><span class="stars">★★★★★</span><small>4,9 • 214 recensioni</small></div>
         <div class="price">Prezzo come da listino</div>
@@ -113,25 +91,14 @@
           <option value="APPUNTAMENTO">APPUNTAMENTO/CONSEGNA</option>
           <option value="ESAME">ESAME/LEZIONE</option>
         </select>
-        <button
-          data-sku="SCUSA_BASE"
-          data-title="Scusa Base"
-          data-context-select="#ctx-base">Acquista</button>
+        <button data-sku="SCUSA_BASE" data-title="Scusa Base" data-context-select="#ctx-base">Acquista</button>
         <div class="muted">Nota: SCUSA BASE consegna una sola scusa.</div>
       </div>
 
       <!-- SCUSA DELUXE -->
       <div class="card">
-        <img
-          class="prodimg"
-          alt="Scusa Deluxe — creatività e varianti"
-          loading="lazy" decoding="async"
-          srcset="
-            https://source.unsplash.com/1920x1440/?brainstorm,creative,sticky-notes,neon 1920w,
-            https://source.unsplash.com/2560x1920/?brainstorm,creative,sticky-notes,neon 2560w,
-            https://source.unsplash.com/3840x2160/?brainstorm,creative,sticky-notes,neon 3840w"
-          sizes="(max-width:600px) 100vw, 50vw"
-          src="https://source.unsplash.com/3840x2160/?brainstorm,creative,sticky-notes,neon" />
+        <img class="prodimg" alt="Scusa Deluxe — creatività e varianti"
+             src="/assets/deluxe-4k.jpg" loading="lazy" decoding="async" />
         <div class="title">SCUSA DELUXE <span class="badge">3 varianti</span></div>
         <div class="rating"><span class="stars">★★★★★</span><small>5,0 • 137 recensioni</small></div>
         <div class="price">Prezzo come da listino</div>
@@ -147,25 +114,14 @@
           <option value="APPUNTAMENTO">APPUNTAMENTO/CONSEGNA</option>
           <option value="ESAME">ESAME/LEZIONE</option>
         </select>
-        <button
-          data-sku="SCUSA_DELUXE"
-          data-title="Scusa Deluxe"
-          data-context-select="#ctx-deluxe">Acquista</button>
+        <button data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe" data-context-select="#ctx-deluxe">Acquista</button>
         <div class="muted">Nota: DELUXE consegna tre varianti.</div>
       </div>
 
       <!-- CONNESSIONE KO -->
       <div class="card">
-        <img
-          class="prodimg"
-          alt="Connessione KO — router e cavi"
-          loading="lazy" decoding="async"
-          srcset="
-            https://source.unsplash.com/1920x1440/?router,internet,cable,outage 1920w,
-            https://source.unsplash.com/2560x1920/?router,internet,cable,outage 2560w,
-            https://source.unsplash.com/3840x2160/?router,internet,cable,outage 3840w"
-          sizes="(max-width:600px) 100vw, 50vw"
-          src="https://source.unsplash.com/3840x2160/?router,internet,cable,outage" />
+        <img class="prodimg" alt="Connessione KO — router e cavi"
+             src="/assets/connessione-4k.jpg" loading="lazy" decoding="async" />
         <div class="title">CONNESSIONE KO <span class="badge">Scenario fisso</span></div>
         <div class="rating"><span class="stars">★★★★★</span><small>4,8 • 96 recensioni</small></div>
         <div class="price">Prezzo come da listino</div>
@@ -175,16 +131,8 @@
 
       <!-- TRAFFICO -->
       <div class="card">
-        <img
-          class="prodimg"
-          alt="Traffico — scie luminose in città"
-          loading="lazy" decoding="async"
-          srcset="
-            https://source.unsplash.com/1920x1440/?traffic,city,night,long-exposure 1920w,
-            https://source.unsplash.com/2560x1920/?traffic,city,night,long-exposure 2560w,
-            https://source.unsplash.com/3840x2160/?traffic,city,night,long-exposure 3840w"
-          sizes="(max-width:600px) 100vw, 50vw"
-          src="https://source.unsplash.com/3840x2160/?traffic,city,night,long-exposure" />
+        <img class="prodimg" alt="Traffico — scie luminose in città"
+             src="/assets/traffico-4k.jpg" loading="lazy" decoding="async" />
         <div class="title">TRAFFICO <span class="badge">Scenario fisso</span></div>
         <div class="rating"><span class="stars">★★★★★</span><small>4,7 • 121 recensioni</small></div>
         <div class="price">Prezzo come da listino</div>
@@ -194,16 +142,8 @@
 
       <!-- RIUNIONE IMPROVVISA -->
       <div class="card">
-        <img
-          class="prodimg"
-          alt="Riunione improvvisa — sala meeting"
-          loading="lazy" decoding="async"
-          srcset="
-            https://source.unsplash.com/1920x1440/?meeting,office,boardroom 1920w,
-            https://source.unsplash.com/2560x1920/?meeting,office,boardroom 2560w,
-            https://source.unsplash.com/3840x2160/?meeting,office,boardroom 3840w"
-          sizes="(max-width:600px) 100vw, 50vw"
-          src="https://source.unsplash.com/3840x2160/?meeting,office,boardroom" />
+        <img class="prodimg" alt="Riunione improvvisa — sala meeting"
+             src="/assets/riunione-4k.jpg" loading="lazy" decoding="async" />
         <div class="title">RIUNIONE IMPROVVISA <span class="badge">Scenario fisso</span></div>
         <div class="rating"><span class="stars">★★★★★</span><small>4,9 • 88 recensioni</small></div>
         <div class="price">Prezzo come da listino</div>
@@ -312,60 +252,29 @@
     <section class="card">
       <h2 style="margin:0 0 8px">Recensioni clienti</h2>
       <div class="reviews">
-        <div class="rev">
-          <div class="name">Marco R. <span class="stars">★★★★★</span></div>
-          <div class="meta">Acquisto verificato • Scusa Deluxe</div>
-          <p>Tre varianti perfette, ho scelto quella più in linea con il tono. Risposta ricevuta in 10 minuti.</p>
-        </div>
-        <div class="rev">
-          <div class="name">Giulia P. <span class="stars">★★★★★</span></div>
-          <div class="meta">Acquisto verificato • Scenari Fissi</div>
-          <p>“Riunione” pronta all’uso. Zero fronzoli, ha sbloccato una situazione complicata.</p>
-        </div>
-        <div class="rev">
-          <div class="name">Luca S. <span class="stars">★★★★★</span></div>
-          <div class="meta">Acquisto verificato • Scusa Base</div>
-          <p>Modello chiaro e credibile. Il destinatario ha proposto subito una nuova data.</p>
-        </div>
-        <div class="rev">
-          <div class="name">Sara D. <span class="stars">★★★★★</span></div>
-          <div class="meta">Acquisto verificato • Wallet</div>
-          <p>Minuti accumulati e riscattati senza problemi. Ottimo per fidelizzare.</p>
-        </div>
+        <div class="rev"><div class="name">Marco R. <span class="stars">★★★★★</span></div><div class="meta">Acquisto verificato • Scusa Deluxe</div><p>Tre varianti perfette, ho scelto quella più in linea con il tono. Risposta ricevuta in 10 minuti.</p></div>
+        <div class="rev"><div class="name">Giulia P. <span class="stars">★★★★★</span></div><div class="meta">Acquisto verificato • Scenari Fissi</div><p>“Riunione” pronta all’uso. Zero fronzoli, ha sbloccato una situazione complicata.</p></div>
+        <div class="rev"><div class="name">Luca S. <span class="stars">★★★★★</span></div><div class="meta">Acquisto verificato • Scusa Base</div><p>Modello chiaro e credibile. Il destinatario ha proposto subito una nuova data.</p></div>
+        <div class="rev"><div class="name">Sara D. <span class="stars">★★★★★</span></div><div class="meta">Acquisto verificato • Wallet</div><p>Minuti accumulati e riscattati senza problemi. Ottimo per fidelizzare.</p></div>
       </div>
     </section>
 
     <!-- FAQ -->
     <section id="faq-switch" class="card">
       <h2 style="margin:0 0 8px">FAQ</h2>
-      <details>
-        <summary>Cos’è il Responsibility Switch?</summary>
-        <p>È il sistema che trasforma la scusa in un punto a capo: il destinatario riceve una pagina dedicata e può scegliere come continuare il dialogo.</p>
-      </details>
-      <details>
-        <summary>Cosa significa SLA?</summary>
-        <p>Tempo massimo entro cui COLPA MIA si impegna a gestire la tua scusa. Se superato, applichiamo rimborso/sostituzione del servizio.</p>
-      </details>
-      <details>
-        <summary>Cos’è la prova di consegna?</summary>
-        <p>Ricevuta digitale con timestamp e cronologia azioni, garanzia che l’errore è stato preso in carico.</p>
-      </details>
+      <details><summary>Cos’è il Responsibility Switch?</summary><p>È il sistema che trasforma la scusa in un punto a capo: il destinatario riceve una pagina dedicata e può scegliere come continuare il dialogo.</p></details>
+      <details><summary>Cosa significa SLA?</summary><p>Tempo massimo entro cui COLPA MIA si impegna a gestire la tua scusa. Se superato, applichiamo rimborso/sostituzione del servizio.</p></details>
+      <details><summary>Cos’è la prova di consegna?</summary><p>Ricevuta digitale con timestamp e cronologia azioni, garanzia che l’errore è stato preso in carico.</p></details>
     </section>
   </div>
 
   <script>
-    // Checkout: invia SOLO { sku, ctx } al backend
     async function startCheckout(btn){
       const sku = btn.dataset.sku;
       if(!sku){ alert('SKU mancante'); return; }
-
-      // titolo informativo
-      const title = btn.getAttribute('data-title')
-        || btn.closest('.card')?.querySelector('.title')?.textContent
-        || sku;
+      const title = btn.getAttribute('data-title') || btn.closest('.card')?.querySelector('.title')?.textContent || sku;
       sessionStorage.setItem('last_checkout_title', title);
 
-      // ctx dal select del card se presente
       let ctx = '';
       const sel = btn.dataset.contextSelect ? document.querySelector(btn.dataset.contextSelect) : null;
       if (sel && sel.value) ctx = String(sel.value).toUpperCase().trim();
@@ -383,17 +292,10 @@
         location.href = data.url || '/success.html';
       }catch(e){
         alert('Errore checkout: ' + (e.message||e));
-      }finally{
-        btn.disabled = false;
-      }
+      }finally{ btn.disabled = false; }
     }
+    document.querySelectorAll('button[data-sku]').forEach(b=> b.addEventListener('click', ()=> startCheckout(b)));
 
-    // bind acquisto
-    document.querySelectorAll('button[data-sku]').forEach(b=>{
-      b.addEventListener('click', ()=> startCheckout(b));
-    });
-
-    // “Prendo io la colpa” (mailto)
     document.querySelectorAll('.mailto-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const card = btn.closest('.card');
@@ -402,22 +304,14 @@
         const tier = btn.dataset.tier || 'LIGHT';
         const to   = btn.dataset.mail || 'colpamiaconsulenze@proton.me';
         const subj = encodeURIComponent(`[${tier}] Prendo io la colpa — richiesta`);
-        const body = encodeURIComponent(
-`Ciao,
-ti scrivo per il pacchetto "${tier}".
-Ecco i dettagli del caso (contesto, persone coinvolte, obiettivo, tempistiche, eventuale orario credibile):
--
-Grazie!`
-        );
+        const body = encodeURIComponent(`Ciao,\n\nti scrivo per il pacchetto "${tier}".\nEcco i dettagli del caso (contesto, persone coinvolte, obiettivo, tempistiche, eventuale orario credibile):\n-\nGrazie!`);
         location.href = `mailto:${to}?subject=${subj}&body=${body}`;
       });
     });
 
-    // Wallet: mostra "minutes" (fallback a "wallet")
     (function(){
       const $ = s=>document.querySelector(s);
       const out = $('#wallet-result');
-
       $('#btn-wallet-check')?.addEventListener('click', async ()=>{
         const email = ($('#wallet-email')?.value||'').trim();
         if(!email){ alert('Inserisci la tua email'); return; }
