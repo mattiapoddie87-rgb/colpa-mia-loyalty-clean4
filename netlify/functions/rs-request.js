@@ -1,61 +1,62 @@
 // netlify/functions/rs-request.js
-const { Blobs } = require('@netlify/blobs');
-const crypto = require('crypto');
-const nodemailer = require('nodemailer'); // o usa la tua utility esistente
+// Crea un link "Responsibility Switch" e salva i dati su Netlify Blobs
 
-const SITE_URL = process.env.SITE_URL || 'https://'+(process.env.URL || '');
-const STORE = new Blobs({ siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_TOKEN });
+const { randomUUID } = require('crypto');
+const { createClient } = require('@netlify/blobs');
 
-function id() { return crypto.randomBytes(8).toString('hex'); }
-function addDays(d){ const m={}; if(d==='24 ore') m.hours=24; else if(d==='3 giorni') m.days=3; else if(d==='7 giorni') m.days=7; return m; }
+function getBlobsClient() {
+  // Usa SiteID/Token da ENV (UI Netlify → Environment variables)
+  const siteID = process.env.NETLIFY_SITE_ID;
+  const token  = process.env.NETLIFY_BLOBS_TOKEN;
 
-async function sendMail(to, subject, html){
-  if (process.env.RESEND_API_KEY) {
-    const fetch = (...a)=>import('node-fetch').then(({default: f})=>f(...a));
-    await fetch('https://api.resend.com/emails', {
-      method:'POST',
-      headers:{'Authorization':`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},
-      body: JSON.stringify({ from: process.env.MAIL_FROM, to, subject, html })
-    });
-    return;
+  if (!siteID || !token) {
+    throw new Error('Missing NETLIFY_SITE_ID or NETLIFY_BLOBS_TOKEN');
   }
-  const t = nodemailer.createTransport({
-    host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT||587), secure: false,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-  await t.sendMail({ from: process.env.MAIL_FROM, to, subject, html });
+  return createClient({ siteID, token });
 }
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') return { statusCode: 405, body: 'Method Not Allowed' };
-  const { email, context, brief='', expires='', pod='Sì' } = JSON.parse(event.body||'{}');
-  if (!email || !context) return { statusCode: 400, body: JSON.stringify({ error:'missing_fields' }) };
-
-  const key = `rs/${id()}.json`;
-  const now = new Date();
-  let expiresAt = null;
-  if (expires) {
-    const d = new Date(now);
-    const step = addDays(expires);
-    if (step.hours) d.setHours(d.getHours()+step.hours);
-    if (step.days) d.setDate(d.getDate()+step.days);
-    expiresAt = d.toISOString();
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  const record = {
-    id: key.split('/').pop().replace('.json',''),
-    email, context, brief, pod, createdAt: now.toISOString(), expiresAt, status: 'NEW'
-  };
+  try {
+    const { email, context, note, proof = 'Si', expire = 'none' } =
+      JSON.parse(event.body || '{}');
 
-  await STORE.set(key, JSON.stringify(record), { contentType: 'application/json' });
+    if (!email || !context) {
+      return { statusCode: 400, body: JSON.stringify({ ok: false, error: 'missing_fields' }) };
+    }
 
-  const link = `${SITE_URL}/.netlify/functions/rs-view?id=${record.id}`;
-  // mail al richiedente
-  await sendMail(email, 'Il tuo Responsibility Switch', `
-    <p>Ciao, ecco il link del tuo Responsibility Switch:</p>
-    <p><a href="${link}">${link}</a></p>
-    <p>Contesto: <b>${context}</b><br/>Scade: ${expiresAt||'—'}<br/>Prova di consegna: ${pod}</p>
-  `);
+    // genera id univoco
+    const id = randomUUID();
 
-  return { statusCode: 200, body: JSON.stringify({ link }) };
+    const payload = {
+      id,
+      email,
+      context,
+      note: note || '',
+      proof: String(proof || 'Si'),
+      expire,                       // 'none' | '24h' | '7d' | iso date
+      createdAt: new Date().toISOString(),
+      status: 'created'
+    };
+
+    // salva su Blobs (store: rswitch)
+    const blobs = getBlobsClient();
+    const store = blobs.store('rswitch');       // crea se non esiste
+    await store.setJSON(`req/${id}.json`, payload);
+
+    // link pubblico (puoi puntare a una tua pagina /rs/:id se la implementi)
+    const origin = process.env.URL || `https://${event.headers.host}`;
+    const link = `${origin}/responsibility-switch.html?rid=${encodeURIComponent(id)}`;
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ ok: true, id, link })
+    };
+  } catch (err) {
+    console.error('rs-request error:', err);
+    return { statusCode: 500, body: JSON.stringify({ ok: false, error: 'server_error' }) };
+  }
 };
