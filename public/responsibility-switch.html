@@ -10,31 +10,30 @@
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     .wrap{max-width:940px;margin:0 auto;padding:24px}
     .card{background:#101724;border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
-    h1{margin:0 0 8px} .muted{color:var(--muted)}
+    h1{margin:0 0 8px}.muted{color:var(--muted)}
     label{display:block;margin:10px 0 6px;color:#cfd8ea}
     input,select,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #273251;background:#0c101b;color:#e9eef5}
     textarea{min-height:120px;resize:vertical}
-    .row{display:flex;gap:10px;flex-wrap:wrap}
-    .row>*{flex:1 1 260px}
+    .row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1 1 260px}
     .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
     .btn{padding:12px 16px;border-radius:12px;border:0;background:#1b2a46;color:#fff;text-decoration:none;cursor:pointer}
     .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#061018;font-weight:800}
-    .note{font-size:.9rem;color:#9fb0c9}
-    .ok{color:#28d381}.err{color:#ff6b6b}
+    .note{font-size:.9rem;color:#9fb0c9}.ok{color:#28d381}.err{color:#ff6b6b}
+    .linkbox{display:flex;gap:8px;align-items:center}
+    .linkbox input{flex:1}
     a{color:#9bd0ff;text-decoration:none}
   </style>
 </head>
 <body>
   <div class="wrap">
-    <h1>Responsibility Switch — Richiesta</h1>
-    <p class="muted">Genera un link personale da inviare al destinatario: la pagina mostrerà la tua scusa e le opzioni di rimedio (richiamami, riprogramma, rimborso, ecc.).</p>
+    <h1>Responsibility Switch — Richiedi il link</h1>
+    <p class="muted">Il sistema genera un link personale, lo salva e te lo invia via email. Condividilo con il destinatario: ogni sua scelta viene tracciata e ti arriva una notifica.</p>
 
     <div class="card">
-      <h2 style="margin:0 0 8px">Dati per la richiesta</h2>
       <div class="row">
         <div>
-          <label>La tua email (per conferma)</label>
-          <input id="email" type="email" placeholder="tu@esempio.it" autocomplete="email">
+          <label>Email per la conferma</label>
+          <input id="email" type="email" placeholder="tu@esempio.it" autocomplete="email" required>
         </div>
         <div>
           <label>Contesto</label>
@@ -46,84 +45,71 @@
         </div>
       </div>
 
-      <label>Testo (opz.) — come vuoi “impostare” lo switch</label>
-      <textarea id="brief" placeholder="Es. Vorrei dare tre opzioni: 1) sposto a domani sera; 2) videochiamata di 10' domani mattina; 3) rimborso voucher."></textarea>
+      <label>Note/brief (opz.)</label>
+      <textarea id="brief" placeholder="Es. dammi tre opzioni: sposto, call 10', voucher."></textarea>
 
       <div class="row">
         <div>
           <label>Scadenza link (opz.)</label>
           <select id="expires">
-            <option value="">Nessuna</option>
-            <option>24 ore</option>
-            <option>3 giorni</option>
-            <option>7 giorni</option>
+            <option value="">Nessuna</option><option>24 ore</option><option>3 giorni</option><option>7 giorni</option>
           </select>
         </div>
         <div>
-          <label>Richiedi prova di consegna</label>
-          <select id="pod">
-            <option>Sì</option>
-            <option>No</option>
-          </select>
+          <label>Prova di consegna</label>
+          <select id="pod"><option>Sì</option><option>No</option></select>
         </div>
       </div>
 
       <label class="note" style="display:flex;gap:8px;align-items:center;margin-top:12px">
         <input id="consent" type="checkbox" style="width:auto"> 
-        Dichiaro di aver letto e accettato la <a href="/manleva-switch.html" target="_blank" rel="noopener">manleva del Responsibility Switch</a>.
+        Confermo la <a href="/manleva-switch.html" target="_blank" rel="noopener">manleva del Responsibility Switch</a>.
       </label>
 
       <div class="actions">
-        <button class="btn primary" id="send">Richiedi il tuo Responsibility Switch</button>
+        <button class="btn primary" id="send">Genera link</button>
         <a class="btn" href="/#catalogo">Torna al catalogo</a>
         <span id="msg" class="note"></span>
       </div>
-    </div>
 
-    <div class="card">
-      <h3 style="margin:0 0 6px">Come funziona</h3>
-      <ol class="note" style="margin:0 0 0 18px;line-height:1.7">
-        <li>Compili e invii la richiesta.</li>
-        <li>Ricevi via email il link del tuo Switch.</li>
-        <li>Inoltra quel link al destinatario (tu decidi su quale canale).</li>
-        <li>Ogni scelta effettuata dal destinatario ti arriva come notifica + report.</li>
-      </ol>
+      <div id="out" class="card" style="display:none;margin-top:12px">
+        <div class="linkbox">
+          <input id="share" readonly>
+          <button class="btn" id="copy">Copia</button>
+        </div>
+        <small class="note">Questo è il link per il destinatario. Ti è stato inviato anche via email.</small>
+      </div>
     </div>
   </div>
 
   <script>
-    // Versione “zero backend”: apre un’email precompilata con i dati.
-    // Se in futuro vuoi un serverless, sostituisci con fetch('/.netlify/functions/rs-request', { ... }).
-    const btn = document.getElementById('send');
-    const msg = document.getElementById('msg');
-    btn.addEventListener('click', ()=>{
-      msg.textContent = '';
-      const email = (document.getElementById('email').value||'').trim();
-      const context = document.getElementById('context').value;
-      const brief = (document.getElementById('brief').value||'').trim();
-      const expires = document.getElementById('expires').value;
-      const pod = document.getElementById('pod').value;
-      const ok = document.getElementById('consent').checked;
-
-      if(!email){ msg.textContent='Inserisci una email.'; msg.className='note err'; return; }
-      if(!ok){ msg.textContent='Devi accettare la manleva.'; msg.className='note err'; return; }
-
-      const to   = 'colpamiaconsulenze@proton.me';
-      const subj = encodeURIComponent('Richiesta Responsibility Switch');
-      const body = encodeURIComponent(
-`Email: ${email}
-Contesto: ${context}
-Scadenza: ${expires||'—'}
-Prova di consegna: ${pod}
-
-Brief:
-${brief||'—'}
-
-Confermo di aver accettato la manleva del Responsibility Switch.`
-      );
-      location.href = `mailto:${to}?subject=${subj}&body=${body}`;
-      msg.textContent='Si sta aprendo il client email…'; msg.className='note ok';
-    });
+    const $ = s=>document.querySelector(s);
+    $('#send').onclick = async ()=>{
+      $('#msg').textContent=''; $('#out').style.display='none';
+      const email   = $('#email').value.trim();
+      const context = $('#context').value;
+      const brief   = $('#brief').value.trim();
+      const expires = $('#expires').value;
+      const pod     = $('#pod').value;
+      const ok      = $('#consent').checked;
+      if(!email){ $('#msg').textContent='Inserisci una email.'; $('#msg').className='note err'; return; }
+      if(!ok){ $('#msg').textContent='Devi accettare la manleva.'; $('#msg').className='note err'; return; }
+      $('#send').disabled=true;
+      try{
+        const r = await fetch('/.netlify/functions/rs-request', {
+          method:'POST', headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ email, context, brief, expires, pod })
+        });
+        const data = await r.json();
+        if(!r.ok) throw new Error(data.error||'request_failed');
+        $('#share').value = data.link;
+        $('#out').style.display='block';
+        $('#msg').textContent='Link generato ✔'; $('#msg').className='note ok';
+      }catch(e){
+        $('#msg').textContent='Errore: '+e.message; $('#msg').className='note err';
+      }finally{ $('#send').disabled=false; }
+    };
+    $('#copy').onclick = async ()=>{ await navigator.clipboard.writeText($('#share').value); };
   </script>
 </body>
 </html>
