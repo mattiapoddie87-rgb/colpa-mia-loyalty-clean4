@@ -3,25 +3,22 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Responsibility Switch — Richiesta</title>
+  <title>Responsibility Switch — Richiedi il link</title>
   <meta name="theme-color" content="#0b0f16"/>
   <style>
-    :root{--bg:#0b0f16;--panel:#101724;--line:#1f2b46;--muted:#a9b4c6;--brand:#37c9ff;--brand2:#8a6dff;color-scheme:dark}
+    :root{--bg:#0b0f16;--panel:#101724;--line:#1f2b46;--muted:#a9b4c6;--brand:#3b82f6;color-scheme:dark}
     *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    .wrap{max-width:940px;margin:0 auto;padding:24px}
+    .wrap{max-width:900px;margin:0 auto;padding:24px}
     .card{background:#101724;border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
-    h1{margin:0 0 8px}.muted{color:var(--muted)}
-    label{display:block;margin:10px 0 6px;color:#cfd8ea}
-    input,select,textarea{width:100%;padding:12px;border-radius:12px;border:1px solid #273251;background:#0c101b;color:#e9eef5}
+    label{font-size:.9rem;color:#cfe0ff}
+    input,select,textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
     textarea{min-height:120px;resize:vertical}
-    .row{display:flex;gap:10px;flex-wrap:wrap}.row>*{flex:1 1 260px}
-    .actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:12px}
-    .btn{padding:12px 16px;border-radius:12px;border:0;background:#1b2a46;color:#fff;text-decoration:none;cursor:pointer}
-    .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#061018;font-weight:800}
-    .note{font-size:.9rem;color:#9fb0c9}.ok{color:#28d381}.err{color:#ff6b6b}
-    .linkbox{display:flex;gap:8px;align-items:center}
-    .linkbox input{flex:1}
-    a{color:#9bd0ff;text-decoration:none}
+    .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+    .btn{display:inline-block;padding:10px 14px;border-radius:12px;border:0;background:var(--brand);color:#061018;text-decoration:none;font-weight:800;cursor:pointer}
+    .muted{color:var(--muted)} .msg{margin-top:8px} .err{color:#ff6b6b}.ok{color:#28d381}
+    .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+    .chk{display:flex;align-items:center;gap:8px;margin-top:8px}
+    .chk input{width:auto}
   </style>
 </head>
 <body>
@@ -32,84 +29,100 @@
     <div class="card">
       <div class="row">
         <div>
-          <label>Email per la conferma</label>
-          <input id="email" type="email" placeholder="tu@esempio.it" autocomplete="email" required>
+          <label for="rs-email">Email per la conferma</label>
+          <input id="rs-email" type="email" placeholder="tu@email.com" autocomplete="email">
         </div>
         <div>
-          <label>Contesto</label>
-          <select id="context">
-            <option>CENA</option><option>APERITIVO</option><option>EVENTO</option><option>LAVORO</option>
-            <option>PARTITA A CALCETTO</option><option>FAMIGLIA</option><option>SALUTE</option>
-            <option>APPUNTAMENTO/CONSEGNA</option><option>ESAME/LEZIONE</option>
+          <label for="rs-context">Contesto</label>
+          <select id="rs-context">
+            <option value="CENA">CENA</option>
+            <option value="APERITIVO">APERITIVO</option>
+            <option value="EVENTO">EVENTO</option>
+            <option value="LAVORO" selected>LAVORO</option>
+            <option value="PARTITA A CALCETTO">PARTITA A CALCETTO</option>
+            <option value="FAMIGLIA">FAMIGLIA</option>
+            <option value="SALUTE">SALUTE</option>
+            <option value="APPUNTAMENTO/CONSEGNA">APPUNTAMENTO/CONSEGNA</option>
+            <option value="ESAME/LEZIONE">ESAME/LEZIONE</option>
           </select>
         </div>
       </div>
 
-      <label>Note/brief (opz.)</label>
-      <textarea id="brief" placeholder="Es. dammi tre opzioni: sposto, call 10', voucher."></textarea>
+      <label for="rs-note" style="margin-top:10px">Note/brief (opz.)</label>
+      <textarea id="rs-note" placeholder="Es. dammi tre opzioni: sposto, call 10', voucher."></textarea>
 
-      <div class="row">
+      <div class="row" style="margin-top:10px">
         <div>
-          <label>Scadenza link (opz.)</label>
-          <select id="expires">
-            <option value="">Nessuna</option><option>24 ore</option><option>3 giorni</option><option>7 giorni</option>
+          <label for="rs-ttl">Scadenza link (opz.)</label>
+          <select id="rs-ttl">
+            <option value="none" selected>Nessuna</option>
+            <option value="24h">24 ore</option>
+            <option value="7d">7 giorni</option>
           </select>
         </div>
         <div>
-          <label>Prova di consegna</label>
-          <select id="pod"><option>Sì</option><option>No</option></select>
+          <label for="rs-proof">Prova di consegna</label>
+          <select id="rs-proof">
+            <option value="yes" selected>Sì</option>
+            <option value="no">No</option>
+          </select>
         </div>
       </div>
 
-      <label class="note" style="display:flex;gap:8px;align-items:center;margin-top:12px">
-        <input id="consent" type="checkbox" style="width:auto"> 
-        Confermo la <a href="/manleva-switch.html" target="_blank" rel="noopener">manleva del Responsibility Switch</a>.
+      <label class="chk">
+        <input id="rs-consent" type="checkbox">
+        <span>Confermo la <a class="muted" href="/manleva-switch.html" target="_blank" rel="noopener">manleva del Responsibility Switch</a>.</span>
       </label>
 
       <div class="actions">
-        <button class="btn primary" id="send">Genera link</button>
-        <a class="btn" href="/#catalogo">Torna al catalogo</a>
-        <span id="msg" class="note"></span>
-      </div>
-
-      <div id="out" class="card" style="display:none;margin-top:12px">
-        <div class="linkbox">
-          <input id="share" readonly>
-          <button class="btn" id="copy">Copia</button>
-        </div>
-        <small class="note">Questo è il link per il destinatario. Ti è stato inviato anche via email.</small>
+        <button id="rs-go" class="btn">Genera link</button>
+        <a href="/#catalogo" class="btn" style="background:#2d6cdf">Torna al catalogo</a>
+        <span id="rs-msg" class="msg muted"></span>
       </div>
     </div>
   </div>
 
   <script>
-    const $ = s=>document.querySelector(s);
-    $('#send').onclick = async ()=>{
-      $('#msg').textContent=''; $('#out').style.display='none';
-      const email   = $('#email').value.trim();
-      const context = $('#context').value;
-      const brief   = $('#brief').value.trim();
-      const expires = $('#expires').value;
-      const pod     = $('#pod').value;
-      const ok      = $('#consent').checked;
-      if(!email){ $('#msg').textContent='Inserisci una email.'; $('#msg').className='note err'; return; }
-      if(!ok){ $('#msg').textContent='Devi accettare la manleva.'; $('#msg').className='note err'; return; }
-      $('#send').disabled=true;
+    const $ = (s)=>document.querySelector(s);
+    const msg = $('#rs-msg');
+    function show(m, cls){ msg.textContent = m || ''; msg.className = 'msg ' + (cls||'muted'); }
+
+    $('#rs-go').addEventListener('click', async ()=>{
+      show('Invio…');
+
+      const email   = ($('#rs-email').value || '').trim();
+      const context = $('#rs-context').value;
+      const note    = ($('#rs-note').value || '').trim();
+      const ttl     = $('#rs-ttl').value;
+      const proof   = $('#rs-proof').value;
+      const manleva = $('#rs-consent').checked;   // <<< QUI il flag corretto
+
+      // validazioni minime
+      if(!email){ show('Inserisci una email valida.', 'err'); return; }
+      if(!manleva){ show('Devi confermare la manleva.', 'err'); return; }
+
       try{
         const r = await fetch('/.netlify/functions/rs-request', {
-          method:'POST', headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ email, context, brief, expires, pod })
+          method:'POST',
+          headers:{ 'content-type':'application/json' },
+          body: JSON.stringify({ email, context, note, ttl, proof, manleva })
         });
-        const data = await r.json();
-        if(!r.ok) throw new Error(data.error||'request_failed');
-        $('#share').value = data.link;
-        $('#out').style.display='block';
-        $('#msg').textContent='Link generato ✔'; $('#msg').className='note ok';
+        const data = await r.json().catch(()=>({}));
+        if(!r.ok) throw new Error(data?.error || 'request_failed');
+
+        // Mostra il link generato
+        const link = data.url;
+        show('Link generato: ' + link, 'ok');
+
+        // opzionale: copia in clipboard
+        try { await navigator.clipboard.writeText(link); show('Link copiato negli appunti!', 'ok'); } catch{}
+
+        // opzionale: redirect immediato alla pagina del link
+        // location.href = link;
       }catch(e){
-        $('#msg').textContent='Errore: '+e.message; $('#msg').className='note err';
-      }finally{ $('#send').disabled=false; }
-    };
-    $('#copy').onclick = async ()=>{ await navigator.clipboard.writeText($('#share').value); };
+        show('Errore: ' + (e.message || 'server_error'), 'err');
+      }
+    });
   </script>
 </body>
 </html>
