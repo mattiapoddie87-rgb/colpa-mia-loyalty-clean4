@@ -1,91 +1,136 @@
-const { createClient } = require('@netlify/blobs');
-const crypto = require('crypto');
+// netlify/functions/rs-request.js
+// Responsability Switch – crea una richiesta e la salva su Netlify Blobs
 
-function json(status, body) {
+// NOTA: @netlify/blobs è ESM. In CommonJS lo importiamo con un import dinamico.
+async function getBlobsStore() {
+  const { createClient } = await import('@netlify/blobs');
+  const client = createClient({
+    token: process.env.NETLIFY_BLOBS_TOKEN,
+    siteID: process.env.NETLIFY_SITE_ID,
+  });
+  // Nome store configurabile via env; default: "rs-requests"
+  const storeName = process.env.BLOB_STORE_RS || 'rs-requests';
+  return client.getStore(storeName);
+}
+
+// utils -------------------------------------------------------------
+function ok(body, status = 200, headers = {}) {
   return {
     statusCode: status,
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
+    headers: {
+      'content-type': 'application/json; charset=utf-8',
+      'cache-control': 'no-store',
+      'access-control-allow-origin': '*',
+      'access-control-allow-methods': 'POST,OPTIONS,GET',
+      'access-control-allow-headers': 'content-type',
+      ...headers,
+    },
+    body: typeof body === 'string' ? body : JSON.stringify(body),
   };
 }
 
+function bad(msg, status = 400) {
+  return ok({ error: msg }, status);
+}
+
+function isEmail(s) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+}
+
+function baseUrl(event) {
+  // prova a ricostruire l’origin (Netlify mette X-Forwarded-Proto/Host)
+  const proto =
+    event.headers['x-forwarded-proto'] ||
+    event.headers['x-forwarded-protocol'] ||
+    'https';
+  const host = event.headers['x-forwarded-host'] || event.headers.host || '';
+  return `${proto}://${host}`;
+}
+
+// handler -----------------------------------------------------------
 exports.handler = async (event) => {
-  // Health check: GET /.netlify/functions/rs-request?health=1
-  if (event.httpMethod === 'GET' && (event.queryStringParameters?.health === '1')) {
-    return json(200, {
-      ok: true,
-      siteId: !!process.env.NETLIFY_SITE_ID,
-      token: !!process.env.NETLIFY_BLOBS_TOKEN,
-      node: process.version,
-    });
-  }
-
-  if (event.httpMethod !== 'POST') {
-    return json(405, { ok: false, error: 'method_not_allowed' });
-  }
-
-  // --- ENV check (principale causa di 500) ---
-  const siteId = process.env.NETLIFY_SITE_ID;
-  const token  = process.env.NETLIFY_BLOBS_TOKEN;
-  if (!siteId || !token) {
-    return json(500, {
-      ok: false,
-      error: 'env_missing',
-      hint: 'NETLIFY_SITE_ID e/o NETLIFY_BLOBS_TOKEN non presenti.',
-    });
-  }
-
-  // --- Parse input ---
-  let input = {};
-  try { input = JSON.parse(event.body || '{}'); } catch (e) {
-    return json(400, { ok:false, error:'bad_json', detail: e.message });
-  }
-
-  const email   = String(input.email || '').trim();
-  const context = String(input.context || '').trim();
-  const brief   = String(input.brief || '').trim();
-  const proof   = input.proof === 'no' ? 'no' : 'yes';
-  const ttlOpt  = String(input.ttl || '').trim(); // 'none' | '24h' | '7d' | '30d'
-
-  if (!email || !context) {
-    return json(400, { ok:false, error:'validation_failed', hint:'email e context sono obbligatori' });
-  }
-
-  // TTL opzionale
-  let expiresAt = null;
-  const now = Date.now();
-  const add = ms => new Date(now + ms).toISOString();
-  if (ttlOpt === '24h')  expiresAt = add(24 * 3600e3);
-  if (ttlOpt === '7d')   expiresAt = add(7  * 24 * 3600e3);
-  if (ttlOpt === '30d')  expiresAt = add(30 * 24 * 3600e3);
-
   try {
-    const client = createClient({ siteId, token });
-    const store  = client.store('responsibility-switch'); // auto-create
+    // CORS preflight
+    if (event.httpMethod === 'OPTIONS') {
+      return ok('', 204);
+    }
 
-    const id = crypto.randomUUID();
+    // Health check rapido
+    if (event.httpMethod === 'GET' && event.queryStringParameters?.health) {
+      return ok({ ok: true, name: 'rs-request' });
+    }
+
+    if (event.httpMethod !== 'POST') {
+      return bad('Method Not Allowed', 405);
+    }
+
+    // parse body
+    let data = {};
+    try {
+      data = JSON.parse(event.body || '{}');
+    } catch (_) {
+      return bad('Invalid JSON');
+    }
+
+    // campi attesi dal form
+    const email = String(data.email || '').trim();
+    const context = String(data.context || '').trim(); // es: LAVORO/CENA/...
+    const note = String(data.note || '').trim();       // opzionale
+    const proof = String(data.proof || 'yes');         // "yes" | "no"
+    const ttl = String(data.ttl || 'none');            // "none" | "24h" | "7d"
+    const manleva = !!data.manleva;
+
+    if (!isEmail(email)) return bad('Email non valida');
+    if (!context) return bad('Contesto mancante');
+    if (!manleva) return bad('Manleva non confermata');
+
+    // TTL in secondi (se vuoi far scadere il link)
+    let expiresAt = null;
+    if (ttl === '24h') {
+      expiresAt = Date.now() + 24 * 3600 * 1000;
+    } else if (ttl === '7d') {
+      expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
+    }
+
+    // record da salvare
+    const id = `rs_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
     const record = {
       id,
-      createdAt: new Date().toISOString(),
-      email, context, brief, proof,
-      status: 'draft',
-      expiresAt,          // null o ISO
+      email,
+      context,
+      note,
+      proof: proof === 'yes',
+      expiresAt,             // timestamp o null
+      createdAt: Date.now(),
+      status: 'created',     // created | sent | opened | chosen | expired
+      choices: [
+        'Riprogramma',
+        'Voucher',
+        'Richiamami'
+      ],                     // puoi personalizzare/parametrizzare
+      meta: {},
     };
 
-    await store.setJSON(`requests/${id}.json`, record);
+    // Salva su Netlify Blobs
+    const store = await getBlobsStore();
+    await store.setJSON(id, record);
 
-    const base =
-      process.env.URL ||
-      process.env.DEPLOY_PRIME_URL ||
-      process.env.SITE_URL || '';
+    // URL pubblico della pagina switch (crea la pagina se non l’hai già)
+    // Es: /switch.html?id=xxxxx  oppure un path “pretty” se hai una route dedicata.
+    const publicUrl = `${baseUrl(event)}/responsibility-switch.html?id=${encodeURIComponent(id)}`;
 
-    const origin = base && !/^https?:\/\//i.test(base) ? `https://${base}` : base;
-    const link = origin ? `${origin}/switch/${id}` : `/switch/${id}`;
+    // (Opzionale) invio email al richiedente con il link – qui lasciamo solo come placeholder:
+    // await sendMailWithResend({ to: email, url: publicUrl, context });
 
-    return json(200, { ok:true, id, link });
-  } catch (e) {
-    // Log nei function logs; messaggio esplicito al client
-    console.error('rs-request error:', e);
-    return json(500, { ok:false, error:'server_error', detail: e.message || String(e) });
+    return ok({
+      ok: true,
+      id,
+      url: publicUrl,
+      expiresAt,
+    });
+  } catch (err) {
+    console.error('rs-request error:', err);
+    // errore generico
+    return bad('server_error', 500);
   }
 };
