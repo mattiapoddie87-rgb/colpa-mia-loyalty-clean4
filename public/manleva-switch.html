@@ -7,28 +7,52 @@
   <meta name="theme-color" content="#0b0f16"/>
   <style>
     :root{--bg:#0b0f16;--panel:#101724;--line:#1f2b46;--muted:#a9b4c6;color-scheme:dark}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     .wrap{max-width:900px;margin:0 auto;padding:24px}
-    .card{background:#101724;border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
-    h1{margin:0 0 8px} .muted{color:var(--muted)}
-    a.btn{display:inline-block;margin-top:8px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:#061018;text-decoration:none;font-weight:800}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+    h1{margin:0 0 8px}
+    .muted{color:var(--muted)}
+    a.btn{display:inline-block;margin-top:10px;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:#061018;text-decoration:none;font-weight:800}
+    ul{margin:10px 0 0 18px;line-height:1.6}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Manleva — Responsibility Switch</h1>
+
     <div class="card">
-      <p class="muted">Il Responsibility Switch è una pagina ufficiale che accompagna la tua scusa e propone al destinatario una o più opzioni di rimedio
-      (es. riprogrammare, rimborso, richiamami). Il servizio:</p>
+      <p class="muted">
+        Il <b>Responsibility Switch</b> è una pagina ufficiale che accompagna la tua scusa e propone al destinatario opzioni di rimedio
+        (es. riprogrammare, rimborso, richiamami). Il servizio:
+      </p>
       <ul>
-        <li>non invia messaggi automaticamente a terze parti senza tua azione;</li>
-        <li>genera un link condivisibile che puoi inviare tu a chi desideri;</li>
-        <li>può tracciare aperture e scelte per fornirti prova di presa in carico;</li>
+        <li>non invia messaggi automaticamente a terze parti senza una tua azione;</li>
+        <li>genera un <b>link condivisibile</b> che puoi inviare tu a chi desideri;</li>
+        <li>può tracciare aperture e scelte per fornirti <b>prova di presa in carico</b> (timestamp e log essenziali);</li>
         <li>non garantisce la risposta del destinatario;</li>
         <li>rispetta le norme di uso lecito: è vietato l’uso ingannevole o molesto.</li>
       </ul>
-      <p>Procedendo, dichiari di avere titolo a contattare il destinatario e di manlevare COLPA MIA da usi impropri del link generato.</p>
-      <a class="btn" href="/responsibility-switch.html">Procedi con la richiesta</a>
+
+      <p class="muted" style="margin-top:10px">
+        <b>Trattamento dati.</b> L’email inserita e le scelte del destinatario sono trattate al solo fine di erogare il servizio e
+        generare la prova di presa in carico, secondo l’informativa privacy del sito.
+      </p>
+
+      <p class="muted">
+        <b>Scadenza link.</b> I link possono avere una scadenza impostata dal richiedente; oltre tale data non sono più utilizzabili.
+      </p>
+
+      <p class="muted">
+        <b>Limitazione di responsabilità.</b> COLPA MIA non è responsabile per la mancata risposta del destinatario né per gli esiti
+        della scelta effettuata tramite lo Switch.
+      </p>
+
+      <p>
+        Procedendo, dichiari di avere titolo a contattare il destinatario e di <b>manlevare COLPA MIA</b> da usi impropri del link generato.
+      </p>
+
+      <a class="btn" href="/responsibility-switch.html" rel="noopener">Procedi con la richiesta</a>
     </div>
   </div>
 </body>
