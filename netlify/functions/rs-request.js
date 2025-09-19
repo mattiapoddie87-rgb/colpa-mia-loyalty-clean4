@@ -1,62 +1,86 @@
 // netlify/functions/rs-request.js
-// Crea un link "Responsibility Switch" e salva i dati su Netlify Blobs
-
-const { randomUUID } = require('crypto');
 const { createClient } = require('@netlify/blobs');
+const crypto = require('crypto');
 
-function getBlobsClient() {
-  // Usa SiteID/Token da ENV (UI Netlify → Environment variables)
-  const siteID = process.env.NETLIFY_SITE_ID;
-  const token  = process.env.NETLIFY_BLOBS_TOKEN;
-
-  if (!siteID || !token) {
-    throw new Error('Missing NETLIFY_SITE_ID or NETLIFY_BLOBS_TOKEN');
-  }
-  return createClient({ siteID, token });
+function json(status, body) {
+  return {
+    statusCode: status,
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  };
 }
 
 exports.handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return json(405, { ok: false, error: 'method_not_allowed' });
   }
 
+  // --- ENV check (la causa più frequente dei 500) ---
+  const siteId = process.env.NETLIFY_SITE_ID;
+  const token  = process.env.NETLIFY_BLOBS_TOKEN;
+  if (!siteId || !token) {
+    return json(500, {
+      ok: false,
+      error: 'env_missing',
+      hint: 'Imposta NETLIFY_SITE_ID e NETLIFY_BLOBS_TOKEN nelle Environment variables del sito.',
+    });
+  }
+
+  // --- Parse input ---
+  let payload = {};
+  try { payload = JSON.parse(event.body || '{}'); } catch {}
+  const email   = String(payload.email || '').trim();
+  const context = String(payload.context || '').trim();
+  const brief   = String(payload.brief || '').trim();
+  const proof   = payload.proof === 'no' ? 'no' : 'yes';
+  const ttlOpt  = String(payload.ttl || '').trim(); // 'none' | '24h' | '7d' ...
+
+  if (!email || !context) {
+    return json(400, { ok: false, error: 'validation_failed', hint: 'email e context sono obbligatori' });
+  }
+
+  // --- TTL calcolato (facoltativo) ---
+  let expiresAt = null;
+  const now = Date.now();
+  const add = (ms) => new Date(now + ms).toISOString();
+  if (ttlOpt === '24h')  expiresAt = add(24 * 3600e3);
+  if (ttlOpt === '7d')   expiresAt = add(7  * 24 * 3600e3);
+  if (ttlOpt === '30d')  expiresAt = add(30 * 24 * 3600e3);
+
   try {
-    const { email, context, note, proof = 'Si', expire = 'none' } =
-      JSON.parse(event.body || '{}');
+    // --- Blobs client + store ---
+    const client = createClient({ siteId, token });
+    const store  = client.store('responsibility-switch'); // nome della store
 
-    if (!email || !context) {
-      return { statusCode: 400, body: JSON.stringify({ ok: false, error: 'missing_fields' }) };
-    }
-
-    // genera id univoco
-    const id = randomUUID();
-
-    const payload = {
+    // --- ID + record ---
+    const id = crypto.randomUUID();
+    const record = {
       id,
+      createdAt: new Date().toISOString(),
       email,
       context,
-      note: note || '',
-      proof: String(proof || 'Si'),
-      expire,                       // 'none' | '24h' | '7d' | iso date
-      createdAt: new Date().toISOString(),
-      status: 'created'
+      brief,
+      proof,         // yes/no
+      status: 'draft',
+      expiresAt,     // null oppure ISO
     };
 
-    // salva su Blobs (store: rswitch)
-    const blobs = getBlobsClient();
-    const store = blobs.store('rswitch');       // crea se non esiste
-    await store.setJSON(`req/${id}.json`, payload);
+    // salva come JSON
+    await store.setJSON(`requests/${id}.json`, record);
 
-    // link pubblico (puoi puntare a una tua pagina /rs/:id se la implementi)
-    const origin = process.env.URL || `https://${event.headers.host}`;
-    const link = `${origin}/responsibility-switch.html?rid=${encodeURIComponent(id)}`;
+    // URL pubblico del sito
+    const base =
+      process.env.URL ||
+      (process.env.DEPLOY_PRIME_URL ? `https://${process.env.DEPLOY_PRIME_URL}` : null) ||
+      process.env.SITE_URL ||
+      '';
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ ok: true, id, link })
-    };
-  } catch (err) {
-    console.error('rs-request error:', err);
-    return { statusCode: 500, body: JSON.stringify({ ok: false, error: 'server_error' }) };
+    const link = base ? `${base}/switch/${id}` : `/switch/${id}`;
+
+    return json(200, { ok: true, id, link });
+  } catch (e) {
+    // log utile nei Function logs, risposta “pulita” al client
+    console.error('rs-request error:', e);
+    return json(500, { ok: false, error: 'server_error', detail: e.message || String(e) });
   }
 };
