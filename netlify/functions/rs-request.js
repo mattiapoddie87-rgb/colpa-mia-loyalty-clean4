@@ -1,136 +1,133 @@
 // netlify/functions/rs-request.js
-// Responsability Switch – crea una richiesta e la salva su Netlify Blobs
+// Crea/ritorna un Responsibility Switch link salvandolo in Netlify Blobs.
+// - Salvataggio idempotente e validazioni chiare (mai 500 non gestiti)
+// - CORS e preflight gestiti
+// - Invio email opzionale via Resend se RESEND_API_KEY è configurata
 
-// NOTA: @netlify/blobs è ESM. In CommonJS lo importiamo con un import dinamico.
-async function getBlobsStore() {
-  const { createClient } = await import('@netlify/blobs');
-  const client = createClient({
-    token: process.env.NETLIFY_BLOBS_TOKEN,
-    siteID: process.env.NETLIFY_SITE_ID,
-  });
-  // Nome store configurabile via env; default: "rs-requests"
-  const storeName = process.env.BLOB_STORE_RS || 'rs-requests';
-  return client.getStore(storeName);
+const { getStore } = require('@netlify/blobs');
+const crypto = require('crypto');
+
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+function ok(body) {
+  return { statusCode: 200, headers: { 'content-type': 'application/json', ...CORS_HEADERS }, body: JSON.stringify(body) };
 }
-
-// utils -------------------------------------------------------------
-function ok(body, status = 200, headers = {}) {
-  return {
-    statusCode: status,
-    headers: {
-      'content-type': 'application/json; charset=utf-8',
-      'cache-control': 'no-store',
-      'access-control-allow-origin': '*',
-      'access-control-allow-methods': 'POST,OPTIONS,GET',
-      'access-control-allow-headers': 'content-type',
-      ...headers,
-    },
-    body: typeof body === 'string' ? body : JSON.stringify(body),
-  };
-}
-
-function bad(msg, status = 400) {
-  return ok({ error: msg }, status);
-}
-
-function isEmail(s) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(s || '').trim());
+function bad(status, msg) {
+  return { statusCode: status, headers: { 'content-type': 'application/json', ...CORS_HEADERS }, body: JSON.stringify({ error: msg }) };
 }
 
 function baseUrl(event) {
-  // prova a ricostruire l’origin (Netlify mette X-Forwarded-Proto/Host)
-  const proto =
-    event.headers['x-forwarded-proto'] ||
-    event.headers['x-forwarded-protocol'] ||
-    'https';
-  const host = event.headers['x-forwarded-host'] || event.headers.host || '';
-  return `${proto}://${host}`;
+  // URL in produzione, fallback a origin della richiesta o localhost
+  return process.env.URL || event?.headers?.origin || 'http://localhost:8888';
 }
 
-// handler -----------------------------------------------------------
-exports.handler = async (event) => {
+function parseJSON(body) {
+  try { return JSON.parse(body || '{}'); } catch { return {}; }
+}
+
+function ttlSeconds(code) {
+  if (!code || code === 'none') return undefined;
+  if (code === '24h') return 24 * 60 * 60;
+  if (code === '7d') return 7 * 24 * 60 * 60;
+  return undefined;
+}
+
+async function sendEmailIfConfigured(to, link, context, note) {
+  const key = process.env.RESEND_API_KEY;
+  if (!key) return; // opzionale
   try {
-    // CORS preflight
-    if (event.httpMethod === 'OPTIONS') {
-      return ok('', 204);
-    }
-
-    // Health check rapido
-    if (event.httpMethod === 'GET' && event.queryStringParameters?.health) {
-      return ok({ ok: true, name: 'rs-request' });
-    }
-
-    if (event.httpMethod !== 'POST') {
-      return bad('Method Not Allowed', 405);
-    }
-
-    // parse body
-    let data = {};
-    try {
-      data = JSON.parse(event.body || '{}');
-    } catch (_) {
-      return bad('Invalid JSON');
-    }
-
-    // campi attesi dal form
-    const email = String(data.email || '').trim();
-    const context = String(data.context || '').trim(); // es: LAVORO/CENA/...
-    const note = String(data.note || '').trim();       // opzionale
-    const proof = String(data.proof || 'yes');         // "yes" | "no"
-    const ttl = String(data.ttl || 'none');            // "none" | "24h" | "7d"
-    const manleva = !!data.manleva;
-
-    if (!isEmail(email)) return bad('Email non valida');
-    if (!context) return bad('Contesto mancante');
-    if (!manleva) return bad('Manleva non confermata');
-
-    // TTL in secondi (se vuoi far scadere il link)
-    let expiresAt = null;
-    if (ttl === '24h') {
-      expiresAt = Date.now() + 24 * 3600 * 1000;
-    } else if (ttl === '7d') {
-      expiresAt = Date.now() + 7 * 24 * 3600 * 1000;
-    }
-
-    // record da salvare
-    const id = `rs_${Math.random().toString(36).slice(2, 10)}${Date.now().toString(36)}`;
-    const record = {
-      id,
-      email,
-      context,
-      note,
-      proof: proof === 'yes',
-      expiresAt,             // timestamp o null
-      createdAt: Date.now(),
-      status: 'created',     // created | sent | opened | chosen | expired
-      choices: [
-        'Riprogramma',
-        'Voucher',
-        'Richiamami'
-      ],                     // puoi personalizzare/parametrizzare
-      meta: {},
-    };
-
-    // Salva su Netlify Blobs
-    const store = await getBlobsStore();
-    await store.setJSON(id, record);
-
-    // URL pubblico della pagina switch (crea la pagina se non l’hai già)
-    // Es: /switch.html?id=xxxxx  oppure un path “pretty” se hai una route dedicata.
-    const publicUrl = `${baseUrl(event)}/responsibility-switch.html?id=${encodeURIComponent(id)}`;
-
-    // (Opzionale) invio email al richiedente con il link – qui lasciamo solo come placeholder:
-    // await sendMailWithResend({ to: email, url: publicUrl, context });
-
-    return ok({
-      ok: true,
-      id,
-      url: publicUrl,
-      expiresAt,
+    const { Resend } = require('resend');
+    const resend = new Resend(key);
+    await resend.emails.send({
+      from: 'COLPA MIA <no-reply@colpamia.com>',
+      to,
+      subject: 'Il tuo Responsibility Switch',
+      html: `
+        <p>Ciao! Ecco il tuo link:</p>
+        <p><a href="${link}">${link}</a></p>
+        <p><b>Contesto:</b> ${context || '-'}</p>
+        ${note ? `<p><b>Note:</b> ${note}</p>` : ''}
+        <p>Puoi condividere questo link con il destinatario. Ogni scelta verrà tracciata.</p>
+      `,
     });
-  } catch (err) {
-    console.error('rs-request error:', err);
-    // errore generico
-    return bad('server_error', 500);
+  } catch (e) {
+    // Non blocchiamo il flusso se l'email fallisce
+    console.error('resend_email_failed', e?.message || e);
   }
+}
+
+exports.handler = async (event) => {
+  // Preflight CORS
+  if (event.httpMethod === 'OPTIONS') {
+    return { statusCode: 204, headers: CORS_HEADERS };
+  }
+
+  if (event.httpMethod !== 'POST') {
+    return bad(405, 'Method Not Allowed');
+  }
+
+  // --- INPUT ---
+  const { email, context, note, ttl, proof, manleva } = parseJSON(event.body);
+
+  if (!email || !/^\S+@\S+\.\S+$/.test(email)) {
+    return bad(400, 'Email non valida');
+  }
+  if (!manleva) {
+    return bad(400, 'Manleva non confermata');
+  }
+
+  // --- BLOBS STORE (v7) ---
+  let store;
+  try {
+    store = getStore({
+      name: 'rs', // nome del tuo store
+      // in Functions i due valori sono disponibili; lasciarli anche se non strettamente necessari
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    });
+  } catch (e) {
+    console.error('blobs_init_failed', e?.message || e);
+    return bad(500, 'blobs_init_failed');
+  }
+
+  // --- RECORD ---
+  const id = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  const record = {
+    id,
+    createdAt,
+    email,
+    context: context || '',
+    note: note || '',
+    proof: proof === 'no' ? 'no' : 'yes',
+    status: 'active',
+    version: 1,
+  };
+
+  // chiave e TTL (automatica su Blobs)
+  const key = `links/${id}.json`;
+  const ttlSec = ttlSeconds(ttl);
+
+  try {
+    await store.set(
+      key,
+      Buffer.from(JSON.stringify(record), 'utf8'),
+      ttlSec ? { ttl: ttlSec } : undefined
+    );
+  } catch (e) {
+    console.error('blobs_set_failed', e?.message || e);
+    return bad(500, 'blobs_set_failed');
+  }
+
+  // URL pubblico del link (la tua pagina consumerà l’id)
+  const link = `${baseUrl(event).replace(/\/$/, '')}/rs/${id}`;
+
+  // email opzionale
+  await sendEmailIfConfigured(email, link, context, note);
+
+  return ok({ id, url: link });
 };
