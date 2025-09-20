@@ -6,25 +6,21 @@
   <title>Responsibility Switch</title>
   <meta name="theme-color" content="#0b0f16"/>
   <style>
-    :root{
-      --bg:#0b0f16; --panel:#101724; --line:#1f2b46; --brand:#3b82f6; --muted:#a9b4c6;
-      color-scheme:dark;
-    }
+    :root{--bg:#0b0f16;--panel:#101724;--line:#1f2b46;--muted:#a9b4c6;--btn:#3b82f6;--ok:#22c55e;--err:#ef4444;color-scheme:dark}
     *{box-sizing:border-box}
     body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    .wrap{max-width:980px;margin:0 auto;padding:28px}
-    h1{font-size:clamp(22px,4vw,32px);margin:0 0 18px}
-    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
-    .row{display:flex;flex-direction:column;gap:10px}
-    .ctx{opacity:.9;margin:0 0 6px}
-    .btn{display:block;width:100%;text-align:left;background:var(--brand);color:#061018;
-         border:0;border-radius:10px;padding:12px 14px;font-weight:800;cursor:pointer}
+    .wrap{max-width:920px;margin:24px auto;padding:0 16px}
+    h1{margin:0 0 16px;font-size:clamp(22px,3.2vw,34px)}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:16px}
+    .muted{color:var(--muted)}
+    .row{display:flex;flex-direction:column;gap:10px;margin-top:6px}
+    button{appearance:none;border:0;cursor:pointer}
+    .btn{width:100%;text-align:left;padding:12px 14px;border-radius:12px;background:var(--btn);color:#061018;font-weight:700}
     .btn:disabled{opacity:.6;cursor:not-allowed}
-    .ghost{background:transparent;border:1px solid #28406c;color:#bfe1ff}
-    .muted{color:var(--muted);font-size:.95rem}
-    .msg{margin-top:10px;font-size:.95rem}
-    .ok{color:#28d381}.err{color:#ff6b6b}
-    .back{margin-top:8px}
+    .ghost{background:#0f1a2b;color:#e9eef5;border:1px solid #1e3354}
+    .msg{margin-top:12px;font-size:.95rem}
+    .ok{color:var(--ok)} .err{color:var(--err)}
+    .ctx{margin-bottom:10px}
   </style>
 </head>
 <body>
@@ -32,83 +28,94 @@
     <h1>Responsibility Switch</h1>
 
     <div class="card">
-      <p id="ctx" class="ctx">Contesto: <b id="ctxVal">—</b></p>
+      <div id="ctx" class="ctx muted">Contesto: <b id="ctxVal">—</b></div>
 
       <div class="row">
-        <button id="btn-reprog" class="btn">Riprogrammiamo</button>
-        <button id="btn-recall" class="btn">Richiamami</button>
-        <button id="btn-voucher" class="btn">Voucher</button>
-        <button id="btn-back" class="btn ghost back">Torna al catalogo</button>
+        <button id="b-reprogram" class="btn">Riprogrammiamo</button>
+        <button id="b-callme"    class="btn">Richiamami</button>
+        <button id="b-voucher"   class="btn">Voucher</button>
+        <button id="b-back"      class="btn ghost">Torna al catalogo</button>
       </div>
 
-      <div id="out" class="msg"></div>
-      <p class="muted" style="margin-top:8px">
-        Le scelte vengono registrate. Se necessario riceverai una conferma via email.
-      </p>
+      <div id="out" class="msg muted"></div>
+      <div class="muted" style="margin-top:8px">Le scelte vengono registrate. Se necessario riceverai una conferma via email.</div>
     </div>
   </div>
 
   <script>
-  (function () {
-    // --- util
-    const $ = (s)=>document.querySelector(s)
-    const out = $('#out')
-    function setMsg(text, ok=true){ out.textContent = text; out.className = 'msg ' + (ok?'ok':'err') }
-    function disableUI(v=true){
-      ['#btn-reprog','#btn-recall','#btn-voucher','#btn-back'].forEach(sel=>{
-        const b=$(sel); if(b) b.disabled=v
-      })
+    // --- helpers ------------------------------------------------------------
+    const $ = s => document.querySelector(s);
+    const out = $('#out');
+
+    function setMsg(text, cls='muted'){
+      out.className = 'msg ' + cls;
+      out.textContent = text;
     }
 
-    // --- prende id dalla path /rs/:id
-    const parts = location.pathname.split('/').filter(Boolean)
-    const id = parts[parts.length-1] || ''
-    if(!id){ setMsg('Link non valido (id mancante).', false); disableUI(true); return }
+    function getTokenFromUrl(){
+      // Supporta /rs/<token> oppure ?token=.../t=... (fallback)
+      const path = location.pathname.replace(/\/+$/,'');
+      const m = path.match(/\/rs\/([^\/]+)$/i);
+      if (m && m[1]) return m[1];
+      const q = new URLSearchParams(location.search);
+      return q.get('token') || q.get('t') || '';
+    }
 
-    // --- prova a mostrare il contesto
-    const params = new URLSearchParams(location.search)
-    const ctxFromUrl = params.get('c') || params.get('ctx')
-    const ctxEl = $('#ctxVal')
-    if (ctxFromUrl) ctxEl.textContent = ctxFromUrl.toUpperCase()
+    function getContextFromUrl(){
+      const q = new URLSearchParams(location.search);
+      return q.get('ctx') || q.get('context') || '';
+    }
 
-    // Se esiste una funzione rs-get sul tuo backend, prova a usarla (best effort)
-    ;(async ()=>{
-      if (ctxFromUrl) return
+    // --- bootstrap ----------------------------------------------------------
+    const TOKEN = getTokenFromUrl();
+    const CTX   = getContextFromUrl();
+    if (!TOKEN){
+      setMsg('Link non valido o mancante (token assente).', 'err');
+    }
+    $('#ctxVal').textContent = CTX ? CTX.toUpperCase() : '—';
+
+    // --- actions ------------------------------------------------------------
+    async function sendChoice(choice){
+      if (!TOKEN) return;
+      const btns = ['#b-reprogram','#b-callme','#b-voucher'].map(s=>$(s));
+      btns.forEach(b=>b.disabled = true);
+      setMsg('Invio in corso…');
+
       try{
-        const r = await fetch('/.netlify/functions/rs-get?id='+encodeURIComponent(id))
-        if(r.ok){
-          const data = await r.json()
-          if(data?.context) ctxEl.textContent = String(data.context).toUpperCase()
-        }
-      }catch(_){}
-    })()
-
-    // --- invia scelta al backend
-    async function postChoice(choice){
-      try{
-        disableUI(true)
-        const r = await fetch('/.netlify/functions/rs-choice',{
+        const r = await fetch('/.netlify/functions/rs-choice', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ id, choice })
-        })
-        const data = await r.json().catch(()=> ({}))
-        if(!r.ok) throw new Error(data?.error||'Errore')
-        if (data?.next) location.href = data.next
-        else setMsg('Scelta registrata: '+choice, true)
+          body: JSON.stringify({ token: TOKEN, choice })
+        });
+        if(!r.ok){
+          const t = await r.text().catch(()=> '');
+          throw new Error(t || ('HTTP '+r.status));
+        }
+        const res = await r.json();
+
+        // Se il backend propone un'azione, eseguila.
+        if (res.next_action && res.next_action.url){
+          if (res.next_action.type === 'open'){
+            window.open(res.next_action.url,'_blank');
+          } else {
+            window.location.href = res.next_action.url;
+          }
+          return; // stop messaggio successivo
+        }
+
+        setMsg('Scelta registrata: '+ choice, 'ok');
       }catch(e){
-        setMsg('Errore: '+(e.message||e), false)
+        setMsg('Errore: ' + (e.message || 'server_error'), 'err');
       }finally{
-        disableUI(false)
+        btns.forEach(b=>b.disabled = false);
       }
     }
 
-    // --- aggancia i pulsanti
-    $('#btn-reprog')?.addEventListener('click', ()=> postChoice('reprogram'))
-    $('#btn-recall')?.addEventListener('click', ()=> postChoice('recall'))
-    $('#btn-voucher')?.addEventListener('click', ()=> postChoice('voucher'))
-    $('#btn-back')?.addEventListener('click', ()=> postChoice('back'))
-  })();
+    // --- bind UI ------------------------------------------------------------
+    $('#b-reprogram').onclick = ()=> sendChoice('reprogram');
+    $('#b-callme').onclick    = ()=> sendChoice('callme');
+    $('#b-voucher').onclick   = ()=> sendChoice('voucher');
+    $('#b-back').onclick      = ()=> location.href = '/#catalogo';
   </script>
 </body>
 </html>
