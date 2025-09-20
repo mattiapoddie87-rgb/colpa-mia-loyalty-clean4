@@ -3,88 +3,112 @@
 <head>
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Responsibility Switch — Link</title>
+  <title>Responsibility Switch</title>
   <meta name="theme-color" content="#0b0f16"/>
   <style>
-    :root{--bg:#0b0f16;--panel:#101724;--line:#1f2b46;--muted:#a9b4c6;color-scheme:dark}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
-    .wrap{max-width:900px;margin:0 auto;padding:24px}
-    .card{background:#101724;border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
-    .grid{display:grid;gap:10px}
-    .btn{display:inline-block;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:#061018;text-decoration:none;font-weight:800}
-    .muted{color:var(--muted)} .row{display:flex;gap:8px;flex-wrap:wrap}
+    :root{
+      --bg:#0b0f16; --panel:#101724; --line:#1f2b46; --brand:#3b82f6; --muted:#a9b4c6;
+      color-scheme:dark;
+    }
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    .wrap{max-width:980px;margin:0 auto;padding:28px}
+    h1{font-size:clamp(22px,4vw,32px);margin:0 0 18px}
+    .card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:18px}
+    .row{display:flex;flex-direction:column;gap:10px}
+    .ctx{opacity:.9;margin:0 0 6px}
+    .btn{display:block;width:100%;text-align:left;background:var(--brand);color:#061018;
+         border:0;border-radius:10px;padding:12px 14px;font-weight:800;cursor:pointer}
+    .btn:disabled{opacity:.6;cursor:not-allowed}
+    .ghost{background:transparent;border:1px solid #28406c;color:#bfe1ff}
+    .muted{color:var(--muted);font-size:.95rem}
+    .msg{margin-top:10px;font-size:.95rem}
+    .ok{color:#28d381}.err{color:#ff6b6b}
+    .back{margin-top:8px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Responsibility Switch</h1>
-    <div id="status" class="muted">Caricamento…</div>
 
-    <div id="view" class="card" style="display:none">
-      <p id="ctx" class="muted"></p>
-      <div id="opts" class="grid"></div>
+    <div class="card">
+      <p id="ctx" class="ctx">Contesto: <b id="ctxVal">—</b></p>
+
       <div class="row">
-        <a id="btn-back" class="btn" href="/">Torna al catalogo</a>
+        <button id="btn-reprog" class="btn">Riprogrammiamo</button>
+        <button id="btn-recall" class="btn">Richiamami</button>
+        <button id="btn-voucher" class="btn">Voucher</button>
+        <button id="btn-back" class="btn ghost back">Torna al catalogo</button>
       </div>
-    </div>
 
-    <div id="err" class="card" style="display:none">
-      <p>Link non valido o scaduto.</p>
-      <a class="btn" href="/">Torna al catalogo</a>
+      <div id="out" class="msg"></div>
+      <p class="muted" style="margin-top:8px">
+        Le scelte vengono registrate. Se necessario riceverai una conferma via email.
+      </p>
     </div>
   </div>
 
   <script>
-    (async () => {
-      const statusEl = document.getElementById('status');
-      const viewEl   = document.getElementById('view');
-      const errEl    = document.getElementById('err');
-      const optsEl   = document.getElementById('opts');
-      const ctxEl    = document.getElementById('ctx');
+  (function () {
+    // --- util
+    const $ = (s)=>document.querySelector(s)
+    const out = $('#out')
+    function setMsg(text, ok=true){ out.textContent = text; out.className = 'msg ' + (ok?'ok':'err') }
+    function disableUI(v=true){
+      ['#btn-reprog','#btn-recall','#btn-voucher','#btn-back'].forEach(sel=>{
+        const b=$(sel); if(b) b.disabled=v
+      })
+    }
 
-      // id = ultimo segmento del path /rs/:id
-      const parts = location.pathname.replace(/\/+$/,'').split('/');
-      const id = parts[parts.length - 1];
-      if (!id) { statusEl.style.display='none'; errEl.style.display='block'; return; }
+    // --- prende id dalla path /rs/:id
+    const parts = location.pathname.split('/').filter(Boolean)
+    const id = parts[parts.length-1] || ''
+    if(!id){ setMsg('Link non valido (id mancante).', false); disableUI(true); return }
 
-      try {
-        // Recupera i dati del link
-        const r = await fetch('/.netlify/functions/rs-get?id='+encodeURIComponent(id));
-        if (!r.ok) throw new Error('not_ok');
-        const data = await r.json();
+    // --- prova a mostrare il contesto
+    const params = new URLSearchParams(location.search)
+    const ctxFromUrl = params.get('c') || params.get('ctx')
+    const ctxEl = $('#ctxVal')
+    if (ctxFromUrl) ctxEl.textContent = ctxFromUrl.toUpperCase()
 
-        statusEl.style.display = 'none';
-        viewEl.style.display = 'block';
+    // Se esiste una funzione rs-get sul tuo backend, prova a usarla (best effort)
+    ;(async ()=>{
+      if (ctxFromUrl) return
+      try{
+        const r = await fetch('/.netlify/functions/rs-get?id='+encodeURIComponent(id))
+        if(r.ok){
+          const data = await r.json()
+          if(data?.context) ctxEl.textContent = String(data.context).toUpperCase()
+        }
+      }catch(_){}
+    })()
 
-        ctxEl.textContent = 'Contesto: ' + (data.context || '—');
-
-        // Render opzioni
-        (data.options || ['Riprogrammiamo','Richiamami','Voucher']).forEach((label, idx) => {
-          const a = document.createElement('a');
-          a.className = 'btn';
-          a.href = '#';
-          a.textContent = label;
-          a.onclick = async (ev) => {
-            ev.preventDefault();
-            try {
-              await fetch('/.netlify/functions/rs-choice', {
-                method:'POST',
-                headers:{'Content-Type':'application/json'},
-                body: JSON.stringify({ id, choiceIndex: idx, userAgent: navigator.userAgent })
-              });
-              alert('Scelta registrata: ' + label);
-            } catch(e) {
-              alert('Errore nel registrare la scelta');
-            }
-          };
-          optsEl.appendChild(a);
-        });
-
-      } catch (e) {
-        statusEl.style.display='none';
-        errEl.style.display='block';
+    // --- invia scelta al backend
+    async function postChoice(choice){
+      try{
+        disableUI(true)
+        const r = await fetch('/.netlify/functions/rs-choice',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body: JSON.stringify({ id, choice })
+        })
+        const data = await r.json().catch(()=> ({}))
+        if(!r.ok) throw new Error(data?.error||'Errore')
+        if (data?.next) location.href = data.next
+        else setMsg('Scelta registrata: '+choice, true)
+      }catch(e){
+        setMsg('Errore: '+(e.message||e), false)
+      }finally{
+        disableUI(false)
       }
-    })();
+    }
+
+    // --- aggancia i pulsanti
+    $('#btn-reprog')?.addEventListener('click', ()=> postChoice('reprogram'))
+    $('#btn-recall')?.addEventListener('click', ()=> postChoice('recall'))
+    $('#btn-voucher')?.addEventListener('click', ()=> postChoice('voucher'))
+    $('#btn-back')?.addEventListener('click', ()=> postChoice('back'))
+  })();
   </script>
 </body>
 </html>
