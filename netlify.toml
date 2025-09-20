@@ -1,7 +1,24 @@
-[build.environment]
-  NODE_VERSION = "20"
-
+# --- Funzioni Netlify ---
 [functions]
   directory = "netlify/functions"
   node_bundler = "esbuild"
+  # Necessario per usare Netlify Blobs all'interno delle funzioni
   external_node_modules = ["@netlify/blobs"]
+
+# --- Redirect per la pagina dinamica del Responsibility Switch ---
+# Qualsiasi URL /rs/<id> serve il file /rs/index.html (che sta in /public/rs/index.html)
+[[redirects]]
+  from = "/rs/*"
+  to = "/rs/index.html"
+  status = 200
+
+# (Opzionale) short link senza .html per pagine informative
+[[redirects]]
+  from = "/responsibility-switch"
+  to = "/responsibility-switch.html"
+  status = 200
+
+[[redirects]]
+  from = "/manleva-switch"
+  to = "/manleva-switch.html"
+  status = 200
