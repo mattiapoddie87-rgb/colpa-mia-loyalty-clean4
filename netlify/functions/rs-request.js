@@ -1,57 +1,40 @@
-// Crea/ritorna un link RS e lo salva nei Netlify Blobs (store: "rs-links")
-const { createClient } = require('@netlify/blobs');
-
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type',
-  'Access-Control-Allow-Methods': 'POST,OPTIONS'
-};
+// Genera un link RS "stateless": i dati sono nel token (base64url JSON).
+// NIENTE Blobs, NIENTE storage esterno -> zero 500 per dipendenze.
 
 exports.handler = async (event) => {
+  const CORS = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Headers': 'Content-Type',
+    'Access-Control-Allow-Methods': 'POST,OPTIONS'
+  };
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers: CORS };
-  if (event.httpMethod !== 'POST')
-    return { statusCode: 405, headers: CORS, body: 'Method Not Allowed' };
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers: CORS, body: 'Method Not Allowed' };
 
   try {
-    const { email, context, note, proof = 'yes', ttl = 0 } = JSON.parse(event.body || '{}');
+    const { email = '', context = '', note = '', proof = 'yes', ttl = 0 } = JSON.parse(event.body || '{}');
 
-    // token link
-    const token = cryptoRandom();
-    const createdAt = Date.now();
+    const payload = {
+      email: String(email).trim(),
+      context: String(context || ''),
+      note: String(note || ''),
+      proof: String(proof || 'yes'),
+      iat: Date.now(),
+      ttl: Number(ttl || 0) // opzionale, non obbligatorio
+    };
 
-    // client esplicito (niente auto-env)
-    const blobs = createClient({
-      siteID: process.env.NETLIFY_SITE_ID,
-      token: process.env.NETLIFY_BLOBS_TOKEN
-    });
-    const store = blobs.getStore('rs-links');
-
-    const data = { token, email: (email||'').trim(), context, note, proof, createdAt };
-    const key  = `links/${token}.json`;
-
-    // TTL opzionale
-    await store.setJSON(key, data, ttl ? { ttl } : undefined);
-
-    const publicUrl = `/rs/${token}?ctx=${encodeURIComponent(context||'')}`;
+    const token = toBase64Url(JSON.stringify(payload));
+    const url = `/rs/${token}?ctx=${encodeURIComponent(payload.context || '')}`;
 
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, token, url: publicUrl })
+      body: JSON.stringify({ ok: true, token, url })
     };
   } catch (e) {
-    return {
-      statusCode: 500,
-      headers: CORS,
-      body: `server_error: ${e.message || e}`
-    };
+    return { statusCode: 500, body: 'server_error: ' + (e.message || e), headers: CORS };
   }
 };
 
-// piccolo generatore sicuro
-function cryptoRandom () {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c=>{
-    const r = (Math.random()*16)|0, v = c==='x'? r : (r&0x3|0x8);
-    return v.toString(16);
-  });
+function toBase64Url(str) {
+  return Buffer.from(str, 'utf8').toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/,'');
 }
