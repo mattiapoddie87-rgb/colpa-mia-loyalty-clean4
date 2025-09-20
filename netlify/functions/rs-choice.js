@@ -1,43 +1,63 @@
 // netlify/functions/rs-choice.js
-const { Blobs } = require('@netlify/blobs');
-const nodemailer = require('nodemailer');
-const STORE = new Blobs({ siteID: process.env.NETLIFY_SITE_ID, token: process.env.NETLIFY_TOKEN });
+import { getStore } from '@netlify/blobs'
 
-async function send(to, subject, html){
-  if (process.env.RESEND_API_KEY) {
-    const fetch = (...a)=>import('node-fetch').then(({default:f})=>f(...a));
-    await fetch('https://api.resend.com/emails', {
-      method:'POST',
-      headers:{'Authorization':`Bearer ${process.env.RESEND_API_KEY}`,'Content-Type':'application/json'},
-      body: JSON.stringify({ from: process.env.MAIL_FROM, to, subject, html })
-    });
-    return;
+export const handler = async (event) => {
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'Method Not Allowed' }
   }
-  const t = nodemailer.createTransport({
-    host: process.env.SMTP_HOST, port: +(process.env.SMTP_PORT||587), secure:false,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-  });
-  await t.sendMail({ from: process.env.MAIL_FROM, to, subject, html });
+
+  try {
+    const { id, choice } = JSON.parse(event.body || '{}')
+    if (!id || !choice) {
+      return { statusCode: 400, body: 'Missing id or choice' }
+    }
+
+    const store = getStore('rs')
+    const key = `rs:${id}`
+    const raw = await store.get(key, { type: 'json' })
+    if (!raw) return { statusCode: 404, body: 'RS not found' }
+
+    const now = new Date().toISOString()
+    raw.events = Array.isArray(raw.events) ? raw.events : []
+    raw.events.push({ ts: now, type: 'choice', choice })
+
+    await store.setJSON(key, raw)
+
+    // Email di notifica (opzionale)
+    try {
+      if (process.env.RESEND_API_KEY && (raw.requesterEmail || raw.ownerEmail)) {
+        const to = raw.ownerEmail || raw.requesterEmail
+        const subject = `RS scelta: ${choice} — ${raw.context || ''}`
+        const body = `ID: ${id}\nScelta: ${choice}\nContesto: ${raw.context || '-'}\nNote: ${raw.note || '-'}\nQuando: ${now}`
+        const r = await fetch('https://api.resend.com/emails', {
+          method: 'POST',
+          headers: {
+            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            from: process.env.EMAIL_FROM || 'noreply@colpamia.com',
+            to: to,
+            subject,
+            text: body
+          })
+        })
+        await r.text() // ignoro eventuali errori
+      }
+    } catch (e) {
+      console.warn('email_send_failed', e.message)
+    }
+
+    // Destinazioni/azioni suggerite lato client
+    let next = null
+    if (choice === 'back') next = '/#catalogo'
+
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ ok: true, next })
+    }
+  } catch (e) {
+    console.error('rs-choice error', e)
+    return { statusCode: 500, body: 'server_error' }
+  }
 }
-
-exports.handler = async (event)=>{
-  if (event.httpMethod !== 'POST') return { statusCode:405, body:'Method Not Allowed' };
-  const { id, choice } = JSON.parse(event.body||'{}');
-  if(!id || !choice) return { statusCode:400, body: JSON.stringify({ error:'missing_fields' }) };
-
-  const key = `rs/${id}.json`;
-  const raw = await STORE.get(key, { type:'json' });
-  if(!raw) return { statusCode:404, body: JSON.stringify({ error:'not_found' }) };
-
-  const when = new Date().toISOString();
-  raw.choice = { value: choice, at: when };
-  raw.status = 'COMPLETED';
-  await STORE.set(key, JSON.stringify(raw), { contentType:'application/json' });
-
-  await send(raw.email, 'Nuova scelta sul tuo Responsibility Switch',
-    `<p>Il destinatario ha scelto: <b>${choice}</b></p>
-     <p>Contesto: <b>${raw.context}</b></p>
-     <p>Quando: ${when}</p>`);
-
-  return { statusCode:200, body: JSON.stringify({ ok:true }) };
-};
