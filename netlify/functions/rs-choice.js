@@ -1,63 +1,67 @@
-// netlify/functions/rs-choice.js
-import { getStore } from '@netlify/blobs'
+// Netlify Function: registra la scelta del Responsibility Switch
+// npm i @netlify/blobs  (ce l'hai già nel package.json)
+import { getStore } from '@netlify/blobs';
+
+const ok = (body = {}) => ({
+  statusCode: 200,
+  headers: cors(),
+  body: JSON.stringify(body),
+});
+
+const bad = (msg, code = 400) => ({
+  statusCode: code,
+  headers: cors(),
+  body: JSON.stringify({ error: msg }),
+});
+
+const cors = () => ({
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Content-Type': 'application/json; charset=utf-8',
+});
 
 export const handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' }
-  }
-
   try {
-    const { id, choice } = JSON.parse(event.body || '{}')
-    if (!id || !choice) {
-      return { statusCode: 400, body: 'Missing id or choice' }
-    }
+    if (event.httpMethod === 'OPTIONS') return ok();       // preflight
+    if (event.httpMethod !== 'POST') return bad('method_not_allowed', 405);
 
-    const store = getStore('rs')
-    const key = `rs:${id}`
-    const raw = await store.get(key, { type: 'json' })
-    if (!raw) return { statusCode: 404, body: 'RS not found' }
+    // body JSON
+    let payload;
+    try { payload = JSON.parse(event.body || '{}'); }
+    catch { return bad('invalid_json'); }
 
-    const now = new Date().toISOString()
-    raw.events = Array.isArray(raw.events) ? raw.events : []
-    raw.events.push({ ts: now, type: 'choice', choice })
+    const id = String(payload.id || '').trim();
+    const choice = String(payload.choice || '').trim();
 
-    await store.setJSON(key, raw)
+    const ALLOWED = new Set(['reprogram', 'recall', 'voucher', 'back']);
+    if (!id) return bad('missing_id');
+    if (!ALLOWED.has(choice)) return bad('invalid_choice');
 
-    // Email di notifica (opzionale)
-    try {
-      if (process.env.RESEND_API_KEY && (raw.requesterEmail || raw.ownerEmail)) {
-        const to = raw.ownerEmail || raw.requesterEmail
-        const subject = `RS scelta: ${choice} — ${raw.context || ''}`
-        const body = `ID: ${id}\nScelta: ${choice}\nContesto: ${raw.context || '-'}\nNote: ${raw.note || '-'}\nQuando: ${now}`
-        const r = await fetch('https://api.resend.com/emails', {
-          method: 'POST',
-          headers: {
-            Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-            'Content-Type': 'application/json'
-          },
-          body: JSON.stringify({
-            from: process.env.EMAIL_FROM || 'noreply@colpamia.com',
-            to: to,
-            subject,
-            text: body
-          })
-        })
-        await r.text() // ignoro eventuali errori
-      }
-    } catch (e) {
-      console.warn('email_send_failed', e.message)
-    }
+    // store Blobs (nome "rs-choices")
+    const store = getStore({ name: 'rs-choices' });
 
-    // Destinazioni/azioni suggerite lato client
-    let next = null
-    if (choice === 'back') next = '/#catalogo'
+    const ts = Date.now();
+    const key = `${id}/${ts}.json`;
 
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ ok: true, next })
-    }
+    const record = {
+      id,
+      choice,
+      ts,
+      ip: event.headers['x-nf-client-connection-ip'] || event.headers['client-ip'] || null,
+      ua: event.headers['user-agent'] || null,
+    };
+
+    // salva come JSON
+    await store.set(key, JSON.stringify(record), { contentType: 'application/json' });
+
+    // opzionale: se vuoi un redirect dopo la scelta (es. torna al catalogo sul bottone "back")
+    let next = null;
+    if (choice === 'back') next = '/#catalogo';
+
+    return ok({ ok: true, key, next });
   } catch (e) {
-    console.error('rs-choice error', e)
-    return { statusCode: 500, body: 'server_error' }
+    console.error('rs-choice error:', e);
+    return bad('server_error', 500);
   }
-}
+};
