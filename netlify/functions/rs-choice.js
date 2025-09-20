@@ -1,113 +1,69 @@
 // netlify/functions/rs-choice.js
-// Endpoint: POST /.netlify/functions/rs-choice
-//
-// Scopo: riceve una scelta (choice) da un link RS e risponde 200.
-//        Niente Netlify Blobs (per evitare MissingBlobsEnvironmentError).
-//        Opzionale: invio email notifica via RESEND o fallback log.
+import { getStore } from '@netlify/blobs';
 
-export async function handler(event) {
-  // CORS preflight
-  if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204,
-      headers: corsHeaders(),
-      body: '',
-    };
-  }
+const CALENDLY_URL   = process.env.CALENDLY_URL || '';           // es. https://calendly.com/colpamia/15min
+const WHATSAPP_NUM   = process.env.WHATSAPP_NUMBER || '';         // es. 393331234567 (senza +)
+const SUPPORT_EMAIL  = process.env.SUPPORT_EMAIL || 'colpamiaconsulenze@proton.me';
+const VOUCHER_PAGE   = process.env.VOUCHER_PAGE || '/voucher.html';
 
+export const handler = async (event) => {
   if (event.httpMethod !== 'POST') {
-    return json(405, { error: 'method_not_allowed' });
+    return { statusCode: 405, body: 'Method Not Allowed' };
   }
 
-  let payload;
   try {
-    payload = JSON.parse(event.body || '{}');
-  } catch {
-    return json(400, { error: 'invalid_json' });
-  }
+    const { token, choice } = JSON.parse(event.body || '{}');
+    if (!token || !choice) {
+      return { statusCode: 400, body: 'missing_params' };
+    }
 
-  const id = (payload.id || '').trim();            // id del link (UUID)
-  const choice = (payload.choice || '').trim();    // es. "reschedule|call|voucher"
-  const ip = event.headers['x-nf-client-connection-ip']
-         || event.headers['x-forwarded-for']
-         || '';
-  const ua = event.headers['user-agent'] || '';
+    // Salva la scelta (idempotente semplice)
+    const store = getStore({ name: 'rs-choices' });
+    const key = `choice:${token}:${Date.now()}`;
+    await store.set(key, JSON.stringify({
+      token, choice, ts: new Date().toISOString(),
+      ua: event.headers['user-agent'] || '',
+      ip: event.headers['x-nf-client-connection-ip'] || event.headers['x-forwarded-for'] || ''
+    }), { metadata: { token, choice } });
 
-  if (!id || !choice) {
-    return json(400, { error: 'missing_fields', need: ['id', 'choice'] });
-  }
+    // Prepara azione successiva
+    let nextAction = null;
 
-  // Log “persistente” minimo: console + timestamp
-  const record = {
-    ts: new Date().toISOString(),
-    id,
-    choice,
-    ip,
-    ua,
-  };
-  console.log('RS-CHOICE', record);
-
-  // --- OPZIONALE: notifica via RESEND (se presenti le env) ---
-  try {
-    const TO = process.env.RS_NOTIFY_TO || process.env.CONTACT_EMAIL;
-    const RESEND_KEY = process.env.RESEND_API_KEY;
-    if (RESEND_KEY && TO) {
-      const res = await fetch('https://api.resend.com/emails', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${RESEND_KEY}`,
-        },
-        body: JSON.stringify({
-          from: process.env.RESEND_FROM || 'ColpaMia <no-reply@colpamia.com>',
-          to: [TO],
-          subject: `RS choice: ${choice} — ${id}`,
-          html: `<p>Scelta registrata.</p>
-                 <ul>
-                   <li><b>ID</b>: ${escapeHtml(id)}</li>
-                   <li><b>Choice</b>: ${escapeHtml(choice)}</li>
-                   <li><b>IP</b>: ${escapeHtml(ip)}</li>
-                   <li><b>UA</b>: ${escapeHtml(ua)}</li>
-                   <li><b>TS</b>: ${escapeHtml(record.ts)}</li>
-                 </ul>`,
-        }),
-      });
-      // Non bloccare mai la response se la mail fallisce
-      if (!res.ok) {
-        const txt = await res.text();
-        console.warn('RESEND_FAIL', res.status, txt);
+    if (choice === 'reprogram') {
+      if (CALENDLY_URL) {
+        nextAction = { type: 'redirect', url: CALENDLY_URL };
+      } else {
+        // fallback: email precompilata
+        const subject = encodeURIComponent('Riprogrammazione appuntamento');
+        const body = encodeURIComponent(`Ciao, vorrei riprogrammare. Token RS: ${token}\n\nGrazie!`);
+        nextAction = { type: 'open', url: `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}` };
       }
     }
+
+    if (choice === 'callme') {
+      // WhatsApp se disponibile, altrimenti email
+      if (WHATSAPP_NUM) {
+        const msg = encodeURIComponent(`Ciao, puoi richiamarmi? Token RS: ${token}`);
+        nextAction = { type: 'redirect', url: `https://wa.me/${WHATSAPP_NUM}?text=${msg}` };
+      } else {
+        const subject = encodeURIComponent('Richiamami');
+        const body = encodeURIComponent(`Ciao, puoi richiamarmi? Token RS: ${token}`);
+        nextAction = { type: 'open', url: `mailto:${SUPPORT_EMAIL}?subject=${subject}&body=${body}` };
+      }
+    }
+
+    if (choice === 'voucher') {
+      // passa il token alla pagina voucher
+      nextAction = { type: 'redirect', url: `${VOUCHER_PAGE}?token=${encodeURIComponent(token)}` };
+    }
+
+    return {
+      statusCode: 200,
+      headers: { 'content-type': 'application/json; charset=utf-8' },
+      body: JSON.stringify({ ok: true, next_action: nextAction })
+    };
   } catch (e) {
-    console.warn('RESEND_ERROR', e?.message || e);
+    console.error('rs-choice error:', e);
+    return { statusCode: 500, body: 'server_error' };
   }
-
-  // Risposta OK: il bottone smette di dare 500
-  return {
-    statusCode: 200,
-    headers: corsHeaders(),
-    body: JSON.stringify({ ok: true }),
-  };
-}
-
-// ----------------- helpers -----------------
-function json(status, obj) {
-  return {
-    statusCode: status,
-    headers: corsHeaders(),
-    body: JSON.stringify(obj),
-  };
-}
-function corsHeaders() {
-  return {
-    'Access-Control-Allow-Origin': '*',
-    'Access-Control-Allow-Methods': 'POST,OPTIONS',
-    'Access-Control-Allow-Headers': 'Content-Type,Authorization',
-    'Content-Type': 'application/json; charset=utf-8',
-  };
-}
-function escapeHtml(s) {
-  return String(s)
-    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-}
+};
