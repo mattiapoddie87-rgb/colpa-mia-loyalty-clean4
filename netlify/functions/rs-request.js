@@ -1,158 +1,179 @@
 // netlify/functions/rs-request.js
 const { randomUUID } = require('crypto');
 
-// ----------------- helpers -----------------
+/* ----------------------------- helpers ---------------------------------- */
+
 function getBaseUrl(event) {
-  return process.env.URL || process.env.DEPLOY_PRIME_URL || `https://${event.headers.host}`;
+  // URL del sito (prod/preview/local)
+  const host = event?.headers?.host;
+  return (
+    process.env.URL ||
+    process.env.DEPLOY_PRIME_URL ||
+    (host ? `https://${host}` : '')
+  );
 }
 
-function isTrue(v) {
-  const s = String(v || '').trim().toLowerCase();
-  return s === 'yes' || s === 'si' || s === 'sì' || s === 'true' || s === '1';
-}
-
-function computeExpiresAt(ttl) {
-  const now = Date.now();
-  if (ttl === '24h') return new Date(now + 24 * 60 * 60 * 1000).toISOString();
-  if (ttl === '7d')  return new Date(now + 7 * 24 * 60 * 60 * 1000).toISOString();
-  return null; // nessuna scadenza
-}
-
+// Salva su Netlify Blobs con chiave *links/<id>.json*
 async function saveToBlobs(id, data) {
   try {
     const { getStore } = require('@netlify/blobs');
-    const store = getStore('rs'); // namespace
-    await store.setJSON(id, data, { metadata: { createdAt: Date.now() } });
-    return { ok: true };
+
+    // Inizializzazione esplicita per evitare "environment not configured"
+    const store = getStore({
+      name: 'rs',
+      siteID: process.env.NETLIFY_SITE_ID,
+      token: process.env.NETLIFY_BLOBS_TOKEN,
+    });
+
+    const key = `links/${id}.json`;
+    await store.setJSON(key, data, { metadata: { createdAt: Date.now() } });
+    return { ok: true, key };
   } catch (e) {
     console.error('blobs_set_failed', e?.message || e);
-    return { ok: false, error: e.message };
+    return { ok: false, error: e?.message || String(e) };
   }
 }
 
-async function sendWithResend({ from, to, subject, text, html }) {
-  const key = process.env.RESEND_API_KEY;
-  if (!key || !from) return { ok: false, error: 'resend_not_configured' };
-  const { Resend } = require('resend');
-  const resend = new Resend(key);
-  await resend.emails.send({ from, to: Array.isArray(to) ? to : [to], subject, text, html });
-  return { ok: true };
-}
-
-async function sendWithSMTP({ from, to, subject, html }) {
-  const host = process.env.SMTP_HOST;
-  const user = process.env.SMTP_USER;
-  const pass = process.env.SMTP_PASS;
-  if (!host || !user || !pass) return { ok: false, error: 'smtp_not_configured' };
-
-  const nodemailer = require('nodemailer');
-  const transporter = nodemailer.createTransport({
-    host,
-    port: Number(process.env.SMTP_PORT || 587),
-    secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-    auth: { user, pass }
-  });
-  const fromAddr = process.env.EMAIL_FROM || `COLPA MIA <${user}>`;
-  await transporter.sendMail({ from: fromAddr, to, subject, html });
-  return { ok: true };
-}
-
-async function sendEmail({ to, link }) {
-  if (!to) return { ok: false, error: 'missing_to' };
-
-  const from =
+// Invio email con Resend (semplice e robusto)
+async function sendEmail({ to, subject, text, html }) {
+  const FROM =
     process.env.RS_FROM_EMAIL ||
     process.env.RESEND_FROM ||
-    process.env.EMAIL_FROM ||
     process.env.FROM_EMAIL ||
     '';
 
-  const subject = 'COLPA MIA — Il tuo Responsibility Switch';
-  const text    = `Ecco il tuo link personale:\n${link}\n\nTienilo e inoltralo al destinatario.`;
-  const html    = `<p>Ecco il tuo link personale:</p><p><a href="${link}">${link}</a></p><p>Tienilo e inoltralo al destinatario.</p>`;
+  const RESEND_KEY = process.env.RESEND_API_KEY;
 
-  // 1) Resend
-  try {
-    const r = await sendWithResend({ from, to, subject, text, html });
-    if (r.ok) return r;
-  } catch (e) {
-    // continua col fallback
-  }
-  // 2) SMTP fallback
-  try {
-    const r = await sendWithSMTP({ from, to, subject, html });
-    if (r.ok) return r;
-  } catch (e) {
-    return { ok: false, error: e.message || String(e) };
-  }
-  return { ok: false, error: 'no_email_provider' };
+  if (!to) return { ok: false, error: 'missing_to' };
+  if (!FROM) return { ok: false, error: 'missing_from' };
+  if (!RESEND_KEY) return { ok: false, error: 'missing_resend_key' };
+
+  const { Resend } = require('resend');
+  const resend = new Resend(RESEND_KEY);
+
+  await resend.emails.send({
+    from: FROM,
+    to: Array.isArray(to) ? to : [to], // Resend accetta array
+    subject,
+    text,
+    html,
+  });
+
+  return { ok: true };
 }
 
-// ----------------- handler -----------------
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
+};
+
+/* ------------------------------ handler --------------------------------- */
+
 exports.handler = async (event) => {
-  // CORS/OPTIONS
+  // Preflight
   if (event.httpMethod === 'OPTIONS') {
-    return {
-      statusCode: 204,
-      headers: {
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST,OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-      }
-    };
+    return { statusCode: 204, headers: CORS };
   }
   if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
+    return { statusCode: 405, headers: CORS, body: 'Method Not Allowed' };
   }
 
   try {
     const body = event.body ? JSON.parse(event.body) : {};
 
+    // campi dal form
     const email   = String(body.email || '').trim();
     const context = String(body.context || '').trim();
     const note    = String(body.note || '').trim();
-    const ttl     = String(body.ttl || body.expires || '').trim(); // accetta ttl o expires
-    const proof   = body.proof; // yes/no/Si…
+    const ttl     = String(body.ttl || body.expires || 'none').trim(); // compat
+    const proof   = String(body.proof || 'yes').trim();                // 'yes'|'no'
+    const manleva = !!body.manleva;
 
-    const id      = randomUUID();
-    const baseUrl = getBaseUrl(event);
-    const url     = `${baseUrl}/rs/${id}`;
-    const expiresAt = computeExpiresAt(ttl);
+    if (!manleva) {
+      return {
+        statusCode: 400,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ok: false, error: 'manleva_required' }),
+      };
+    }
+
+    const id = randomUUID();
+
+    // URL pubblico del link (passo anche il contesto per UX)
+    const baseUrl   = getBaseUrl(event);
+    const publicUrl = `${baseUrl}/rs/${id}?ctx=${encodeURIComponent(context)}`;
+
+    // calcolo eventuale scadenza
+    let expiresAt = null;
+    if (ttl === '24h') {
+      expiresAt = Date.now() + 24 * 60 * 60 * 1000;
+    } else if (ttl === '7d') {
+      expiresAt = Date.now() + 7 * 24 * 60 * 60 * 1000;
+    }
 
     const record = {
       id,
-      url,
       email,
       context,
       note,
       ttl,
-      expiresAt,
+      proof,         // 'yes' | 'no'
+      url: publicUrl,
       createdAt: Date.now(),
-      status: 'NEW'
+      expiresAt,     // ms epoch o null
+      status: 'NEW',
     };
 
-    const saved = await saveToBlobs(id, record);
+    // Salvataggio
+    const saveRes = await saveToBlobs(id, record);
+    if (!saveRes.ok) {
+      return {
+        statusCode: 500,
+        headers: { ...CORS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          ok: false,
+          error: 'blobs_save_failed',
+          detail: saveRes.error,
+        }),
+      };
+    }
 
-    // invio email solo se richiesto
-    let emailResult = { ok: false, skipped: true };
-    if (isTrue(proof) && email) {
+    // Email di conferma (solo se richiesto e presente email)
+    let mail = { ok: false, skipped: true };
+    if (proof !== 'no' && email) {
+      const subject = 'COLPA MIA — Il tuo Responsibility Switch';
+      const text = `Ecco il tuo link personale:\n${publicUrl}\n\nTienilo e inoltralo al destinatario.`;
+      const html = `
+        <p>Ecco il tuo link personale:</p>
+        <p><a href="${publicUrl}">${publicUrl}</a></p>
+        <p>Tienilo e inoltralo al destinatario.</p>
+      `;
       try {
-        emailResult = await sendEmail({ to: email, link: url });
+        mail = await sendEmail({ to: email, subject, text, html });
       } catch (e) {
-        emailResult = { ok: false, error: e.message || String(e) };
+        console.error('email_failed', e?.message || e);
+        mail = { ok: false, error: e?.message || String(e) };
       }
     }
 
     return {
       statusCode: 200,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ ok: true, id, url, saved: !!saved.ok, email: emailResult })
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        ok: true,
+        id,
+        url: publicUrl,
+        saved: true,
+        email: mail,
+      }),
     };
   } catch (e) {
+    console.error('rs-request_error', e?.message || e);
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-      body: JSON.stringify({ ok: false, error: e.message || String(e) })
+      headers: { ...CORS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ok: false, error: e?.message || String(e) }),
     };
   }
 };
