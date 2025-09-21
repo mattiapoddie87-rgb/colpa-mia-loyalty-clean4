@@ -1,65 +1,48 @@
-// rs-test-email.js — invia una mail di prova con Resend o SMTP e ritorna l'esito
-const https = require('https');
-const nodemailer = require('nodemailer');
-
-exports.handler = async () => {
-  const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'Content-Type' };
-  const to = process.env.EMAIL_TO || process.env.TEST_TO || process.env.SMTP_USER;
-
-  const subject = 'Test COLPA MIA (Netlify Function)';
-  const html = '<p>Questa è una mail di prova inviata dalla funzione <b>rs-test-email</b>.</p>';
-
-  const debug = { tried: [], errors: [] };
-
+// netlify/functions/rs-test-email.js
+exports.handler = async (event) => {
   try {
-    if (process.env.RESEND_API_KEY) {
-      debug.tried.push('resend');
-      try {
-        await sendResend({
-          apiKey: process.env.RESEND_API_KEY,
-          from: process.env.EMAIL_FROM || 'COLPA MIA <onboarding@resend.dev>',
-          to, subject, html
-        });
-        return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok:true, via:'resend', to }) };
-      } catch(e){ debug.errors.push('resend: '+e.message); }
+    // Accetta sia query sia body
+    const qs = event.queryStringParameters || {};
+    const body = event.body ? JSON.parse(event.body) : {};
+    const to = String(qs.to || body.to || '').trim();
+
+    // Mittente: compatibile con nomi vecchi e nuovi
+    const FROM =
+      process.env.RS_FROM_EMAIL ||
+      process.env.RESEND_FROM ||
+      process.env.FROM_EMAIL ||
+      '';
+
+    const RESEND_KEY = process.env.RESEND_API_KEY;
+
+    if (!to) {
+      return {
+        statusCode: 400,
+        body: JSON.stringify({ ok: false, error: 'missing_to' })
+      };
     }
-    if (process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
-      debug.tried.push('smtp');
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: String(process.env.SMTP_SECURE || 'false') === 'true',
-        auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
-      });
-      await transporter.sendMail({
-        from: process.env.EMAIL_FROM || `COLPA MIA <${process.env.SMTP_USER}>`,
-        to, subject, html
-      });
-      return { statusCode: 200, headers: CORS, body: JSON.stringify({ ok:true, via:'smtp', to }) };
+    if (!FROM || !RESEND_KEY) {
+      return {
+        statusCode: 500,
+        body: JSON.stringify({ ok: false, error: 'nessun provider configurato' })
+      };
     }
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ ok:false, error:'nessun provider configurato', debug }) };
-  } catch(e){
-    return { statusCode: 500, headers: CORS, body: JSON.stringify({ ok:false, error:e.message, debug }) };
+
+    const { Resend } = require('resend');
+    const resend = new Resend(RESEND_KEY);
+
+    await resend.emails.send({
+      from: FROM,           // es: 'COLPA MIA <noreply@tuodominio.com>'
+      to: [to],             // sempre array: evita il "Missing `to`"
+      subject: 'ColpaMia — Test email',
+      text: 'Funziona ✅'
+    });
+
+    return { statusCode: 200, body: JSON.stringify({ ok: true }) };
+  } catch (e) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ ok: false, error: e.message })
+    };
   }
 };
-
-function sendResend({ apiKey, from, to, subject, html }) {
-  return new Promise((resolve, reject) => {
-    const body = JSON.stringify({ from, to, subject, html });
-    const req = https.request({
-      method: 'POST',
-      hostname: 'api.resend.com',
-      path: '/emails',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-        'Content-Length': Buffer.byteLength(body)
-      }
-    }, res => {
-      let data=''; res.on('data', c=>data+=c);
-      res.on('end', () => res.statusCode < 300 ? resolve() : reject(new Error(`Resend ${res.statusCode}: ${data}`)));
-    });
-    req.on('error', reject);
-    req.write(body); req.end();
-  });
-}
