@@ -16,39 +16,46 @@ exports.handler = async (event) => {
     const { token, choice } = JSON.parse(event.body || '{}');
     if (!token || !choice) return { statusCode: 400, headers: CORS, body: 'bad_request' };
 
-    const payload = decodeToken(token);
-    if (!payload) return { statusCode: 400, headers: CORS, body: 'invalid_token' };
+    // Prova decodifica (nuovo flusso). Se fallisce, compatibilità: usa token grezzo.
+    let payload = safeDecodeToken(token); // {email?, context?, note?} | null
+    const compatMode = !payload;          // true = vecchio link/id non decodificabile
 
-    // Azione suggerita al client (solo per reprogram/callme)
+    // Azione suggerita (solo reprogram/callme). Voucher resta in pagina.
     let next = null;
-    if (choice === 'reprogram') {
-      next = {
-        type: 'open',
-        url:
-          `mailto:${encodeURIComponent(payload.email || '')}` +
-          `?subject=${encodeURIComponent('Riprogrammazione — ' + (payload.context || 'RS'))}` +
-          `&body=${encodeURIComponent('Ciao, riprogrammiamo. Token: ' + token)}`
-      };
-    } else if (choice === 'callme') {
-      next = {
-        type: 'open',
-        url:
-          `mailto:${encodeURIComponent(payload.email || '')}` +
-          `?subject=${encodeURIComponent('Richiamami — ' + (payload.context || 'RS'))}` +
-          `&body=${encodeURIComponent('Mi puoi richiamare? Token: ' + token)}`
-      };
+    if (!compatMode) {
+      if (choice === 'reprogram') {
+        next = {
+          type: 'open',
+          url:
+            `mailto:${encodeURIComponent(payload.email || '')}` +
+            `?subject=${encodeURIComponent('Riprogrammazione — ' + (payload.context || 'RS'))}` +
+            `&body=${encodeURIComponent('Ciao, riprogrammiamo. Token: ' + token)}`
+        };
+      } else if (choice === 'callme') {
+        next = {
+          type: 'open',
+          url:
+            `mailto:${encodeURIComponent(payload.email || '')}` +
+            `?subject=${encodeURIComponent('Richiamami — ' + (payload.context || 'RS'))}` +
+            `&body=${encodeURIComponent('Mi puoi richiamare? Token: ' + token)}`
+        };
+      }
+      // voucher: nessun redirect
     }
-    // NOTA: per "voucher" non impostiamo alcun redirect: resta sulla pagina.
 
     // ------- EMAIL NOTIFICA (Resend -> fallback SMTP) -------
-    const to = (process.env.EMAIL_TO || payload.email || '').trim();
+    const to =
+      (process.env.EMAIL_TO || '').trim() ||
+      (payload && payload.email ? String(payload.email).trim() : '');
+
     if (to) {
-      const subject = `[RS] Scelta: ${choice} — ${payload.context || 'RS'}`;
+      const subject = `[RS] Scelta: ${choice} — ${payload?.context || 'RS'}`;
       const html = `
         <p><b>Scelta registrata:</b> ${escapeHtml(choice)}</p>
-        <p><b>Contesto:</b> ${escapeHtml(payload.context || '')}</p>
-        <p><b>Note:</b> ${escapeHtml(payload.note || '')}</p>
+        <p><b>Contesto:</b> ${escapeHtml(payload?.context || '')}</p>
+        <p><b>Note:</b> ${escapeHtml(payload?.note || '')}</p>
         <p><b>Token:</b> <code>${escapeHtml(token)}</code></p>
+        ${compatMode ? '<p><i>Compat mode: token non decodificabile (link vecchio/id).</i></p>' : ''}
         <hr/>
         <p>Scelta effettuata alle: ${new Date().toISOString()}</p>
       `;
@@ -60,7 +67,7 @@ exports.handler = async (event) => {
         try {
           await sendResend({ apiKey: process.env.RESEND_API_KEY, from, to, subject, html });
           sent = true;
-        } catch (e) { /* fallback sotto */ }
+        } catch (_) { /* fallback SMTP sotto */ }
       }
 
       // 2) SMTP fallback
@@ -79,20 +86,23 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ok: true, choice, next_action: next })
+      body: JSON.stringify({ ok: true, choice, next_action: next, compat: compatMode })
     };
   } catch (e) {
     return { statusCode: 500, headers: CORS, body: 'server_error: ' + (e.message || e) };
   }
 };
 
-function decodeToken(tok) {
+// --- utils ------------------------------------------------------------------
+function safeDecodeToken(tok) {
   try {
     const b64 = tok.replace(/-/g, '+').replace(/_/g, '/');
     const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : '';
     const json = Buffer.from(b64 + pad, 'base64').toString('utf8');
-    return JSON.parse(json);
-  } catch { return null; }
+    return JSON.parse(json); // {email?, context?, note?}
+  } catch {
+    return null; // non è un token base64 (vecchio id) -> compatMode
+  }
 }
 
 function escapeHtml(s) {
