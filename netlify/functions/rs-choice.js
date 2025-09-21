@@ -1,7 +1,7 @@
-// Registra la scelta (stateless): decodifica il token base64url e, se vuoi,
-// invia una mail di notifica usando RESEND (opzionale). Nessun Blob.
+// rs-choice.js — registra la scelta e invia mail (Resend -> fallback Nodemailer)
 
 const https = require('https');
+const nodemailer = require('nodemailer');
 
 exports.handler = async (event) => {
   const CORS = {
@@ -19,7 +19,7 @@ exports.handler = async (event) => {
     const payload = decodeToken(token);
     if (!payload) return { statusCode: 400, headers: CORS, body: 'invalid_token' };
 
-    // Azione coerente (mailto/redirect) rimandata al client via next_action
+    // Azione suggerita al client
     let next = null;
     if (choice === 'reprogram') {
       next = {
@@ -39,19 +39,42 @@ exports.handler = async (event) => {
       next = { type: 'redirect', url: '/#catalogo' };
     }
 
-    // (OPZIONALE) notifica via Resend se hai la chiave: RESEND_API_KEY
-    if (process.env.RESEND_API_KEY && (process.env.EMAIL_TO || payload.email)) {
-      const to = process.env.EMAIL_TO || payload.email;
-      await sendResend({
-        apiKey: process.env.RESEND_API_KEY,
-        from: process.env.EMAIL_FROM || 'noreply@colpamia.com',
-        to,
-        subject: `[RS] Scelta: ${choice} — ${payload.context || 'RS'}`,
-        html: `<p>Scelta registrata: <b>${choice}</b></p>
-               <p>Contesto: <b>${escapeHtml(payload.context || '')}</b></p>
-               <p>Note: ${escapeHtml(payload.note || '')}</p>
-               <p>Token: <code>${token}</code></p>`
-      });
+    // ------- EMAIL -------
+    const to = (process.env.EMAIL_TO || payload.email || '').trim();
+    if (to) {
+      const subject = `[RS] Scelta: ${choice} — ${payload.context || 'RS'}`;
+      const html = `
+        <p><b>Scelta registrata:</b> ${escapeHtml(choice)}</p>
+        <p><b>Contesto:</b> ${escapeHtml(payload.context || '')}</p>
+        <p><b>Note:</b> ${escapeHtml(payload.note || '')}</p>
+        <p><b>Token:</b> <code>${escapeHtml(token)}</code></p>
+        <hr/>
+        <p>Scelta effettuata alle: ${new Date().toISOString()}</p>
+      `;
+
+      // 1) Resend (se disponibile)
+      let sent = false;
+      if (process.env.RESEND_API_KEY) {
+        const from = process.env.EMAIL_FROM || 'COLPA MIA <onboarding@resend.dev>';
+        try {
+          await sendResend({ apiKey: process.env.RESEND_API_KEY, from, to, subject, html });
+          sent = true;
+        } catch (e) {
+          // continua con SMTP
+        }
+      }
+
+      // 2) Fallback SMTP con Nodemailer (se configurato)
+      if (!sent && process.env.SMTP_HOST && process.env.SMTP_USER && process.env.SMTP_PASS) {
+        const transporter = nodemailer.createTransport({
+          host: process.env.SMTP_HOST,
+          port: Number(process.env.SMTP_PORT || 587),
+          secure: String(process.env.SMTP_SECURE || 'false') === 'true', // true per 465
+          auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASS }
+        });
+        const from = process.env.EMAIL_FROM || `COLPA MIA <${process.env.SMTP_USER}>`;
+        await transporter.sendMail({ from, to, subject, html });
+      }
     }
 
     return {
@@ -79,7 +102,6 @@ function escapeHtml(s) {
   ));
 }
 
-// Invio email minimale via Resend REST
 function sendResend({ apiKey, from, to, subject, html }) {
   return new Promise((resolve, reject) => {
     const body = JSON.stringify({ from, to, subject, html });
