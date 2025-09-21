@@ -38,15 +38,15 @@
       </div>
 
       <div id="out" class="msg muted"></div>
-      <div class="muted" style="margin-top:8px">Le scelte vengono registrate. Se necessario riceverai una conferma via email.</div>
+      <div class="muted" style="margin-top:8px">La tua scelta viene registrata e si apre l’email per contattare COLPA MIA.</div>
     </div>
   </div>
 
   <script>
-    // ---------------- helpers ----------------
+    // --- helpers ------------------------------------------------------------
     const $ = s => document.querySelector(s);
     const out = $('#out');
-    const ctxEl = $('#ctxVal');
+    const SUPPORT = 'colpamiaconsulenze@proton.me';
 
     function setMsg(text, cls='muted'){
       out.className = 'msg ' + cls;
@@ -54,7 +54,6 @@
     }
 
     function getTokenFromUrl(){
-      // supporta /rs/<id|token> oppure ?token=/t=
       const path = location.pathname.replace(/\/+$/,'');
       const m = path.match(/\/rs\/([^\/]+)$/i);
       if (m && m[1]) return m[1];
@@ -67,23 +66,35 @@
       return q.get('ctx') || q.get('context') || '';
     }
 
-    async function hydrateContext(token, ctxFromUrl){
-      if (ctxFromUrl){
-        ctxEl.textContent = ctxFromUrl.toUpperCase();
-        return;
-      }
-      if (!token) return;
-      try{
-        const r = await fetch('/.netlify/functions/rs-get?id=' + encodeURIComponent(token));
-        if (r.ok){
-          const d = await r.json();
-          ctxEl.textContent = (d.context || '—').toUpperCase();
-        }
-      }catch{/* ignora */}
+    function openCompose(choiceLabel, token, ctx){
+      const subject = `[RS] ${choiceLabel} — ${ctx || 'SENZA CONTESTO'}`;
+      const body = [
+        'Ciao COLPA MIA,',
+        '',
+        `ho selezionato: ${choiceLabel}`,
+        ctx ? `Contesto: ${ctx}` : null,
+        `Token: ${token}`,
+        '',
+        'Dettagli/Note aggiuntive:',
+        ''
+      ].filter(Boolean).join('\n');
+      const url = `mailto:${encodeURIComponent(SUPPORT)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+      // prova nuova scheda (alcuni browser bloccano) -> fallback current
+      const w = window.open(url, '_blank');
+      if (!w) location.href = url;
     }
 
-    async function sendChoice(token, choice){
-      if (!token){ setMsg('Link non valido o mancante (token assente).', 'err'); return; }
+    // --- bootstrap ----------------------------------------------------------
+    const TOKEN = getTokenFromUrl();
+    const CTX   = getContextFromUrl();
+    if (!TOKEN){
+      setMsg('Link non valido o mancante (token assente).', 'err');
+    }
+    $('#ctxVal').textContent = CTX ? CTX.toUpperCase() : '—';
+
+    // --- actions ------------------------------------------------------------
+    async function sendChoice(choice, label){
+      if (!TOKEN) return;
       const btns = ['#b-reprogram','#b-callme','#b-voucher'].map(s=>$(s));
       btns.forEach(b=>b.disabled = true);
       setMsg('Invio in corso…');
@@ -92,22 +103,17 @@
         const r = await fetch('/.netlify/functions/rs-choice', {
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ token, choice })
+          body: JSON.stringify({ token: TOKEN, choice })
         });
-        const bodyText = await r.text();
-        let data = {};
-        try { data = JSON.parse(bodyText); } catch {}
-        if(!r.ok) throw new Error(data?.error || bodyText || ('HTTP '+r.status));
-
-        if (data.next_action && data.next_action.url){
-          if (data.next_action.type === 'open'){
-            window.open(data.next_action.url,'_blank');
-          } else {
-            window.location.href = data.next_action.url;
-          }
-          return;
+        if(!r.ok){
+          const t = await r.text().catch(()=> '');
+          throw new Error(t || ('HTTP '+r.status));
         }
-        setMsg('Scelta registrata: ' + choice, 'ok');
+        await r.json(); // non serve il contenuto, basta l’OK
+
+        setMsg('Scelta registrata: '+ label, 'ok');
+        // Apri compose email verso COLPA MIA con dati precompilati
+        openCompose(label, TOKEN, CTX);
       }catch(e){
         setMsg('Errore: ' + (e.message || 'server_error'), 'err');
       }finally{
@@ -115,21 +121,11 @@
       }
     }
 
-    // ---------------- bootstrap ----------------
-    (async function init(){
-      const TOKEN = getTokenFromUrl();
-      const CTX   = getContextFromUrl();
-
-      if (!TOKEN){
-        setMsg('Link non valido o mancante (token assente).', 'err');
-      }
-      await hydrateContext(TOKEN, CTX);
-
-      $('#b-reprogram').onclick = ()=> sendChoice(TOKEN, 'reprogram');
-      $('#b-callme').onclick    = ()=> sendChoice(TOKEN, 'callme');
-      $('#b-voucher').onclick   = ()=> sendChoice(TOKEN, 'voucher');
-      $('#b-back').onclick      = ()=> location.href = '/#catalogo';
-    })();
+    // --- bind UI ------------------------------------------------------------
+    $('#b-reprogram').onclick = ()=> sendChoice('reprogram', 'Riprogrammiamo');
+    $('#b-callme').onclick    = ()=> sendChoice('callme',    'Richiamami');
+    $('#b-voucher').onclick   = ()=> sendChoice('voucher',   'Voucher');
+    $('#b-back').onclick      = ()=> location.href = '/#catalogo';
   </script>
 </body>
 </html>
