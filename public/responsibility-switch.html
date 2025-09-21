@@ -7,29 +7,36 @@
   <meta name="theme-color" content="#0b0f16"/>
   <style>
     :root{--bg:#0b0f16;--panel:#101724;--line:#1f2b46;--muted:#a9b4c6;--brand:#3b82f6;color-scheme:dark}
-    *{box-sizing:border-box} body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
+    *{box-sizing:border-box}
+    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif}
     .wrap{max-width:900px;margin:0 auto;padding:24px}
     .card{background:#101724;border:1px solid var(--line);border-radius:16px;padding:16px;margin:12px 0}
+    h1{margin:0 0 8px}
     label{font-size:.9rem;color:#cfe0ff}
     input,select,textarea{width:100%;padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
     textarea{min-height:120px;resize:vertical}
     .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
     .btn{display:inline-block;padding:10px 14px;border-radius:12px;border:0;background:var(--brand);color:#061018;text-decoration:none;font-weight:800;cursor:pointer}
-    .muted{color:var(--muted)} .msg{margin-top:8px} .err{color:#ff6b6b}.ok{color:#28d381}
+    .muted{color:var(--muted)}
+    .msg{margin-top:8px}
+    .err{color:#ff6b6b}
+    .ok{color:#28d381}
     .actions{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
     .chk{display:flex;align-items:center;gap:8px;margin-top:8px}
     .chk input{width:auto}
+    .box{background:#0c1322;border:1px dashed #22365a;border-radius:12px;padding:12px;margin-top:10px}
+    code{background:#0b1324;border:1px solid #1e3356;padding:2px 6px;border-radius:8px}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Responsibility Switch — Richiedi il link</h1>
-    <p class="muted">Il sistema genera un link personale, lo salva e te lo invia via email. Condividilo con il destinatario: ogni sua scelta viene tracciata e ti arriva una notifica.</p>
+    <p class="muted">Genera un link personale da condividere al destinatario: le sue scelte (riprogramma, richiamami, voucher) vengono registrate e ti arriva una notifica.</p>
 
     <div class="card">
       <div class="row">
         <div>
-          <label for="rs-email">Email per la conferma</label>
+          <label for="rs-email">Email per conferma</label>
           <input id="rs-email" type="email" placeholder="tu@email.com" autocomplete="email">
         </div>
         <div>
@@ -61,7 +68,7 @@
           </select>
         </div>
         <div>
-          <label for="rs-proof">Prova di consegna</label>
+          <label for="rs-proof">Prova di consegna (email)</label>
           <select id="rs-proof">
             <option value="yes" selected>Sì</option>
             <option value="no">No</option>
@@ -79,13 +86,23 @@
         <a href="/#catalogo" class="btn" style="background:#2d6cdf">Torna al catalogo</a>
         <span id="rs-msg" class="msg muted"></span>
       </div>
+
+      <div id="rs-out" class="box" style="display:none">
+        <div><b>Link generato:</b> <a id="rs-link" href="#" target="_blank" rel="noopener">—</a></div>
+        <div style="margin-top:6px"><small class="muted">Copiato negli appunti. Inoltra questo link al destinatario.</small></div>
+        <div style="margin-top:8px"><code id="rs-id">ID: —</code></div>
+      </div>
     </div>
   </div>
 
   <script>
     const $ = (s)=>document.querySelector(s);
     const msg = $('#rs-msg');
-    function show(m, cls){ msg.textContent = m || ''; msg.className = 'msg ' + (cls||'muted'); }
+    const outBox = $('#rs-out');
+    const outLink = $('#rs-link');
+    const outId = $('#rs-id');
+
+    function show(m, cls='muted'){ msg.textContent = m || ''; msg.className = 'msg ' + (cls||'muted'); }
 
     $('#rs-go').addEventListener('click', async ()=>{
       show('Invio…');
@@ -93,11 +110,11 @@
       const email   = ($('#rs-email').value || '').trim();
       const context = $('#rs-context').value;
       const note    = ($('#rs-note').value || '').trim();
-      const ttl     = $('#rs-ttl').value;
-      const proof   = $('#rs-proof').value;
-      const manleva = $('#rs-consent').checked;   // <<< QUI il flag corretto
+      const ttlSel  = $('#rs-ttl').value;
+      const ttl     = (ttlSel === 'none') ? '' : ttlSel;
+      const proof   = $('#rs-proof').value; // "yes" | "no"
+      const manleva = $('#rs-consent').checked;
 
-      // validazioni minime
       if(!email){ show('Inserisci una email valida.', 'err'); return; }
       if(!manleva){ show('Devi confermare la manleva.', 'err'); return; }
 
@@ -108,19 +125,18 @@
           body: JSON.stringify({ email, context, note, ttl, proof, manleva })
         });
         const data = await r.json().catch(()=>({}));
-        if(!r.ok) throw new Error(data?.error || 'request_failed');
+        if(!r.ok || !data?.ok) throw new Error(data?.error || 'request_failed');
 
-        // Mostra il link generato
-        const link = data.url;
-        show('Link generato: ' + link, 'ok');
+        outLink.href = data.url;
+        outLink.textContent = data.url;
+        outId.textContent = 'ID: ' + (data.id || '—');
+        outBox.style.display = 'block';
 
-        // opzionale: copia in clipboard
-        try { await navigator.clipboard.writeText(link); show('Link copiato negli appunti!', 'ok'); } catch{}
-
-        // opzionale: redirect immediato alla pagina del link
-        // location.href = link;
+        try { await navigator.clipboard.writeText(String(data.url||'')); } catch {}
+        show('Link generato correttamente.', 'ok');
       }catch(e){
         show('Errore: ' + (e.message || 'server_error'), 'err');
+        outBox.style.display = 'none';
       }
     });
   </script>
