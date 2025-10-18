@@ -26,13 +26,12 @@
     .selected{outline:2px solid var(--brand)}
     .note{font-size:.9rem;color:#9fb0c9;margin-top:10px}
     .err{color:#ff6b6b}
-    .ok{color:#28d381}
   </style>
 </head>
 <body>
   <div class="wrap">
     <h1>Checkout COLPA MIA</h1>
-    <p class="muted">Inserisci l’email che userai in cassa. Ti verrà precompilata in Stripe Checkout.</p>
+    <p class="muted">Inserisci l’email che userai in cassa. Verrà precompilata in Stripe Checkout.</p>
 
     <div class="panel">
       <label for="email">Email</label>
@@ -42,10 +41,10 @@
       <p id="msg" class="note"></p>
     </div>
 
-    <!-- Sezione dinamica in base ai parametri dalla home -->
+    <!-- Selezione arrivata dalla home -->
     <div id="chosen" class="panel" style="margin-top:12px;display:none"></div>
 
-    <!-- Catalogo prezzi standard -> mantieni invariato visivamente -->
+    <!-- Listino standard -->
     <div class="grid" id="catalog">
       <div class="card" data-sku="BASE_5">
         <div class="row"><div class="title">Base 5</div><div class="price">€</div></div>
@@ -70,32 +69,15 @@
   </div>
 
   <script>
-  // Mappa alias SKU dalla home -> prodotti di checkout
-  const SKU_ALIAS = {
-    // dalla home nuova
-    SCUSA_BASE: 'BASE_5',
-    SCUSA_DELUXE: 'BASE_15',
-    TRAFFICO: 'BASE_5',
-    RIUNIONE: 'BASE_5',
-    CONNESSIONE: 'BASE_5',
-    // già in checkout
-    BASE_5: 'BASE_5',
-    BASE_15: 'BASE_15',
-    PREMIUM_30: 'PREMIUM_30'
-  };
+  function qs(n){ return new URLSearchParams(location.search).get(n) || ''; }
 
-  function qs(name){ return new URLSearchParams(location.search).get(name) || ''; }
-
-  // Render “scelta dalla home”
+  // Render selezione dalla home
   (function renderChosen(){
-    const inSku   = qs('sku');
-    const sku     = SKU_ALIAS[inSku] || inSku;
-    const title   = qs('title');
-    const context = qs('context');
-
+    const sku = qs('sku');
+    const title = qs('title') || 'Prodotto';
+    const ctx = qs('context') || '';
     if(!sku) return;
 
-    // Evidenzia card corrispondente
     const card = document.querySelector(`.card[data-sku="${sku}"]`);
     if(card) card.classList.add('selected');
 
@@ -105,10 +87,10 @@
       <div class="row" style="align-items:center;gap:8px">
         <div>
           <div class="title">Selezione</div>
-          <div class="sku">Titolo: ${title || '(—)'} • SKU: ${sku}${context ? ' • Contesto: '+context : ''}</div>
+          <div class="sku">Titolo: ${title} • SKU: ${sku}${ctx ? ' • Contesto: '+ctx : ''}</div>
         </div>
         <div class="price" style="margin-left:auto">
-          <button class="btn" id="buy-chosen" data-sku="${sku}" data-title="${title || ''}" data-context="${context || ''}">
+          <button class="btn" id="buy-chosen" data-sku="${sku}" data-title="${title}" data-context="${ctx}">
             Procedi all’acquisto
           </button>
         </div>
@@ -118,8 +100,8 @@
   async function buy(sku, title, context){
     const email = document.getElementById('email').value.trim();
     const msg = document.getElementById('msg');
-    if(!email){ msg.textContent = 'Inserisci l’email.'; msg.className='note err'; return; }
-    msg.textContent = 'Creo la sessione di pagamento…'; msg.className='note';
+    if(!email){ msg.textContent='Inserisci l’email.'; msg.className='note err'; return; }
+    msg.textContent='Creo la sessione di pagamento…'; msg.className='note';
 
     try{
       const r = await fetch('/.netlify/functions/create-checkout-session', {
@@ -136,7 +118,7 @@
     }
   }
 
-  // Hook bottoni
+  // Click handler
   document.addEventListener('click', (ev)=>{
     const t = ev.target;
     if(t && t.id === 'buy-chosen'){
