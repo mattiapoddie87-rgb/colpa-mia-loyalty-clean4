@@ -1,24 +1,32 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Checkout COLPA MIA</title>
+  <meta name="theme-color" content="#0b0f16"/>
   <style>
-    :root { color-scheme: dark; }
-    body { margin:0; font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; background:#0b0d12; color:#e9eef5;}
-    .wrap { max-width:900px; margin:40px auto; padding:0 16px; }
-    .card { background:#0f1623; border:1px solid #1f2636; border-radius:14px; padding:16px; }
-    .grid { display:grid; gap:16px; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-    label { font-size:14px; opacity:.9; }
-    input { width:100%; padding:12px; border-radius:10px; border:1px solid #334; background:#111826; color:#e9eef5; }
-    button { padding:12px 14px; border-radius:10px; border:0; cursor:pointer; background:linear-gradient(135deg,#6c7dff,#8a6dff); color:white; font-weight:600; }
-    .muted{opacity:.8;font-size:13px;margin-top:4px}
-    .row{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
-    .price{font-weight:700;font-size:18px}
-    .sku{opacity:.8;font-size:12px}
-    .msg{margin-top:12px;font-size:14px}
-    .err{color:#ff6b6b}.ok{color:#29d07b}
+    :root{--bg:#0b0f16;--panel:#101724;--muted:#a9b4c6;--line:#1a2540;--brand:#7c83ff}
+    *{box-sizing:border-box} html,body{height:100%}
+    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
+    .wrap{max-width:1100px;margin:20px auto;padding:0 16px}
+    h1{margin:.3rem 0 1rem}
+    .muted{color:var(--muted)}
+    input,button{padding:12px 14px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
+    input{width:100%}
+    .row{display:flex;gap:12px;flex-wrap:wrap}
+    .panel{background:#0f1626;border:1px solid var(--line);border-radius:16px;padding:16px}
+    .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:16px}
+    .card{background:#0f1626;border:1px solid var(--line);border-radius:16px;padding:16px}
+    .title{font-weight:800}
+    .sku{font-size:.9rem;color:#9fb0c9;margin:.25rem 0 .6rem}
+    .price{margin-left:auto}
+    .btn{cursor:pointer;background:var(--brand);border-color:var(--brand);color:#08101e;font-weight:800}
+    .btn:hover{filter:brightness(1.06)}
+    .selected{outline:2px solid var(--brand)}
+    .note{font-size:.9rem;color:#9fb0c9;margin-top:10px}
+    .err{color:#ff6b6b}
+    .ok{color:#28d381}
   </style>
 </head>
 <body>
@@ -26,74 +34,118 @@
     <h1>Checkout COLPA MIA</h1>
     <p class="muted">Inserisci l’email che userai in cassa. Ti verrà precompilata in Stripe Checkout.</p>
 
-    <div class="card" style="margin:16px 0">
+    <div class="panel">
       <label for="email">Email</label>
-      <input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email" />
-      <div id="msg" class="msg"></div>
+      <div class="row" style="margin-top:6px">
+        <input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email" />
+      </div>
+      <p id="msg" class="note"></p>
     </div>
 
-    <div class="grid">
-      <!-- Esempi prodotti: usa i tuoi SKU o i tuoi PRICE ID -->
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <div>
-            <div><b>Base 5</b></div>
-            <div class="sku">SKU: BASE_5</div>
-          </div>
-          <div class="price">€</div>
-        </div>
-        <button data-checkout data-sku="BASE_5">Compra Base 5</button>
+    <!-- Sezione dinamica in base ai parametri dalla home -->
+    <div id="chosen" class="panel" style="margin-top:12px;display:none"></div>
+
+    <!-- Catalogo prezzi standard -> mantieni invariato visivamente -->
+    <div class="grid" id="catalog">
+      <div class="card" data-sku="BASE_5">
+        <div class="row"><div class="title">Base 5</div><div class="price">€</div></div>
+        <div class="sku">SKU: BASE_5</div>
+        <button class="btn buy" data-sku="BASE_5" data-title="Base 5">Compra Base 5</button>
       </div>
 
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <div>
-            <div><b>Base 15</b></div>
-            <div class="sku">SKU: BASE_15</div>
-          </div>
-          <div class="price">€€</div>
-        </div>
-        <button data-checkout data-sku="BASE_15">Compra Base 15</button>
+      <div class="card" data-sku="BASE_15">
+        <div class="row"><div class="title">Base 15</div><div class="price">€€</div></div>
+        <div class="sku">SKU: BASE_15</div>
+        <button class="btn buy" data-sku="BASE_15" data-title="Base 15">Compra Base 15</button>
       </div>
 
-      <div class="card">
-        <div class="row" style="justify-content:space-between">
-          <div>
-            <div><b>Premium 30</b></div>
-            <div class="sku">SKU: PREMIUM_30</div>
-          </div>
-          <div class="price">€€€</div>
-        </div>
-        <button data-checkout data-sku="PREMIUM_30">Compra Premium 30</button>
+      <div class="card" data-sku="PREMIUM_30">
+        <div class="row"><div class="title">Premium 30</div><div class="price">€€€</div></div>
+        <div class="sku">SKU: PREMIUM_30</div>
+        <button class="btn buy" data-sku="PREMIUM_30" data-title="Premium 30">Compra Premium 30</button>
       </div>
-
-      <!-- Se preferisci PRICE ID diretti, usa data-price-id="price_XXXX" al posto di data-sku -->
     </div>
+
+    <p class="note">Continuando, accetti Termini e Privacy.</p>
   </div>
 
   <script>
-    const msgEl = document.querySelector('#msg');
-    function show(m, cls){ msgEl.textContent=m||''; msgEl.className='msg ' + (cls||''); }
+  // Mappa alias SKU dalla home -> prodotti di checkout
+  const SKU_ALIAS = {
+    // dalla home nuova
+    SCUSA_BASE: 'BASE_5',
+    SCUSA_DELUXE: 'BASE_15',
+    TRAFFICO: 'BASE_5',
+    RIUNIONE: 'BASE_5',
+    CONNESSIONE: 'BASE_5',
+    // già in checkout
+    BASE_5: 'BASE_5',
+    BASE_15: 'BASE_15',
+    PREMIUM_30: 'PREMIUM_30'
+  };
 
-    async function startCheckout(key, email, qty=1){
-      const payload = (key.startsWith('price_')) ? { priceId:key, email, qty } : { sku:key, email, qty };
+  function qs(name){ return new URLSearchParams(location.search).get(name) || ''; }
+
+  // Render “scelta dalla home”
+  (function renderChosen(){
+    const inSku   = qs('sku');
+    const sku     = SKU_ALIAS[inSku] || inSku;
+    const title   = qs('title');
+    const context = qs('context');
+
+    if(!sku) return;
+
+    // Evidenzia card corrispondente
+    const card = document.querySelector(`.card[data-sku="${sku}"]`);
+    if(card) card.classList.add('selected');
+
+    const box = document.getElementById('chosen');
+    box.style.display = 'block';
+    box.innerHTML = `
+      <div class="row" style="align-items:center;gap:8px">
+        <div>
+          <div class="title">Selezione</div>
+          <div class="sku">Titolo: ${title || '(—)'} • SKU: ${sku}${context ? ' • Contesto: '+context : ''}</div>
+        </div>
+        <div class="price" style="margin-left:auto">
+          <button class="btn" id="buy-chosen" data-sku="${sku}" data-title="${title || ''}" data-context="${context || ''}">
+            Procedi all’acquisto
+          </button>
+        </div>
+      </div>`;
+  })();
+
+  async function buy(sku, title, context){
+    const email = document.getElementById('email').value.trim();
+    const msg = document.getElementById('msg');
+    if(!email){ msg.textContent = 'Inserisci l’email.'; msg.className='note err'; return; }
+    msg.textContent = 'Creo la sessione di pagamento…'; msg.className='note';
+
+    try{
       const r = await fetch('/.netlify/functions/create-checkout-session', {
-        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({ sku, email, title, context })
       });
-      const out = await r.json().catch(()=>({}));
-      if(!r.ok || !out.url){ show(out.error || `Errore checkout (HTTP ${r.status})`,'err'); return; }
-      location.href = out.url;
+      const data = await r.json();
+      if(!r.ok) throw new Error(data.error || 'Errore');
+      location.href = data.url; // Stripe Checkout
+    }catch(e){
+      msg.textContent = 'Errore: ' + e.message;
+      msg.className='note err';
     }
+  }
 
-    document.addEventListener('click', (e)=>{
-      const btn = e.target.closest('[data-checkout]'); if(!btn) return;
-      e.preventDefault();
-      const email = (document.querySelector('#email')?.value || '').trim();
-      const key = btn.getAttribute('data-price-id') || btn.getAttribute('data-sku') || '';
-      if(!key){ show('Manca priceId/sku','err'); return; }
-      show('');
-      startCheckout(key, email, 1);
-    });
+  // Hook bottoni
+  document.addEventListener('click', (ev)=>{
+    const t = ev.target;
+    if(t && t.id === 'buy-chosen'){
+      buy(t.dataset.sku, t.dataset.title, t.dataset.context);
+    }
+    if(t && t.classList.contains('buy')){
+      buy(t.dataset.sku, t.dataset.title, '');
+    }
+  });
   </script>
 </body>
 </html>
