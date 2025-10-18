@@ -79,7 +79,6 @@
         <span>COLPA MIA</span>
       </a>
 
-      <!-- CTA RS + manleva + Wallet + Termini -->
       <div class="actions row">
         <a class="btn" href="/responsibility-switch.html">Richiedi il tuo Responsibility Switch personale</a>
         <a class="manleva-link" href="/manleva-switch.html" target="_blank" rel="noopener">Leggi manleva</a>
@@ -129,7 +128,6 @@
     <div style="position:absolute;inset:auto -40px -40px auto;opacity:.08;pointer-events:none;font-size:160px;font-weight:900;letter-spacing:2px">CM</div>
   </section>
 
-  <!-- Come funziona -->
   <h2 class="section">Come funziona lo switch</h2>
   <div class="panel">
     <ol style="margin:0 0 0 18px;line-height:1.8">
@@ -139,7 +137,6 @@
     </ol>
   </div>
 
-  <!-- CATALOGO -->
   <h2 id="catalogo" class="section">Catalogo</h2>
   <div class="grid">
     <article class="card">
@@ -200,14 +197,13 @@
     </article>
   </div>
 
-  <!-- Altre sezioni esistenti (wallet, FAQ, footer) possono restare come nel tuo repo -->
-
   <footer>
     <div class="wrap note">© COLPA MIA</div>
   </footer>
 
-  <!-- SCRIPT WIDGET: chiama Netlify Function /.netlify/functions/ai-preview -->
+  <!-- SCRIPT WIDGET + ACQUISTO -->
   <script>
+  // === WIDGET ANTEPRIMA ===
   (function(){
     const btn = document.getElementById('cm-genera');
     if(!btn) return;
@@ -230,6 +226,21 @@
       }
     });
   })();
+
+  // === PULSANTI ACQUISTA ===
+  document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('button.cta').forEach(btn => {
+      btn.setAttribute('type','button');
+      btn.addEventListener('click', () => {
+        const sku   = btn.dataset.sku || '';
+        const title = btn.dataset.title || '';
+        const sel   = btn.dataset.contextSelect || '';
+        const ctx   = sel ? (document.querySelector(sel)?.value || '') : '';
+        const url = `/checkout.html?sku=${encodeURIComponent(sku)}&title=${encodeURIComponent(title)}${ctx ? `&context=${encodeURIComponent(ctx)}` : ''}`;
+        window.location.href = url;
+      });
+    });
+  });
   </script>
 </body>
 </html>
