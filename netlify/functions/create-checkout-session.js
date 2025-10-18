@@ -1,81 +1,66 @@
-// netlify/functions/create-checkout-session.js
-const Stripe = require('stripe');
-const stripe = Stripe(process.env.STRIPE_SECRET_KEY);
+// Serverless: crea una Sessione di Stripe Checkout
+// Requisiti: ENV STRIPE_SECRET_KEY, SITE_URL (opzionale)
 
-// Mappa SKU → priceId (oppure usa prices dinamici come già fai)
-const PRICE_BY_SKU = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Methods': 'POST,OPTIONS'
+};
+const j = (s,b)=>({statusCode:s, headers:{'Content-Type':'application/json',...CORS}, body:JSON.stringify(b)});
+
+const PRICE_BY_SKU = {
+  // TODO: sostituisci con i tuoi price_XXXX di Stripe
+  BASE_5:      'price_xxx_base5',
+  BASE_15:     'price_xxx_base15',
+  PREMIUM_30:  'price_xxx_premium30',
+  // Alias dalla home, se vuoi collegarli direttamente
+  SCUSA_BASE:     'price_xxx_base5',
+  SCUSA_DELUXE:   'price_xxx_base15',
+  TRAFFICO:       'price_xxx_base5',
+  RIUNIONE:       'price_xxx_base5',
+  CONNESSIONE:    'price_xxx_base5'
+};
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'POST') {
-    return { statusCode: 405, body: 'Method Not Allowed' };
-  }
+  if(event.httpMethod==='OPTIONS') return j(204,{});
+  if(event.httpMethod!=='POST')    return j(405,{error:'Method not allowed'});
+  try{
+    const { sku, email, title, context } = JSON.parse(event.body || '{}');
+    if(!sku || !email) return j(400,{error:'sku e email richiesti.'});
 
-  let payload = {};
-  try { payload = JSON.parse(event.body || '{}'); } catch {}
+    const price = PRICE_BY_SKU[sku];
+    if(!price) return j(400,{error:`SKU non valido: ${sku}`});
 
-  const {
-    sku = '',
-    success_url = `${process.env.ENTRY_LINK || ''}/success.html?session_id={CHECKOUT_SESSION_ID}`,
-    cancel_url = `${process.env.ENTRY_LINK || ''}/cancel.html`,
-    need_default = '',          // contesto scelto dalla tendina
-    context_hint = '',          // idem
-    need_mode = ''              // se "locked" non mostrare il campo
-  } = payload;
+    const origin = event.headers.origin || process.env.SITE_URL || 'https://colpamia.com';
+    const success = `${origin}/?ok=1`;
+    const cancel  = `${origin}/checkout.html?canceled=1`;
 
-  if (!sku) return { statusCode: 400, body: 'missing_sku' };
+    // Stripe REST (no SDK) – form-encoded
+    const form = new URLSearchParams();
+    form.append('mode','payment');
+    form.append('success_url', success);
+    form.append('cancel_url', cancel);
+    form.append('customer_email', email);
+    form.append('line_items[0][price]', price);
+    form.append('line_items[0][quantity]','1');
+    // metadata utili
+    if(title)   form.append('metadata[title]', title);
+    if(context) form.append('metadata[context]', context);
+    form.append('metadata[sku]', sku);
 
-  // line items
-  let priceId = PRICE_BY_SKU[sku];
-  // Se non usi priceId fissi, qui puoi costruire items via sku → amount/descrizione
-  const lineItems = priceId ? [{ price: priceId, quantity: 1 }] : [{ quantity: 1, price_data: {
-    currency: 'eur',
-    unit_amount: 100, // fallback
-    product_data: { name: sku }
-  }}];
-
-  // Metadata da portare al webhook / email
-  const ctx = (need_default || context_hint || '').toString().trim();
-  const metadata = { sku, ctx };
-
-  // --- COSTRUZIONE CHECKOUT ---
-  // Se ho già il contesto (o need_mode==='locked'), NON aggiungo custom_fields
-  // → così su Stripe non compare il campo "Contesto".
-  const custom_fields = [];
-
-  // Se vuoi mantenerlo opzionale quando manca del tutto:
-  if (!ctx && need_mode !== 'locked') {
-    custom_fields.push({
-      key: 'need',
-      label: { type: 'custom', custom: 'Contesto' },
-      type: 'text',
-      text: {
-        maximum_length: 120,
-        minimum_length: 4,
-        // IMPORTANTE: NON obbligatorio
-        // Stripe lo considera opzionale se non imponi "required": true (non metterlo)
-      }
+    const resp = await fetch('https://api.stripe.com/v1/checkout/sessions', {
+      method:'POST',
+      headers:{
+        'Authorization': `Bearer ${process.env.STRIPE_SECRET_KEY}`,
+        'Content-Type':'application/x-www-form-urlencoded'
+      },
+      body: form.toString()
     });
-  }
+    const data = await resp.json();
+    if(!resp.ok) return j(resp.status, { error: data.error?.message || 'Stripe error' });
 
-  try {
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      allow_promotion_codes: true,
-      line_items: lineItems,
-      success_url,
-      cancel_url,
-      custom_fields,
-      metadata,
-      // Precompila il campo “Descrizione” (facoltativo)
-      invoice_creation: { enabled: false }
-    });
-
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ id: session.id, url: session.url })
-    };
-  } catch (err) {
-    console.error('stripe_error', err);
-    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
+    return j(200, { url: data.url });
+  }catch(e){
+    return j(500,{error:e.message});
   }
 };
