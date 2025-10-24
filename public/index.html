@@ -1,259 +1,161 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
   <title>COLPA MIA — Marketplace di Scuse</title>
-  <meta name="theme-color" content="#0b0f16"/>
+  <meta name="theme-color" content="#0b0f16">
   <style>
-    :root{
-      --bg:#0b0f16; --panel:#101724; --panel-2:#0f1623; --muted:#a9b4c6;
-      --brand:#37c9ff; --brand-2:#8a6dff; --line:#142033; --ok:#28d381; --err:#ff6b6b;
-      color-scheme:dark;
-    }
-    *{box-sizing:border-box} html,body{height:100%}
-    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
-
-    .fx{position:fixed; inset:0; z-index:-1; pointer-events:none; overflow:hidden;
-      background:
-        repeating-linear-gradient(90deg, transparent 0 98px, rgba(255,255,255,.03) 98px 99px, transparent 99px 100px),
-        repeating-linear-gradient(0deg,  transparent 0 98px, rgba(255,255,255,.02) 98px 99px, transparent 99px 100px);
-      animation:bgShiftX 32s linear infinite, bgShiftY 48s linear infinite; filter:blur(.2px)}
-    @keyframes bgShiftX{to{background-position:1200px 0, 0 0}}
-    @keyframes bgShiftY{to{background-position:0 0, 0 900px}}
-
-    .topbar{position:sticky; top:0; z-index:50; background:#0c1220; border-bottom:1px solid #15213a;}
-    .row{display:flex;align-items:center;gap:12px}
-    .wrap{max-width:1200px;margin:0 auto;padding:10px 16px}
-    .brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:#fff}
-    .brand img{width:40px;height:40px;object-fit:contain}
-    .brand span{font-weight:800;letter-spacing:.5px}
-    .actions{gap:12px;margin-left:auto}
-    .actions a{color:#d7e5ff;text-decoration:none;opacity:.95}
-    .actions .btn{padding:.6rem .9rem;border-radius:12px;border:0;background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;font-weight:800;white-space:nowrap}
-    .manleva-link{font-size:.9rem;color:#a9b4c6;text-decoration:none}
-
-    .navcats{background:#0b1322;border-bottom:1px solid #15213a}
-    .navcats .wrap{display:flex;gap:18px;flex-wrap:wrap}
-    .navcats a{color:#cfe5ff;text-decoration:none;padding:10px 0;font-size:.95rem;opacity:.9}
-    .navcats a:hover{opacity:1}
-
-    .hero{position:relative; margin:18px auto 8px; max-width:1200px; border-radius:16px;
-      background:linear-gradient(135deg,#152036,#0f1b2f 60%,#132b4a); border:1px solid #1f2a44; padding:28px; overflow:hidden;}
-    .hero h1{font-size:clamp(28px,5vw,56px);margin:0 0 .25em}
-    .hero p{max-width:62ch;opacity:.9;margin:0 0 14px}
-    .cta{display:flex;gap:.75rem;margin-top:1rem;flex-wrap:wrap}
-    .btn{padding:.75rem 1rem;border-radius:12px;border:1px solid #222;background:#121a2b;color:#e9eef5;text-decoration:none}
-    .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand-2));color:#061018;border:none;font-weight:800}
-
-    h2.section{max-width:1200px;margin:18px auto 10px;padding:0 16px;font-size:1.2rem;opacity:.95}
-    .grid{display:grid; gap:16px; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); max-width:1200px; margin:0 auto; padding:0 16px 8px;}
-    .card{background:var(--panel); border:1px solid #1f2b46; border-radius:16px; overflow:hidden; display:flex; flex-direction:column; min-height:260px;}
-    .card .media{position:relative;height:160px;background:#0d1423;overflow:hidden}
-    .card .media img{width:100%;height:100%;object-fit:cover;display:block;opacity:.95}
-    .card .body{padding:14px;display:flex;flex-direction:column;gap:10px}
-    .title{font-weight:800}
-    .muted{color:var(--muted);font-size:.9rem}
-    select, button, input[type="text"], input[type="email"]{padding:10px 12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;width:100%;}
-    button.cta{cursor:pointer;background:#3b82f6;border-color:#3b82f6}
-    button.cta:hover{filter:brightness(1.05)}
-    .badge{display:inline-block;padding:.25rem .5rem;border-radius:999px;background:#13243d;color:#a9d8ff;font-size:.75rem;border:1px solid #1e3861}
-
-    .panel{max-width:1200px;margin:18px auto;padding:16px;border:1px solid #1f2b46;border-radius:16px;background:var(--panel);}
-    .rowflex{display:flex;gap:10px;flex-wrap:wrap}
-    .rowflex>*{flex:1 1 240px}
-    .msg{margin-top:8px;font-size:.95rem}
-    .ok{color:var(--ok)} .err{color:var(--err)}
-
-    footer{margin:24px 0 40px;color:#9fb0c9;text-align:center;font-size:.9rem}
-    .note{color:#9fb0c9;font-size:.9rem}
+  :root{--bg:#0b0f16;--panel:#101724;--muted:#a9b4c6;--line:#142033;--brand:#37c9ff;--brand2:#8a6dff;color-scheme:dark}
+  *{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
+  .topbar{position:sticky;top:0;z-index:10;background:#0c1220;border-bottom:1px solid #15213a}
+  .wrap{max-width:1200px;margin:0 auto;padding:10px 16px}
+  .row{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .actions{margin-left:auto;gap:12px}
+  .btn{padding:.7rem 1rem;border-radius:12px;border:1px solid #222;background:#121a2b;color:#e9eef5;text-decoration:none}
+  .btn.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));border:none;color:#061018;font-weight:800}
+  .navcats{background:#0b1322;border-bottom:1px solid #15213a}.navcats a{color:#cfe5ff;text-decoration:none;margin-right:18px;padding:10px 0}
+  .hero{max-width:1200px;margin:18px auto 8px;padding:28px;border:1px solid #1f2a44;border-radius:16px;overflow:hidden;background:linear-gradient(135deg,#152036,#0f1b2f 60%,#132b4a)}
+  .hero h1{margin:0 0 .25em;font-size:clamp(28px,5vw,56px)}
+  .grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));max-width:1200px;margin:0 auto;padding:0 16px 24px}
+  .card{background:#101724;border:1px solid #1f2b46;border-radius:16px;overflow:hidden;display:flex;flex-direction:column}
+  .card .media{height:160px;background:#0d1423}.card .media img{width:100%;height:100%;object-fit:cover}
+  .card .body{padding:14px;display:flex;flex-direction:column;gap:10px}
+  .badge{display:inline-block;padding:.25rem .5rem;border-radius:999px;background:#13243d;color:#a9d8ff;font-size:.75rem;border:1px solid #1e3861}
+  .muted{color:var(--muted);font-size:.9rem}
+  footer{margin:24px 0 40px;color:#9fb0c9;text-align:center;font-size:.9rem}
   </style>
 </head>
 <body>
-  <div class="fx" aria-hidden="true"></div>
-
-  <header class="topbar">
-    <div class="wrap row">
-      <a class="brand" href="/">
-        <img src="/assets/colpamia-logo.png" alt="COLPA MIA"/>
-        <span>COLPA MIA</span>
-      </a>
-
-      <div class="actions row">
-        <a class="btn" href="/responsibility-switch.html">Richiedi il tuo Responsibility Switch personale</a>
-        <a class="manleva-link" href="/manleva-switch.html" target="_blank" rel="noopener">Leggi manleva</a>
-        <a class="manleva-link" href="/wallet.html">Wallet</a>
-        <a class="manleva-link" href="/termini.html">Termini</a>
-      </div>
+<header class="topbar">
+  <div class="wrap row">
+    <a href="/" class="row" style="text-decoration:none;color:#fff"><img src="/assets/colpamia-logo.png" alt="CM" width="40" height="40"><b>COLPA MIA</b></a>
+    <div class="actions row">
+      <a class="btn" href="/responsibility-switch.html">Responsibility Switch</a>
+      <a class="btn" href="/wallet.html">Wallet</a>
+      <a class="btn" href="/termini.html">Termini</a>
     </div>
+  </div>
+  <nav class="navcats"><div class="wrap"><a href="#catalogo">Catalogo</a><a href="#faq">FAQ</a></div></nav>
+</header>
 
-    <nav class="navcats">
-      <div class="wrap">
-        <a href="#catalogo">Catalogo</a>
-        <a href="#prendo-io-la-colpa">Prendo io la colpa</a>
-        <a href="#wallet">Premium &amp; Minuti</a>
-        <a href="#faq">FAQ</a>
-      </div>
-    </nav>
-  </header>
-
-  <section class="hero">
-    <h1>Dal punto al punto a capo.</h1>
-    <p>Con COLPA MIA la scusa non chiude. Apre un dialogo, ricostruisce fiducia e trasforma l’errore in continuità.</p>
-    <div class="cta">
-      <a href="#catalogo" class="btn primary">Acquista una scusa</a>
-      <a href="/responsibility-switch.html" class="btn">Richiedi il tuo Responsibility Switch</a>
-    </div>
-
-    <!-- WIDGET AI ON-DEMAND -->
-    <div id="cm-widget" style="max-width:640px;margin:20px 0 0">
-      <label style="display:block;margin:8px 0 4px">Descrivi la situazione</label>
-      <textarea id="cm-input" rows="4" style="width:100%"></textarea>
-      <div style="display:flex;gap:8px;margin-top:8px">
-        <select id="cm-tone">
-          <option value="empatica">Empatica</option>
-          <option value="ironica">Ironica controllata</option>
-          <option value="formale">Formale</option>
-          <option value="diretta">Diretta</option>
-        </select>
-        <button id="cm-genera">Anteprima gratuita</button>
-      </div>
-      <div id="cm-output" style="margin-top:12px;display:none">
-        <div id="cm-text" style="white-space:pre-wrap"></div>
-        <!-- Generazione scusa a pagamento: 1€ -->
-        <a id="cm-buy" href="/checkout.html?sku=SCUSA_BASE&amp;title=Scusa%20Base" class="btn" style="display:inline-block;margin-top:8px">
-          Acquista la scusa • 1,00&nbsp;€
-        </a>
-      </div>
-    </div>
-    <!-- /WIDGET -->
-
-    <div style="position:absolute;inset:auto -40px -40px auto;opacity:.08;pointer-events:none;font-size:160px;font-weight:900;letter-spacing:2px">CM</div>
-  </section>
-
-  <h2 class="section">Come funziona lo switch</h2>
-  <div class="panel">
-    <ol style="margin:0 0 0 18px;line-height:1.8">
-      <li>Tu generi la scusa o deleghi COLPA MIA.</li>
-      <li>Il destinatario riceve una pagina ufficiale con scusa e opzioni di rimedio.</li>
-      <li>La scelta riapre il dialogo: non più un punto fermo, sempre un punto a capo.</li>
-    </ol>
+<section class="hero">
+  <h1>Dal punto al punto a capo.</h1>
+  <p>Con COLPA MIA la scusa non chiude. Apre un dialogo e ricostruisce fiducia.</p>
+  <div class="row" style="margin:14px 0 0">
+    <a href="#catalogo" class="btn primary">Vai al catalogo</a>
   </div>
 
-  <h2 id="catalogo" class="section">Catalogo</h2>
-  <div class="grid">
-    <!-- Scusa Base -->
-    <article class="card">
-      <div class="media"><img src="/assets/scusa-base.webp" alt="Scusa Base"></div>
-      <div class="body">
-        <div class="title">Scusa Base <span class="badge">1 variante</span></div>
-        <div class="muted">Una scusa scritta per riaprire il dialogo.</div>
-        <div style="font-weight:600;margin-top:4px;">1,00&nbsp;€</div>
-        <label class="muted">Contesto</label>
-        <select id="ctx-base">
-          <option>CENA</option><option>APERITIVO</option><option>EVENTO</option><option>LAVORO</option>
-          <option>PARTITA A CALCETTO</option><option>FAMIGLIA</option><option>SALUTE</option>
-          <option>APPUNTAMENTO/CONSEGNA</option><option>ESAME/LEZIONE</option>
-        </select>
-        <button class="cta" data-sku="SCUSA_BASE" data-title="Scusa Base" data-context-select="#ctx-base">Acquista</button>
-      </div>
-    </article>
-
-    <!-- Scusa Deluxe -->
-    <article class="card">
-      <div class="media"><img src="/assets/scusa-deluxe.webp" alt="Scusa Deluxe"></div>
-      <div class="body">
-        <div class="title">Scusa Deluxe <span class="badge">3 varianti</span></div>
-        <div class="muted">Tre varianti, tre possibilità di ricominciare.</div>
-        <div style="font-weight:600;margin-top:4px;">4,50&nbsp;€</div>
-        <label class="muted">Contesto</label>
-        <select id="ctx-deluxe">
-          <option>CENA</option><option>APERITIVO</option><option>EVENTO</option><option>LAVORO</option>
-          <option>PARTITA A CALCETTO</option><option>FAMIGLIA</option><option>SALUTE</option>
-          <option>APPUNTAMENTO/CONSEGNA</option><option>ESAME/LEZIONE</option>
-        </select>
-        <button class="cta" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe" data-context-select="#ctx-deluxe">Acquista</button>
-      </div>
-    </article>
-
-    <!-- Traffico -->
-    <article class="card">
-      <div class="media"><img src="/assets/scenario-traffico.webp" alt="Traffico"></div>
-      <div class="body">
-        <div class="title">Traffico <span class="badge">Scenario fisso</span></div>
-        <div class="muted">Scusa pronta all’uso: traffico/incidente/coda.</div>
-        <div style="font-weight:600;margin-top:4px;">2,00&nbsp;€</div>
-        <button class="cta" data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
-      </div>
-    </article>
-
-    <!-- Riunione -->
-    <article class="card">
-      <div class="media"><img src="/assets/scenario-riunione.webp" alt="Riunione Improvvisa"></div>
-      <div class="body">
-        <div class="title">Riunione Improvvisa <span class="badge">Scenario fisso</span></div>
-        <div class="muted">Riunione/call che sfora. Pronta subito.</div>
-        <div style="font-weight:600;margin-top:4px;">2,00&nbsp;€</div>
-        <button class="cta" data-sku="RIUNIONE" data-title="Riunione Improvvisa">Acquista</button>
-      </div>
-    </article>
-
-    <!-- Connessione -->
-    <article class="card">
-      <div class="media"><img src="/assets/scenario-connessione.webp" alt="Connessione KO"></div>
-      <div class="body">
-        <div class="title">Connessione KO <span class="badge">Scenario fisso</span></div>
-        <div class="muted">Linea/VPN/Internet non disponibile.</div>
-        <div style="font-weight:600;margin-top:4px;">2,00&nbsp;€</div>
-        <button class="cta" data-sku="CONNESSIONE" data-title="Connessione KO">Acquista</button>
-      </div>
-    </article>
+  <!-- Widget: preview gratuito, scusa a pagamento -->
+  <div id="cm-widget" style="max-width:640px;margin:20px 0 0">
+    <label style="display:block;margin:8px 0 4px">Descrivi la situazione</label>
+    <textarea id="cm-input" rows="4" style="width:100%"></textarea>
+    <div class="row" style="margin-top:8px">
+      <select id="cm-tone">
+        <option value="empatica">Empatica</option>
+        <option value="ironica">Ironica controllata</option>
+        <option value="formale">Formale</option>
+        <option value="diretta">Diretta</option>
+      </select>
+      <button id="cm-preview" class="btn">Anteprima gratuita</button>
+    </div>
+    <div id="cm-output" style="margin-top:12px;display:none">
+      <div id="cm-text" style="white-space:pre-wrap;margin-bottom:8px"></div>
+      <a id="cm-buy" class="btn primary">Acquista scusa (1,00 €)</a>
+    </div>
   </div>
+</section>
 
-  <footer>
-    <div class="wrap note">© COLPA MIA</div>
-  </footer>
+<h2 id="catalogo" class="wrap" style="margin:18px auto 10px">Catalogo</h2>
+<div class="grid">
+  <article class="card">
+    <div class="media"><img src="/assets/scusa-base.webp" alt=""></div>
+    <div class="body">
+      <div><b>Scusa Base</b> <span class="badge">1 variante</span></div>
+      <div class="muted">Una scusa per riaprire il dialogo.</div>
+      <div style="font-weight:700">1,00 €</div>
+      <label class="muted">Contesto</label>
+      <select id="ctx-base"><option>CENA</option><option>APERITIVO</option><option>EVENTO</option><option>LAVORO</option></select>
+      <button class="btn cta" data-sku="SCUSA_BASE" data-title="Scusa Base" data-context-select="#ctx-base">Acquista</button>
+    </div>
+  </article>
 
-  <!-- SCRIPT WIDGET + ACQUISTO -->
-  <script>
-  // === WIDGET ANTEPRIMA ===
-  (function(){
-    const btn = document.getElementById('cm-genera');
-    if(!btn) return;
-    btn.addEventListener('click', async function(){
-      const input = document.getElementById('cm-input').value.trim();
-      const tone  = document.getElementById('cm-tone').value;
-      if(!input){ alert('Descrivi la situazione.'); return; }
-      try{
-        const r = await fetch('/.netlify/functions/ai-preview', {
-          method:'POST',
-          headers:{'Content-Type':'application/json'},
-          body: JSON.stringify({ message: input, tone })
-        });
-        const data = await r.json();
-        document.getElementById('cm-text').textContent = data.preview || 'Nessuna anteprima.';
-        document.getElementById('cm-output').style.display = 'block';
-      }catch(e){
-        document.getElementById('cm-text').textContent = 'Errore di generazione.';
-        document.getElementById('cm-output').style.display = 'block';
-      }
+  <article class="card">
+    <div class="media"><img src="/assets/scusa-deluxe.webp" alt=""></div>
+    <div class="body">
+      <div><b>Scusa Deluxe</b> <span class="badge">3 varianti</span></div>
+      <div class="muted">Tre possibilità di ricominciare.</div>
+      <div style="font-weight:700">4,50 €</div>
+      <label class="muted">Contesto</label>
+      <select id="ctx-deluxe"><option>CENA</option><option>EVENTO</option><option>LAVORO</option></select>
+      <button class="btn cta" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe" data-context-select="#ctx-deluxe">Acquista</button>
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="media"><img src="/assets/scenario-traffico.webp" alt=""></div>
+    <div class="body">
+      <b>Traffico</b><div class="muted">Scenario fisso</div>
+      <div style="font-weight:700">2,00 €</div>
+      <button class="btn cta" data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="media"><img src="/assets/scenario-riunione.webp" alt=""></div>
+    <div class="body">
+      <b>Riunione Improvvisa</b><div class="muted">Scenario fisso</div>
+      <div style="font-weight:700">2,00 €</div>
+      <button class="btn cta" data-sku="RIUNIONE" data-title="Riunione improvvisa">Acquista</button>
+    </div>
+  </article>
+
+  <article class="card">
+    <div class="media"><img src="/assets/scenario-connessione.webp" alt=""></div>
+    <div class="body">
+      <b>Connessione KO</b><div class="muted">Scenario fisso</div>
+      <div style="font-weight:700">2,00 €</div>
+      <button class="btn cta" data-sku="CONNESSIONE" data-title="Connessione KO">Acquista</button>
+    </div>
+  </article>
+</div>
+
+<footer><div class="wrap" style="color:#9fb0c9">© COLPA MIA</div></footer>
+
+<script>
+// Anteprima gratuita -> anteprima e link al pagamento
+document.getElementById('cm-preview').addEventListener('click', async () => {
+  const message = document.getElementById('cm-input').value.trim();
+  const tone = document.getElementById('cm-tone').value;
+  if(!message){ alert('Descrivi la situazione.'); return; }
+  try{
+    const r = await fetch('/.netlify/functions/ai-preview', {
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({ message, tone })
     });
-  })();
+    const data = await r.json();
+    document.getElementById('cm-text').textContent = data.preview || 'Anteprima non disponibile.';
+    document.getElementById('cm-output').style.display='block';
+    // Genera link al checkout con messaggio e tono codificati
+    const a = document.getElementById('cm-buy');
+    a.href = `/checkout.html?sku=SCUSA_BASE&title=Scusa%20Base&message=${encodeURIComponent(message)}&tone=${encodeURIComponent(tone)}`;
+  }catch(e){
+    document.getElementById('cm-text').textContent = 'Errore di generazione.';
+    document.getElementById('cm-output').style.display='block';
+  }
+});
 
-  // === PULSANTI ACQUISTA ===
-  document.addEventListener('DOMContentLoaded', () => {
-    document.querySelectorAll('button.cta').forEach(btn => {
-      btn.setAttribute('type','button');
-      btn.addEventListener('click', () => {
-        const sku   = btn.dataset.sku || '';
-        const title = btn.dataset.title || '';
-        const sel   = btn.dataset.contextSelect || '';
-        const ctx   = sel ? (document.querySelector(sel)?.value || '') : '';
-        const url = `/checkout.html?sku=${encodeURIComponent(sku)}&title=${encodeURIComponent(title)}${ctx ? `&context=${encodeURIComponent(ctx)}` : ''}`;
-        window.location.href = url;
-      });
-    });
+// Pulsanti Acquista per le scuse: diretto al checkout
+document.querySelectorAll('button.cta').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const sku = btn.dataset.sku || '';
+    const title = btn.dataset.title || '';
+    const sel = btn.dataset.contextSelect || '';
+    const ctx = sel ? (document.querySelector(sel)?.value || '') : '';
+    const url = `/checkout.html?sku=${encodeURIComponent(sku)}&title=${encodeURIComponent(title)}${ctx ? `&context=${encodeURIComponent(ctx)}` : ''}`;
+    location.href = url;
   });
-  </script>
+});
+</script>
 </body>
 </html>
