@@ -1,9 +1,9 @@
 // post-checkout.js
 // Recupera la Checkout Session Stripe, legge metadata e genera la scusa finale.
 // Regole:
-// - CONNESSIONE / TRAFFICO / RIUNIONE => usa TEMPLATES preimpostati (no AI)
-// - SCUSA_BASE / SCUSA_DELUXE => usa AI (come prima)
-// Env richieste: STRIPE_SECRET_KEY, OPENAI_API_KEY
+// - CONNESSIONE / TRAFFICO / RIUNIONE => TEMPLATES preimpostati (no AI)
+// - SCUSA_BASE / SCUSA_DELUXE       => AI con campionamento + dedup per varietà
+// Env: STRIPE_SECRET_KEY, OPENAI_API_KEY
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -13,7 +13,6 @@ const CORS = {
 const j = (s,b)=>({statusCode:s,headers:{'Content-Type':'application/json',...CORS},body:JSON.stringify(b)});
 
 // === TEMPLATES PREIMPOSTATI PER SCENARI ===
-// Placeholders: {message} testo utente, {context} contesto, {rimedio} suggerimento pratico.
 const TEMPLATES = {
   CONNESSIONE: [
     "Ti scrivo ora perché la connessione mi è appena crollata e non riuscivo a rientrare. È responsabilità mia non avere un piano B.\nSe sei d’accordo, {rimedio}. Grazie per la pazienza.",
@@ -32,7 +31,6 @@ const TEMPLATES = {
   ]
 };
 
-// Rimedio di default se l’utente non ha scritto nulla di utile
 function defaultRimedio(sku){
   if (sku === 'CONNESSIONE') return "inviarti subito un riepilogo scritto e fissare un nuovo slot di 15 minuti";
   if (sku === 'TRAFFICO')    return "spostare l’appuntamento su tua scelta e presentarmi con 10’ di anticipo";
@@ -40,15 +38,25 @@ function defaultRimedio(sku){
   return "recuperare con un breve riepilogo e un nuovo slot dedicato";
 }
 
-// Semplifica/igienizza testo utente
 function clean(s){ return (s||"").toString().trim().replace(/\s+/g,' '); }
-
-// Sceglie template deterministico (in base a session id) così non cambia ad ogni refresh
 function pickTemplate(arr, seedStr){
   if (!arr || !arr.length) return "";
-  let h = 0;
-  for (let i=0;i<seedStr.length;i++) h = (h*31 + seedStr.charCodeAt(i)) >>> 0;
+  let h = 0; for (let i=0;i<seedStr.length;i++) h = (h*31 + seedStr.charCodeAt(i)) >>> 0;
   return arr[h % arr.length];
+}
+
+// === Scoring semplice per varietà dei testi AI ===
+function diversityScore(text, userMsg){
+  const t = text.toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,'');
+  const u = (userMsg||'').toLowerCase().replace(/[^\p{L}\p{N}\s]/gu,'');
+  const tWords = t.split(/\s+/).filter(Boolean);
+  const uSet = new Set(u.split(/\s+/).filter(Boolean));
+  const uniq = new Set(tWords);
+  const overlap = tWords.filter(w=>uSet.has(w)).length;
+  const ratioUniq = uniq.size / Math.max(1,tWords.length);           // più alto = più vario
+  const antiEcho  = 1 - (overlap / Math.max(1,tWords.length));       // penalizza eco del messaggio utente
+  const lenBonus  = Math.min(tWords.length,140) / 140;               // favorisce testi completi ma non lunghissimi
+  return ratioUniq*0.5 + antiEcho*0.35 + lenBonus*0.15;
 }
 
 exports.handler = async (event) => {
@@ -59,7 +67,7 @@ exports.handler = async (event) => {
   if (!sessionId) return j(400,{error:'session_id mancante'});
 
   try{
-    // 1) Recupera sessione Stripe
+    // 1) Stripe session
     const resp = await fetch('https://api.stripe.com/v1/checkout/sessions/'+encodeURIComponent(sessionId), {
       headers: { 'Authorization': 'Bearer ' + process.env.STRIPE_SECRET_KEY }
     });
@@ -72,19 +80,15 @@ exports.handler = async (event) => {
     const message = clean(meta.message);
     const context = clean(meta.context);
 
-    // 2) SCENARI a template fisso
+    // 2) Template fissi per scenari
     if (sku === 'CONNESSIONE' || sku === 'TRAFFICO' || sku === 'RIUNIONE') {
       const corpus = TEMPLATES[sku] || [];
       let base = pickTemplate(corpus, sessionId);
       const rimedio = defaultRimedio(sku);
-
-      // Inserisci placeholder
       base = base
         .replace(/\{message\}/g, message || '')
         .replace(/\{context\}/g, context || '')
         .replace(/\{rimedio\}/g, rimedio);
-
-      // Micro-tuning di tono senza AI
       if (tone.includes('formale')) {
         base = base
           .replace(/\b(colpa mia|errore mio)\b/gi, 'è una mia responsabilità')
@@ -97,22 +101,27 @@ exports.handler = async (event) => {
       return j(200, {excuse: base, metadata: {sku, tone, context}});
     }
 
-    // 3) SCUSE AI (BASE/DELUXE): come prima, ma con prompt chiaro
+    // 3) AI per SCUSA_BASE / SCUSA_DELUXE con varietà garantita
     if (sku === 'SCUSA_BASE' || sku === 'SCUSA_DELUXE') {
       const prompt =
-        `Genera una scusa breve, concreta e rispettosa.
+`Genera una scusa breve, concreta e rispettosa.
 Tono: ${tone}. Contesto: ${context||'generico'}.
 Situazione: ${message||'(non fornita)'}.
 Includi: ammissione responsabilità, spiegazione sintetica, rimedio pratico, chiusura positiva.
-Massimo 90-120 parole. Niente lista puntata.`;
+Varia sempre lessico e struttura d’apertura, evita formule ricorrenti.
+Niente elenco puntato. Limite 90–120 parole.`;
 
       const r = await fetch('https://api.openai.com/v1/chat/completions', {
         method:'POST',
         headers:{'Authorization':'Bearer '+process.env.OPENAI_API_KEY,'Content-Type':'application/json'},
         body: JSON.stringify({
           model: 'gpt-4o-mini',
-          temperature: 0.5,
-          max_tokens: 220,
+          temperature: 0.85,        // più varietà
+          top_p: 0.9,
+          frequency_penalty: 0.6,   // riduce ripetizioni nel testo
+          presence_penalty: 0.4,    // incoraggia contenuti nuovi
+          n: 3,                     // 3 candidati
+          max_tokens: 240,
           messages: [
             { role:'system', content:'Assistente COLPA MIA per scuse efficaci e rispettose.' },
             { role:'user',   content: prompt }
@@ -121,11 +130,23 @@ Massimo 90-120 parole. Niente lista puntata.`;
       });
       const d = await r.json();
       if(!r.ok) return j(r.status,{error:d.error?.message || 'OpenAI error'});
-      const excuse = d.choices?.[0]?.message?.content?.trim() || '';
-      return j(200, {excuse, metadata:{sku, tone, context}});
+
+      const candidates = (d.choices||[])
+        .map(c => (c?.message?.content||'').trim())
+        .filter(Boolean);
+
+      // Seleziona il candidato più "diverso" rispetto al messaggio utente
+      let best = candidates[0] || '';
+      let bestScore = -1;
+      for (const c of candidates) {
+        const s = diversityScore(c, message);
+        if (s > bestScore) { bestScore = s; best = c; }
+      }
+
+      return j(200, {excuse: best, metadata:{sku, tone, context}});
     }
 
-    // 4) Default: conferma pagamento
+    // 4) Default
     return j(200, {message:'Pagamento registrato', metadata:{sku, tone, context}});
   }catch(e){
     return j(500,{error:e.message});
