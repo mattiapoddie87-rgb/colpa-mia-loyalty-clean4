@@ -91,7 +91,7 @@
       <div class="wrap">
         <a href="#catalogo">Catalogo</a>
         <a href="#prendo-io-la-colpa">Prendo io la colpa</a>
-        <a href="#wallet">Premium & Minuti</a>
+        <a href="#wallet">Premium &amp; Minuti</a>
         <a href="#faq">FAQ</a>
       </div>
     </nav>
@@ -120,7 +120,10 @@
       </div>
       <div id="cm-output" style="margin-top:12px;display:none">
         <div id="cm-text" style="white-space:pre-wrap"></div>
-        <a id="cm-buy" href="#catalogo" class="btn" style="display:inline-block;margin-top:8px">Procedi all’acquisto</a>
+        <!-- Generazione scusa a pagamento: 1€ -->
+        <a id="cm-buy" href="/checkout.html?sku=SCUSA_BASE&amp;title=Scusa%20Base" class="btn" style="display:inline-block;margin-top:8px">
+          Acquista la scusa • 1,00&nbsp;€
+        </a>
       </div>
     </div>
     <!-- /WIDGET -->
@@ -139,11 +142,13 @@
 
   <h2 id="catalogo" class="section">Catalogo</h2>
   <div class="grid">
+    <!-- Scusa Base -->
     <article class="card">
       <div class="media"><img src="/assets/scusa-base.webp" alt="Scusa Base"></div>
       <div class="body">
         <div class="title">Scusa Base <span class="badge">1 variante</span></div>
         <div class="muted">Una scusa scritta per riaprire il dialogo.</div>
+        <div style="font-weight:600;margin-top:4px;">1,00&nbsp;€</div>
         <label class="muted">Contesto</label>
         <select id="ctx-base">
           <option>CENA</option><option>APERITIVO</option><option>EVENTO</option><option>LAVORO</option>
@@ -154,11 +159,13 @@
       </div>
     </article>
 
+    <!-- Scusa Deluxe -->
     <article class="card">
       <div class="media"><img src="/assets/scusa-deluxe.webp" alt="Scusa Deluxe"></div>
       <div class="body">
         <div class="title">Scusa Deluxe <span class="badge">3 varianti</span></div>
         <div class="muted">Tre varianti, tre possibilità di ricominciare.</div>
+        <div style="font-weight:600;margin-top:4px;">4,50&nbsp;€</div>
         <label class="muted">Contesto</label>
         <select id="ctx-deluxe">
           <option>CENA</option><option>APERITIVO</option><option>EVENTO</option><option>LAVORO</option>
@@ -169,29 +176,35 @@
       </div>
     </article>
 
+    <!-- Traffico -->
     <article class="card">
       <div class="media"><img src="/assets/scenario-traffico.webp" alt="Traffico"></div>
       <div class="body">
         <div class="title">Traffico <span class="badge">Scenario fisso</span></div>
         <div class="muted">Scusa pronta all’uso: traffico/incidente/coda.</div>
+        <div style="font-weight:600;margin-top:4px;">2,00&nbsp;€</div>
         <button class="cta" data-sku="TRAFFICO" data-title="Traffico">Acquista</button>
       </div>
     </article>
 
+    <!-- Riunione -->
     <article class="card">
       <div class="media"><img src="/assets/scenario-riunione.webp" alt="Riunione Improvvisa"></div>
       <div class="body">
         <div class="title">Riunione Improvvisa <span class="badge">Scenario fisso</span></div>
         <div class="muted">Riunione/call che sfora. Pronta subito.</div>
+        <div style="font-weight:600;margin-top:4px;">2,00&nbsp;€</div>
         <button class="cta" data-sku="RIUNIONE" data-title="Riunione Improvvisa">Acquista</button>
       </div>
     </article>
 
+    <!-- Connessione -->
     <article class="card">
       <div class="media"><img src="/assets/scenario-connessione.webp" alt="Connessione KO"></div>
       <div class="body">
         <div class="title">Connessione KO <span class="badge">Scenario fisso</span></div>
         <div class="muted">Linea/VPN/Internet non disponibile.</div>
+        <div style="font-weight:600;margin-top:4px;">2,00&nbsp;€</div>
         <button class="cta" data-sku="CONNESSIONE" data-title="Connessione KO">Acquista</button>
       </div>
     </article>
