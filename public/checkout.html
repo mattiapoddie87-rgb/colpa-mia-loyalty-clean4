@@ -20,7 +20,7 @@
     .card{background:#0f1626;border:1px solid var(--line);border-radius:16px;padding:16px}
     .title{font-weight:800}
     .sku{font-size:.9rem;color:#9fb0c9;margin:.25rem 0 .6rem}
-    .price{margin-left:auto}
+    .price{font-size:1rem;font-weight:700;margin-bottom:.5rem}
     .btn{cursor:pointer;background:var(--brand);border-color:var(--brand);color:#08101e;font-weight:800}
     .btn:hover{filter:brightness(1.06)}
     .selected{outline:2px solid var(--brand)}
@@ -33,6 +33,7 @@
     <h1>Checkout COLPA MIA</h1>
     <p class="muted">Inserisci l’email che userai in cassa. Verrà precompilata in Stripe Checkout.</p>
 
+    <!-- Email -->
     <div class="panel">
       <label for="email">Email</label>
       <div class="row" style="margin-top:6px">
@@ -41,27 +42,68 @@
       <p id="msg" class="note"></p>
     </div>
 
-    <!-- Selezione arrivata dalla home -->
+    <!-- Scelta proveniente dalla home -->
     <div id="chosen" class="panel" style="margin-top:12px;display:none"></div>
 
-    <!-- Listino standard -->
-    <div class="grid" id="catalog">
-      <div class="card" data-sku="BASE_5">
-        <div class="row"><div class="title">Base 5</div><div class="price">€</div></div>
-        <div class="sku">SKU: BASE_5</div>
-        <button class="btn buy" data-sku="BASE_5" data-title="Base 5">Compra Base 5</button>
+    <!-- Prodotti principali (Minuti) -->
+    <div class="grid">
+      <div class="card" data-sku="COLPA_LIGHT">
+        <div class="title">COLPA LIGHT</div>
+        <div class="price">9,90&nbsp;€</div>
+        <div class="sku">SKU: COLPA_LIGHT</div>
+        <button class="btn buy" data-sku="COLPA_LIGHT" data-title="COLPA LIGHT">Compra COLPA LIGHT</button>
       </div>
 
-      <div class="card" data-sku="BASE_15">
-        <div class="row"><div class="title">Base 15</div><div class="price">€€</div></div>
-        <div class="sku">SKU: BASE_15</div>
-        <button class="btn buy" data-sku="BASE_15" data-title="Base 15">Compra Base 15</button>
+      <div class="card" data-sku="COLPA_FULL">
+        <div class="title">COLPA FULL</div>
+        <div class="price">19,90&nbsp;€</div>
+        <div class="sku">SKU: COLPA_FULL</div>
+        <button class="btn buy" data-sku="COLPA_FULL" data-title="COLPA FULL">Compra COLPA FULL</button>
       </div>
 
-      <div class="card" data-sku="PREMIUM_30">
-        <div class="row"><div class="title">Premium 30</div><div class="price">€€€</div></div>
-        <div class="sku">SKU: PREMIUM_30</div>
-        <button class="btn buy" data-sku="PREMIUM_30" data-title="Premium 30">Compra Premium 30</button>
+      <div class="card" data-sku="COLPA_DELUXE">
+        <div class="title">COLPA DELUXE</div>
+        <div class="price">39,90&nbsp;€</div>
+        <div class="sku">SKU: COLPA_DELUXE</div>
+        <button class="btn buy" data-sku="COLPA_DELUXE" data-title="COLPA DELUXE">Compra COLPA DELUXE</button>
+      </div>
+    </div>
+
+    <!-- Prodotti Scusa e Scenari fissi -->
+    <div class="grid">
+      <div class="card" data-sku="SCUSA_BASE">
+        <div class="title">Scusa Base</div>
+        <div class="price">1,00&nbsp;€</div>
+        <div class="sku">SKU: SCUSA_BASE</div>
+        <button class="btn buy" data-sku="SCUSA_BASE" data-title="Scusa Base">Compra Scusa Base</button>
+      </div>
+
+      <div class="card" data-sku="SCUSA_DELUXE">
+        <div class="title">Scusa Deluxe</div>
+        <div class="price">4,50&nbsp;€</div>
+        <div class="sku">SKU: SCUSA_DELUXE</div>
+        <button class="btn buy" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe">Compra Scusa Deluxe</button>
+      </div>
+
+      <div class="card" data-sku="TRAFFICO">
+        <div class="title">Traffico</div>
+        <div class="price">2,00&nbsp;€</div>
+        <div class="sku">SKU: TRAFFICO</div>
+        <button class="btn buy" data-sku="TRAFFICO" data-title="Traffico">Compra Traffico</button>
+      </div>
+
+      <div class="card" data-sku="RIUNIONE">
+        <div class="title">Riunione improvvisa</div>
+        <div class="price">2,00&nbsp;€</div>
+        <div class="sku">SKU: RIUNIONE</div>
+        <button class="btn buy" data-sku="RIUNIONE" data-title="Riunione improvvisa">Compra Riunione</button>
+      </div>
+
+      <div class="card" data-sku="CONNESSIONE">
+        <div class="title">Connessione KO</div>
+        <div a class="price">2,00&nbsp;€</div>
+        <div class="sku">SKU: CONNESSIONE</div>
+        <button class="btn buy" data-sku="CONNESSIONE" data-title="Connessione KO">Compra Connessione KO</button>
       </div>
     </div>
 
@@ -69,40 +111,51 @@
   </div>
 
   <script>
+  // Mappa prezzi da mostrare accanto alle selezioni
+  const PRICE_DISPLAY = {
+    SCUSA_BASE:  '1,00 €',
+    SCUSA_DELUXE:'4,50 €',
+    CONNESSIONE:'2,00 €',
+    TRAFFICO:   '2,00 €',
+    RIUNIONE:   '2,00 €',
+    COLPA_LIGHT:'9,90 €',
+    COLPA_FULL: '19,90 €',
+    COLPA_DELUXE:'39,90 €'
+  };
+
   function qs(n){ return new URLSearchParams(location.search).get(n) || ''; }
 
-  // Render selezione dalla home
+  // Visualizza la selezione passata dalla home
   (function renderChosen(){
-    const sku = qs('sku');
-    const title = qs('title') || 'Prodotto';
-    const ctx = qs('context') || '';
+    const sku   = qs('sku');
+    const title = qs('title') || '';
+    const ctx   = qs('context') || '';
     if(!sku) return;
 
-    const card = document.querySelector(`.card[data-sku="${sku}"]`);
+    // Evidenzia la card scelta
+    const card = document.querySelector(\`.card[data-sku="\${sku}"]\`);
     if(card) card.classList.add('selected');
 
+    const price = PRICE_DISPLAY[sku] || '';
     const box = document.getElementById('chosen');
     box.style.display = 'block';
-    box.innerHTML = `
+    box.innerHTML = \`
       <div class="row" style="align-items:center;gap:8px">
         <div>
           <div class="title">Selezione</div>
-          <div class="sku">Titolo: ${title} • SKU: ${sku}${ctx ? ' • Contesto: '+ctx : ''}</div>
+          <div class="sku">Titolo: \${title || sku} • SKU: \${sku}\${ctx ? ' • Contesto: '+ctx : ''}\${price ? ' • Prezzo: '+price : ''}</div>
         </div>
         <div class="price" style="margin-left:auto">
-          <button class="btn" id="buy-chosen" data-sku="${sku}" data-title="${title}" data-context="${ctx}">
-            Procedi all’acquisto
-          </button>
+          <button class="btn" id="buy-chosen" data-sku="\${sku}" data-title="\${title}" data-context="\${ctx}">Procedi all’acquisto</button>
         </div>
-      </div>`;
+      </div>\`;
   })();
 
   async function buy(sku, title, context){
     const email = document.getElementById('email').value.trim();
-    const msg = document.getElementById('msg');
-    if(!email){ msg.textContent='Inserisci l’email.'; msg.className='note err'; return; }
-    msg.textContent='Creo la sessione di pagamento…'; msg.className='note';
-
+    const msgEl = document.getElementById('msg');
+    if(!email){ msgEl.textContent='Inserisci l’email.'; msgEl.className='note err'; return; }
+    msgEl.textContent='Creo la sessione di pagamento…'; msgEl.className='note';
     try{
       const r = await fetch('/.netlify/functions/create-checkout-session', {
         method:'POST',
@@ -111,14 +164,13 @@
       });
       const data = await r.json();
       if(!r.ok) throw new Error(data.error || 'Errore');
-      location.href = data.url; // Stripe Checkout
+      location.href = data.url;
     }catch(e){
-      msg.textContent = 'Errore: ' + e.message;
-      msg.className='note err';
+      msgEl.textContent = 'Errore: ' + e.message;
+      msgEl.className='note err';
     }
   }
 
-  // Click handler
   document.addEventListener('click', (ev)=>{
     const t = ev.target;
     if(t && t.id === 'buy-chosen'){
