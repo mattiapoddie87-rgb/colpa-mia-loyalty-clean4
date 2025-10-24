@@ -1,54 +1,35 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width,initial-scale=1"/>
-  <title>Grazie!</title>
-  <style>
-    body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:0;background:#0f1115;color:#e6e6e6}
-    .wrap{max-width:900px;margin:0 auto;padding:24px}
-    .card{background:#151822;border:1px solid #23283b;border-radius:16px;padding:16px;margin-bottom:16px}
-    .btn{display:inline-block;padding:10px 14px;border-radius:12px;border:0;background:#3b82f6;color:#fff;text-decoration:none}
-    small{color:#9aa3b2}
-  </style>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Grazie — COLPA MIA</title>
+<style>
+body{margin:0;background:#0b0f16;color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
+.wrap{max-width:900px;margin:24px auto;padding:0 16px}
+a.btn{padding:10px 14px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;text-decoration:none}
+textarea{width:100%;min-height:160px;padding:12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
+.note{color:#9fb0c9;margin-bottom:12px}
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <h1 style="margin:0 0 16px">Grazie!</h1>
-    <p>Pagamento ricevuto correttamente.</p>
-
-    <div class="card">
-      <h2 style="margin:0 0 8px">Riepilogo</h2>
-      <p>Prodotto: <span id="p">—</span></p>
-      <p>ID sessione: <span id="sid">(manca session_id)</span></p>
-    </div>
-
-    <div class="card">
-      <h2 style="margin:0 0 8px">Consegna</h2>
-      <p>
-        Ti abbiamo inviato la scusa via <b>email</b> (e via <b>WhatsApp</b> se hai inserito il numero). Controlla anche spam/promozioni.
-        Se non ricevi nulla entro qualche minuto, scrivi a
-        <a href="mailto:colpamiaconsulenze@proton.me">colpamiaconsulenze@proton.me</a>.
-      </p>
-      <p>Gli eventuali minuti del pacchetto sono stati accreditati sul tuo wallet.</p>
-      <p><a class="btn" href="/#catalogo">Torna al catalogo</a></p>
-    </div>
-  </div>
-
-  <script>
-    (function(){
-      const qs = new URLSearchParams(location.search);
-      const sid = qs.get('session_id') || sessionStorage.getItem('last_session_id') || '';
-      if (sid) {
-        document.getElementById('sid').textContent = sid;
-        sessionStorage.removeItem('last_session_id');
-      }
-      const title = sessionStorage.getItem('last_checkout_title');
-      if (title) {
-        document.getElementById('p').textContent = title;
-        sessionStorage.removeItem('last_checkout_title');
-      }
-    })();
-  </script>
+<div class="wrap">
+  <h1>Pagamento riuscito</h1>
+  <p class="note">Stiamo generando la tua scusa...</p>
+  <textarea id="result" readonly>Generazione in corso…</textarea>
+  <div style="margin-top:10px"><a class="btn" href="/#catalogo">↩ Torna al catalogo</a></div>
+</div>
+<script>
+(async function(){
+  const sessionId=new URLSearchParams(location.search).get('session_id');
+  if(!sessionId){document.getElementById('result').value='Sessione non trovata.';return;}
+  try{
+    const r=await fetch('/.netlify/functions/post-checkout?session_id='+encodeURIComponent(sessionId));
+    const d=await r.json();
+    document.getElementById('result').value=d.excuse||d.message||'Errore: nessun testo.';
+  }catch(e){
+    document.getElementById('result').value='Errore: '+e.message;
+  }
+})();
+</script>
 </body>
 </html>
