@@ -1,185 +1,85 @@
 <!doctype html>
 <html lang="it">
 <head>
-  <meta charset="utf-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1"/>
-  <title>Checkout COLPA MIA</title>
-  <meta name="theme-color" content="#0b0f16"/>
-  <style>
-    :root{--bg:#0b0f16;--panel:#101724;--muted:#a9b4c6;--line:#1a2540;--brand:#7c83ff}
-    *{box-sizing:border-box} html,body{height:100%}
-    body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
-    .wrap{max-width:1100px;margin:20px auto;padding:0 16px}
-    h1{margin:.3rem 0 1rem}
-    .muted{color:var(--muted)}
-    input,button{padding:12px 14px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
-    input{width:100%}
-    .row{display:flex;gap:12px;flex-wrap:wrap}
-    .panel{background:#0f1626;border:1px solid var(--line);border-radius:16px;padding:16px}
-    .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));margin-top:16px}
-    .card{background:#0f1626;border:1px solid var(--line);border-radius:16px;padding:16px}
-    .title{font-weight:800}
-    .sku{font-size:.9rem;color:#9fb0c9;margin:.25rem 0 .6rem}
-    .price{font-size:1rem;font-weight:700;margin-bottom:.5rem}
-    .btn{cursor:pointer;background:var(--brand);border-color:var(--brand);color:#08101e;font-weight:800}
-    .btn:hover{filter:brightness(1.06)}
-    .selected{outline:2px solid var(--brand)}
-    .note{font-size:.9rem;color:#9fb0c9;margin-top:10px}
-    .err{color:#ff6b6b}
-  </style>
+<meta charset="utf-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Checkout COLPA MIA</title>
+<meta name="theme-color" content="#0b0f16"/>
+<style>
+:root{--bg:#0b0f16;--panel:#101724;--muted:#a9b4c6;--line:#1a2540;--brand:#7c83ff}
+*{box-sizing:border-box}html,body{height:100%}body{margin:0;background:var(--bg);color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
+.wrap{max-width:1100px;margin:20px auto;padding:0 16px}
+a.btn,button.btn{padding:10px 14px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;text-decoration:none;cursor:pointer}
+.btn.primary{background:var(--brand);border-color:var(--brand);color:#08101e;font-weight:800}
+.panel{background:#0f1626;border:1px solid var(--line);border-radius:16px;padding:16px;margin-top:12px}
+.title{font-weight:800}.price{font-weight:700}.sku{font-size:.9rem;color:#9fb0c9;margin:.25rem 0 .6rem}
+.note{font-size:.9rem;color:#9fb0c9;margin-top:10px}.err{color:#ff6b6b}
+.selected{outline:2px solid var(--brand)}
+</style>
 </head>
 <body>
-  <div class="wrap">
+<div class="wrap">
+  <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap">
     <h1>Checkout COLPA MIA</h1>
-    <p class="muted">Inserisci l’email che userai in cassa. Verrà precompilata in Stripe Checkout.</p>
+    <a class="btn" href="/#catalogo">↩ Torna al catalogo</a>
+  </div>
+  <p class="note">Inserisci l’email che userai in cassa. Verrà precompilata in Stripe Checkout.</p>
 
-    <!-- Email -->
-    <div class="panel">
-      <label for="email">Email</label>
-      <div class="row" style="margin-top:6px">
-        <input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email" />
-      </div>
-      <p id="msg" class="note"></p>
-    </div>
-
-    <!-- Scelta proveniente dalla home -->
-    <div id="chosen" class="panel" style="margin-top:12px;display:none"></div>
-
-    <!-- Prodotti principali (Minuti) -->
-    <div class="grid">
-      <div class="card" data-sku="COLPA_LIGHT">
-        <div class="title">COLPA LIGHT</div>
-        <div class="price">9,90&nbsp;€</div>
-        <div class="sku">SKU: COLPA_LIGHT</div>
-        <button class="btn buy" data-sku="COLPA_LIGHT" data-title="COLPA LIGHT">Compra COLPA LIGHT</button>
-      </div>
-
-      <div class="card" data-sku="COLPA_FULL">
-        <div class="title">COLPA FULL</div>
-        <div class="price">19,90&nbsp;€</div>
-        <div class="sku">SKU: COLPA_FULL</div>
-        <button class="btn buy" data-sku="COLPA_FULL" data-title="COLPA FULL">Compra COLPA FULL</button>
-      </div>
-
-      <div class="card" data-sku="COLPA_DELUXE">
-        <div class="title">COLPA DELUXE</div>
-        <div class="price">39,90&nbsp;€</div>
-        <div class="sku">SKU: COLPA_DELUXE</div>
-        <button class="btn buy" data-sku="COLPA_DELUXE" data-title="COLPA DELUXE">Compra COLPA DELUXE</button>
-      </div>
-    </div>
-
-    <!-- Prodotti Scusa e Scenari fissi -->
-    <div class="grid">
-      <div class="card" data-sku="SCUSA_BASE">
-        <div class="title">Scusa Base</div>
-        <div class="price">1,00&nbsp;€</div>
-        <div class="sku">SKU: SCUSA_BASE</div>
-        <button class="btn buy" data-sku="SCUSA_BASE" data-title="Scusa Base">Compra Scusa Base</button>
-      </div>
-
-      <div class="card" data-sku="SCUSA_DELUXE">
-        <div class="title">Scusa Deluxe</div>
-        <div class="price">4,50&nbsp;€</div>
-        <div class="sku">SKU: SCUSA_DELUXE</div>
-        <button class="btn buy" data-sku="SCUSA_DELUXE" data-title="Scusa Deluxe">Compra Scusa Deluxe</button>
-      </div>
-
-      <div class="card" data-sku="TRAFFICO">
-        <div class="title">Traffico</div>
-        <div class="price">2,00&nbsp;€</div>
-        <div class="sku">SKU: TRAFFICO</div>
-        <button class="btn buy" data-sku="TRAFFICO" data-title="Traffico">Compra Traffico</button>
-      </div>
-
-      <div class="card" data-sku="RIUNIONE">
-        <div class="title">Riunione improvvisa</div>
-        <div class="price">2,00&nbsp;€</div>
-        <div class="sku">SKU: RIUNIONE</div>
-        <button class="btn buy" data-sku="RIUNIONE" data-title="Riunione improvvisa">Compra Riunione</button>
-      </div>
-
-      <div class="card" data-sku="CONNESSIONE">
-        <div class="title">Connessione KO</div>
-        <div a class="price">2,00&nbsp;€</div>
-        <div class="sku">SKU: CONNESSIONE</div>
-        <button class="btn buy" data-sku="CONNESSIONE" data-title="Connessione KO">Compra Connessione KO</button>
-      </div>
-    </div>
-
-    <p class="note">Continuando, accetti Termini e Privacy.</p>
+  <div class="panel">
+    <label for="email">Email</label>
+    <div style="margin-top:6px"><input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email"></div>
+    <p id="msg" class="note"></p>
   </div>
 
-  <script>
-  // Mappa prezzi da mostrare accanto alle selezioni
-  const PRICE_DISPLAY = {
-    SCUSA_BASE:  '1,00 €',
-    SCUSA_DELUXE:'4,50 €',
-    CONNESSIONE:'2,00 €',
-    TRAFFICO:   '2,00 €',
-    RIUNIONE:   '2,00 €',
-    COLPA_LIGHT:'9,90 €',
-    COLPA_FULL: '19,90 €',
-    COLPA_DELUXE:'39,90 €'
-  };
+  <div id="chosen"></div>
+</div>
 
-  function qs(n){ return new URLSearchParams(location.search).get(n) || ''; }
+<script>
+const PRICE_DISPLAY = {
+  SCUSA_BASE:'1,00 €', SCUSA_DELUXE:'4,50 €', TRAFFICO:'2,00 €', RIUNIONE:'2,00 €', CONNESSIONE:'2,00 €',
+  COLPA_LIGHT:'9,90 €', COLPA_FULL:'19,90 €', COLPA_DELUXE:'39,90 €'
+};
+function qs(n){return new URLSearchParams(location.search).get(n)||'';}
 
-  // Visualizza la selezione passata dalla home
-  (function renderChosen(){
-    const sku   = qs('sku');
-    const title = qs('title') || '';
-    const ctx   = qs('context') || '';
-    if(!sku) return;
+(function renderPage(){
+  const container=document.getElementById('chosen');
+  const sku=qs('sku'); const title=qs('title')||sku; const ctx=qs('context')||'';
+  const message=qs('message')||''; const tone=qs('tone')||'';
+  if(!sku){container.innerHTML='<p class="note">Nessun prodotto selezionato.</p>'; return;}
+  // Mostra solo l'articolo scelto
+  const price=PRICE_DISPLAY[sku]||'';
+  container.innerHTML=`<div class="panel selected">
+    <div class="title">${title}</div>
+    <div class="price">${price}</div>
+    <div class="sku">SKU: ${sku}${ctx?' • Contesto: '+ctx:''}${message?' • Messaggio allegato':''}</div>
+    <button class="btn primary" id="buy" data-sku="${sku}" data-title="${title}" data-context="${ctx}" data-message="${encodeURIComponent(message)}" data-tone="${encodeURIComponent(tone)}">Procedi all’acquisto</button>
+  </div>`;
+})();
 
-    // Evidenzia la card scelta
-    const card = document.querySelector(\`.card[data-sku="\${sku}"]\`);
-    if(card) card.classList.add('selected');
-
-    const price = PRICE_DISPLAY[sku] || '';
-    const box = document.getElementById('chosen');
-    box.style.display = 'block';
-    box.innerHTML = \`
-      <div class="row" style="align-items:center;gap:8px">
-        <div>
-          <div class="title">Selezione</div>
-          <div class="sku">Titolo: \${title || sku} • SKU: \${sku}\${ctx ? ' • Contesto: '+ctx : ''}\${price ? ' • Prezzo: '+price : ''}</div>
-        </div>
-        <div class="price" style="margin-left:auto">
-          <button class="btn" id="buy-chosen" data-sku="\${sku}" data-title="\${title}" data-context="\${ctx}">Procedi all’acquisto</button>
-        </div>
-      </div>\`;
-  })();
-
-  async function buy(sku, title, context){
-    const email = document.getElementById('email').value.trim();
-    const msgEl = document.getElementById('msg');
-    if(!email){ msgEl.textContent='Inserisci l’email.'; msgEl.className='note err'; return; }
-    msgEl.textContent='Creo la sessione di pagamento…'; msgEl.className='note';
-    try{
-      const r = await fetch('/.netlify/functions/create-checkout-session', {
-        method:'POST',
-        headers:{'Content-Type':'application/json'},
-        body: JSON.stringify({ sku, email, title, context })
-      });
-      const data = await r.json();
-      if(!r.ok) throw new Error(data.error || 'Errore');
-      location.href = data.url;
-    }catch(e){
-      msgEl.textContent = 'Errore: ' + e.message;
-      msgEl.className='note err';
-    }
+async function buy(payload){
+  const email=document.getElementById('email').value.trim();
+  const msgEl=document.getElementById('msg');
+  if(!email){ msgEl.textContent='Inserisci l’email.'; msgEl.className='note err'; return; }
+  msgEl.textContent='Creo la sessione di pagamento…'; msgEl.className='note';
+  try{
+    const r=await fetch('/.netlify/functions/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,email})});
+    const d=await r.json(); if(!r.ok) throw new Error(d.error||'Errore');
+    location.href=d.url;
+  }catch(e){
+    msgEl.textContent='Errore: '+e.message; msgEl.className='note err';
   }
+}
 
-  document.addEventListener('click', (ev)=>{
-    const t = ev.target;
-    if(t && t.id === 'buy-chosen'){
-      buy(t.dataset.sku, t.dataset.title, t.dataset.context);
-    }
-    if(t && t.classList.contains('buy')){
-      buy(t.dataset.sku, t.dataset.title, '');
-    }
-  });
-  </script>
+document.addEventListener('click',ev=>{
+  if(ev.target && ev.target.id==='buy'){
+    buy({
+      sku:ev.target.dataset.sku,
+      title:ev.target.dataset.title,
+      context:ev.target.dataset.context,
+      message:decodeURIComponent(ev.target.dataset.message||''),
+      tone:decodeURIComponent(ev.target.dataset.tone||'')
+    });
+  }
+});
+</script>
 </body>
 </html>
