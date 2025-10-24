@@ -1,0 +1,8 @@
+[
+  {"sku":"SCUSA_BASE","name":"Luca P.","rating":5,"text":"Ha sbloccato una conversazione difficile.","demo":true},
+  {"sku":"SCUSA_BASE","name":"Giulia V.","rating":4,"text":"Diretta e rispettosa, perfetta per cena.","demo":true},
+  {"sku":"SCUSA_DELUXE","name":"Marco R.","rating":5,"text":"Le 3 varianti sono utilissime.","demo":true},
+  {"sku":"TRAFFICO","name":"Sara C.","rating":5,"text":"Scenario pronto, l’ho inviato al volo.","demo":true},
+  {"sku":"RIUNIONE","name":"Alessio D.","rating":5,"text":"Professionale e credibile.","demo":true},
+  {"sku":"CONNESSIONE","name":"Elena S.","rating":4,"text":"Realistica, ha funzionato.","demo":true}
+]
