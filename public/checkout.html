@@ -14,6 +14,7 @@ a.btn,button.btn{padding:10px 14px;border-radius:12px;border:1px solid #2b3150;b
 .title{font-weight:800}.price{font-weight:700}.sku{font-size:.9rem;color:#9fb0c9;margin:.25rem 0 .6rem}
 .note{font-size:.9rem;color:#9fb0c9;margin-top:10px}.err{color:#ff6b6b}
 .selected{outline:2px solid var(--brand)}
+.row{display:flex;gap:12px;flex-wrap:wrap;align-items:center}
 </style>
 </head>
 <body>
@@ -22,11 +23,19 @@ a.btn,button.btn{padding:10px 14px;border-radius:12px;border:1px solid #2b3150;b
     <h1>Checkout COLPA MIA</h1>
     <a class="btn" href="/#catalogo">↩ Torna al catalogo</a>
   </div>
-  <p class="note">Inserisci l’email che userai in cassa. Verrà precompilata in Stripe Checkout.</p>
+  <p class="note">Inserisci l’email che userai in cassa. Puoi usare il codice promozionale <b>COLPAMIA10</b>.</p>
 
   <div class="panel">
-    <label for="email">Email</label>
-    <div style="margin-top:6px"><input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email"></div>
+    <div class="row" style="margin-top:6px">
+      <div style="flex:1 1 260px">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="la-tua@email.com" autocomplete="email">
+      </div>
+      <div style="flex:1 1 220px">
+        <label for="promo">Codice promo</label>
+        <input id="promo" type="text" placeholder="COLPAMIA10" autocomplete="off">
+      </div>
+    </div>
     <p id="msg" class="note"></p>
   </div>
 
@@ -35,8 +44,8 @@ a.btn,button.btn{padding:10px 14px;border-radius:12px;border:1px solid #2b3150;b
 
 <script>
 const PRICE_DISPLAY = {
-  SCUSA_BASE:'1,00 €', SCUSA_DELUXE:'4,50 €', TRAFFICO:'2,00 €', RIUNIONE:'2,00 €', CONNESSIONE:'2,00 €',
-  COLPA_LIGHT:'9,90 €', COLPA_FULL:'19,90 €', COLPA_DELUXE:'39,90 €'
+  SCUSA_BASE:'1,00 €', SCUSA_DELUXE:'4,50 €', TRAFFICO:'2,00 €', RIUNIONE:'2,00 €', CONNESSIONE:'2,00 €',
+  COLPA_LIGHT:'9,90 €', COLPA_FULL:'19,90 €', COLPA_DELUXE:'39,90 €'
 };
 function qs(n){return new URLSearchParams(location.search).get(n)||'';}
 
@@ -45,7 +54,6 @@ function qs(n){return new URLSearchParams(location.search).get(n)||'';}
   const sku=qs('sku'); const title=qs('title')||sku; const ctx=qs('context')||'';
   const message=qs('message')||''; const tone=qs('tone')||'';
   if(!sku){container.innerHTML='<p class="note">Nessun prodotto selezionato.</p>'; return;}
-  // Mostra solo l'articolo scelto
   const price=PRICE_DISPLAY[sku]||'';
   container.innerHTML=`<div class="panel selected">
     <div class="title">${title}</div>
@@ -57,11 +65,16 @@ function qs(n){return new URLSearchParams(location.search).get(n)||'';}
 
 async function buy(payload){
   const email=document.getElementById('email').value.trim();
+  const promo=(document.getElementById('promo').value||'').trim();
   const msgEl=document.getElementById('msg');
   if(!email){ msgEl.textContent='Inserisci l’email.'; msgEl.className='note err'; return; }
   msgEl.textContent='Creo la sessione di pagamento…'; msgEl.className='note';
   try{
-    const r=await fetch('/.netlify/functions/create-checkout-session',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({...payload,email})});
+    const r=await fetch('/.netlify/functions/create-checkout-session',{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({...payload,email,promo})
+    });
     const d=await r.json(); if(!r.ok) throw new Error(d.error||'Errore');
     location.href=d.url;
   }catch(e){
