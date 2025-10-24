@@ -1,25 +1,32 @@
-/**
- * claim-purchase.js
+//**
+ * netlify/functions/claim-purchase.js
+ * Invia via email la scusa finale post-acquisto.
+ * - SCUSA_BASE: invia la stessa scusa contestuale di post-checkout.
+ * - SCUSA_DELUXE: genera 3 varianti diverse e le invia.
+ * - CONNESSIONE/TRAFFICO/RIUNIONE: usa il template finale di post-checkout.
  *
- * Viene invocato da un webhook o da una procedura interna appena un ordine è confermato.
- * Recupera la sessione Stripe, estrae SKU, contesto e tono, genera le scuse da inviare via email o WhatsApp,
- * poi invia il messaggio tramite il provider configurato (Resend, Twilio, ecc.).
- *
- * Modifiche principali:
- * - Per SCUSA_BASE: chiama post-checkout e invia la stessa scusa contestuale vista dall’utente.
- * - Per SCUSA_DELUXE: genera 3 varianti diverse con l’AI e le invia tutte.
- * - Per scenari fissi (CONNESSIONE, TRAFFICO, RIUNIONE): usa il template finale di post-checkout.
- * - Usa il codice promo già gestito durante il checkout tramite create-checkout-session.js.
+ * Env richieste: STRIPE_SECRET_KEY, RESEND_API_KEY, MAIL_FROM (es. "COLPA MIA <no-reply@colpamia.com>")
+ * Facoltative: URL o SITE_URL per costruire l’endpoint post-checkout.
  */
 
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const fetch  = require('node-fetch');
-const Resend = require('resend').Resend;
+const { Resend } = require('resend');
 
-// Inizializza Resend se usi l’email. Oppure usa Twilio per WhatsApp (non mostrato qui).
 const resend = new Resend(process.env.RESEND_API_KEY);
+const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <no-reply@colpamia.com>';
 
-// Utility per generare tre varianti con l’AI (scusa deluxe)
+function clean(s){ return (s||'').toString().trim().replace(/\s+/g,' '); }
+
+async function fetchFinalExcuseFromPostCheckout(sessionId) {
+  const base = process.env.URL || process.env.SITE_URL || 'https://colpamia.com';
+  const url = `${base}/.netlify/functions/post-checkout?session_id=${encodeURIComponent(sessionId)}`;
+  const r = await fetch(url);
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error || 'Errore generazione finale');
+  // Preferisce campo "excuse", fallback a "message"
+  return data.excuse || data.message || '';
+}
+
 async function generateDeluxeExcuses({ message, tone = 'empatica', context = '' }) {
   const prompt =
 `Genera una scusa breve, concreta e rispettosa.
@@ -30,8 +37,8 @@ Varia sempre lessico e struttura d’apertura, evita formule ricorrenti.
 Niente elenco puntato. Limite 90–120 parole.`;
 
   const res = await fetch('https://api.openai.com/v1/chat/completions', {
-    method: 'POST',
-    headers: {
+    method:'POST',
+    headers:{
       'Authorization': `Bearer ${process.env.OPENAI_API_KEY}`,
       'Content-Type': 'application/json'
     },
@@ -44,94 +51,95 @@ Niente elenco puntato. Limite 90–120 parole.`;
       n: 3,
       max_tokens: 240,
       messages: [
-        { role: 'system', content: 'Assistente COLPA MIA per scuse efficaci e rispettose.' },
-        { role: 'user',   content: prompt }
+        { role:'system', content:'Assistente COLPA MIA per scuse efficaci e rispettose.' },
+        { role:'user',   content: prompt }
       ]
     })
   });
-
   const data = await res.json();
   if (!res.ok) throw new Error(data.error?.message || 'OpenAI error');
+  return (data.choices||[]).map(c => clean(c?.message?.content)).filter(Boolean);
+}
 
-  return (data.choices || [])
-    .map(c => c.message?.content?.trim())
-    .filter(Boolean);
+function buildEmailHtml({ title, context, tone, excuses }) {
+  let html = `<p>Grazie per il tuo acquisto!</p>`;
+  html += `<p>Prodotto: <strong>${title}</strong></p>`;
+  html += `<p>Contesto: ${context || '-'}</p>`;
+  html += `<p>Tono: ${tone || '-'}</p>`;
+  html += `<hr>`;
+  if (excuses.length <= 1) {
+    const txt = (excuses[0] || '').replace(/\n/g,'<br>');
+    html += `<p><strong>Scusa generata:</strong></p><p>${txt}</p>`;
+  } else {
+    html += `<p><strong>Scuse generate:</strong></p>`;
+    html += excuses.map((exc, i) =>
+      `<p><em>Versione ${i+1}:</em><br>${(exc||'').replace(/\n/g,'<br>')}</p>`
+    ).join('');
+  }
+  return html;
 }
 
 exports.handler = async (event) => {
   try {
+    if (event.httpMethod !== 'POST') {
+      return { statusCode: 405, body: JSON.stringify({ error: 'Method not allowed' }) };
+    }
     const { session_id } = JSON.parse(event.body || '{}');
     if (!session_id) {
       return { statusCode: 400, body: JSON.stringify({ error: 'session_id mancante' }) };
     }
 
-    // Recupera la sessione Stripe con line_items e metadata
-    const session = await stripe.checkout.sessions.retrieve(session_id, {
-      expand: ['line_items']
-    });
-
-    // SKU e metadata impostati nel checkout
+    // Stripe session + metadata
+    const session = await stripe.checkout.sessions.retrieve(session_id, { expand: ['line_items'] });
     const sku     = session.metadata?.sku || '';
     const title   = session.metadata?.title || sku;
-    const context = session.metadata?.context || '';
-    const tone    = session.metadata?.tone || 'empatica';
-    const message = session.metadata?.message || '';
+    const context = clean(session.metadata?.context);
+    const tone    = clean(session.metadata?.tone || 'empatica');
+    const message = clean(session.metadata?.message);
+    const toEmail = session.customer_details?.email || session.customer_email;
 
-    // Se non abbiamo SKU valido, abortiamo
-    if (!sku) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'SKU non presente nella sessione' }) };
+    if (!sku || !toEmail) {
+      return { statusCode: 400, body: JSON.stringify({ error: 'SKU o email non disponibili' }) };
     }
 
-    // Generazione delle scuse in base allo SKU
     let excuses = [];
 
     if (sku === 'SCUSA_BASE') {
-      // Usa la scusa definitiva (contestuale) generata da post-checkout
-      const res = await fetch(`${process.env.URL || process.env.SITE_URL}/.netlify/functions/post-checkout?session_id=${encodeURIComponent(session_id)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore generazione finale');
-      excuses = [data.excuse];
+      // Stessa scusa definitiva della pagina di successo
+      const final = await fetchFinalExcuseFromPostCheckout(session_id);
+      excuses = [final];
     } else if (sku === 'SCUSA_DELUXE') {
-      // Genera tre varianti diverse con l’AI
+      // Tre varianti diverse
       excuses = await generateDeluxeExcuses({ message, tone, context });
+      if (!excuses.length) {
+        // fallback minimo
+        const final = await fetchFinalExcuseFromPostCheckout(session_id);
+        excuses = [final];
+      }
     } else {
-      // Per scenari fissi (CONNESSIONE, TRAFFICO, RIUNIONE) chiama post-checkout per avere la scusa finale
-      const res = await fetch(`${process.env.URL || process.env.SITE_URL}/.netlify/functions/post-checkout?session_id=${encodeURIComponent(session_id)}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || 'Errore generazione finale');
-      excuses = [data.excuse];
+      // Scenari fissi: template già applicato in post-checkout
+      const final = await fetchFinalExcuseFromPostCheckout(session_id);
+      excuses = [final];
     }
 
-    // Componi il testo dell’email: elenca tutte le varianti per la deluxe, una sola per gli altri
-    let html = `<p>Grazie per il tuo acquisto!</p>`;
-    html += `<p>Prodotto: <strong>${title}</strong></p>`;
-    html += `<p>Contesto: ${context || '-'}</p>`;
-    html += `<p>Tono: ${tone}</p>`;
-    html += `<hr>`;
-    if (excuses.length === 1) {
-      html += `<p><strong>Scusa generata:</strong></p><p>${excuses[0].replace(/\n/g, '<br>')}</p>`;
-    } else {
-      html += `<p><strong>Scuse generate:</strong></p>`;
-      html += excuses.map((exc, i) => `<p><em>Versione ${i + 1}:</em><br>${exc.replace(/\n/g, '<br>')}</p>`).join('');
-    }
+    const html = buildEmailHtml({ title, context, tone, excuses });
 
-    // Invia l’e-mail tramite Resend (sostituisci con il tuo provider)
-    // NB: assicurati di avere RESEND_API_KEY e un dominio verificato.
+    // Invio email via Resend
+    if (!process.env.RESEND_API_KEY) {
+      return { statusCode: 500, body: JSON.stringify({ error: 'RESEND_API_KEY mancante' }) };
+    }
     await resend.emails.send({
-      from: 'COLPA MIA <no-reply@colpamia.com>',
-      to: session.customer_details?.email || session.customer_email,
+      from: MAIL_FROM,
+      to: toEmail,
       subject: `La tua scusa ${title}`,
       html
     });
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Email inviata', excuses })
+      body: JSON.stringify({ ok: true, sent_to: toEmail, sku, count: excuses.length })
     };
   } catch (err) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: err.message })
-    };
+    return { statusCode: 500, body: JSON.stringify({ error: err.message }) };
   }
 };
