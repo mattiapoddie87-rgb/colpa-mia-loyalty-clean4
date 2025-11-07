@@ -7,7 +7,7 @@ const BLOBS_TOKEN = process.env.NETLIFY_BLOBS_TOKEN;
 function store(name) {
   return getStore({
     name,
-    siteId: SITE_ID,
+    siteID: SITE_ID,      // ← QUI: siteID (non siteId)
     token: BLOBS_TOKEN,
   });
 }
