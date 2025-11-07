@@ -6,55 +6,69 @@ const BLOB_TOKEN = process.env.NETLIFY_BLOBS_TOKEN;
 const STORE_NAME = 'wallet';
 
 exports.handler = async (event) => {
-  if (event.httpMethod !== 'GET') {
-    return {
-      statusCode: 405,
-      body: JSON.stringify({ error: 'method_not_allowed' }),
-    };
-  }
-
-  const email = (event.queryStringParameters && event.queryStringParameters.email) || '';
+  const email = event.queryStringParameters?.email;
   if (!email) {
     return {
       statusCode: 400,
-      body: JSON.stringify({ error: 'email_required' }),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: 'email required' }),
     };
   }
 
-  if (!SITE_ID || !BLOB_TOKEN) {
-    return {
-      statusCode: 500,
-      body: JSON.stringify({ error: 'blobs_not_configured' }),
-    };
-  }
-
-  const store = getStore({
-    name: STORE_NAME,        // <<< stesso nome del webhook
-    siteID: SITE_ID,
-    token: BLOB_TOKEN,
-  });
-
-  let data = null;
   try {
-    data = await store.get(email, { type: 'json' });
-  } catch (e) {
-    // se non c'è, data resta null
-  }
+    const store = getStore({
+      name: STORE_NAME,
+      siteID: SITE_ID,
+      token: BLOB_TOKEN,
+    });
 
-  if (!data) {
-    // risposta compatibile con il tuo wallet.html
-    data = {
+    // 1) prova a leggerlo come JSON (caso nuovo)
+    let data = await store.get(email, { type: 'json' }).catch(() => null);
+
+    // 2) se era stato salvato male, arriva stringa tipo "[object Object]"
+    if (!data) {
+      const raw = await store.get(email).catch(() => null);
+      if (raw && typeof raw === 'string') {
+        // non è JSON valido, quindi restituiamo default
+        data = null;
+      }
+    }
+
+    // struttura di default
+    const base = {
       minutes: 0,
       points: 0,
       tier: 'None',
       history: [],
-      reset: true,
+    };
+
+    // se non c'è niente, restituisco default senza reset
+    if (!data) {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(base),
+      };
+    }
+
+    // normalizza quello che c'è
+    const out = {
+      minutes: Number(data.minutes || 0),
+      points: Number(data.points || 0),
+      tier: data.tier || 'None',
+      history: Array.isArray(data.history) ? data.history : [],
+    };
+
+    return {
+      statusCode: 200,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(out),
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ error: err.message }),
     };
   }
-
-  return {
-    statusCode: 200,
-    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' },
-    body: JSON.stringify(data),
-  };
 };
