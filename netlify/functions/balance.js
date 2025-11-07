@@ -1,36 +1,58 @@
 // netlify/functions/balance.js
-const Stripe = require('stripe');
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, { apiVersion: '2024-06-20' });
+const { getWallet } = require('./_wallet-lib');
 
-const CORS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
-};
-const j = (s,b,h={}) => ({ statusCode:s, headers:{'Content-Type':'application/json', ...CORS, ...h}, body:JSON.stringify(b) });
+exports.handler = async (event) => {
+  // permetti sia GET che POST
+  const method = event.httpMethod;
 
-const levelFromPoints = (pts) => (pts>=200?'Elite':pts>=100?'Pro':pts>=50?'Plus':'Base');
+  // prendi l'email
+  let email = '';
+  if (method === 'GET') {
+    email = event.queryStringParameters?.email;
+  } else if (method === 'POST') {
+    try {
+      const body = JSON.parse(event.body || '{}');
+      email = body.email;
+    } catch (_) {
+      // ignore
+    }
+  } else {
+    return {
+      statusCode: 405,
+      body: JSON.stringify({ error: 'method_not_allowed' }),
+    };
+  }
 
-async function findOrCreateCustomer(email){
-  const list = await stripe.customers.list({ email, limit: 1 });
-  return list.data[0] || await stripe.customers.create({ email });
-}
+  if (!email) {
+    return {
+      statusCode: 400,
+      body: JSON.stringify({ error: 'email_missing' }),
+    };
+  }
 
-exports.handler = async (event)=>{
-  if (event.httpMethod === 'OPTIONS') return j(204,{});
-  if (event.httpMethod !== 'POST')   return j(405,{ error:'method_not_allowed' });
+  try {
+    const wallet = await getWallet(email);
+    // il tuo frontend si aspetta: minuti, punti, tier
+    const response = {
+      minutes: wallet.minutes || 0,
+      points: wallet.points || 0,
+      tier: wallet.tier || 'None',
+      lastUpdated: wallet.lastUpdated || null,
+      lastReason: wallet.lastReason || null,
+    };
 
-  let body={}; try{ body = JSON.parse(event.body||'{}'); }catch{ return j(400,{ error:'bad_json' }); }
-  const email = String(body.email||'').trim();
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return j(400,{ error:'invalid_email' });
-
-  try{
-    const c = await findOrCreateCustomer(email);
-    const md = c.metadata || {};
-    const minutes = parseInt(md.cm_minutes||'0',10)||0;
-    const points  = parseInt(md.cm_points ||'0',10)||0;
-    return j(200, { ok:true, minutes, points, level: levelFromPoints(points) });
-  }catch(e){
-    return j(500,{ error:String(e?.message||'balance_error') });
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+      },
+      body: JSON.stringify(response),
+    };
+  } catch (err) {
+    return {
+      statusCode: 500,
+      body: JSON.stringify({ error: err.message }),
+    };
   }
 };
