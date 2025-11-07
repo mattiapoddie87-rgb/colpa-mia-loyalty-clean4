@@ -7,14 +7,6 @@ const STORE_NAME = 'wallet';
 
 exports.handler = async (event) => {
   try {
-    if (!SITE_ID || !BLOB_TOKEN) {
-      return {
-        statusCode: 500,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ error: 'NETLIFY_SITE_ID or NETLIFY_BLOBS_TOKEN missing' }),
-      };
-    }
-
     const store = getStore({
       name: STORE_NAME,
       siteID: SITE_ID,
@@ -23,24 +15,17 @@ exports.handler = async (event) => {
 
     const email = event.queryStringParameters?.email;
 
-    // se passo ?email=... mostro quel record
+    // se passo ?email=... mostro il contenuto grezzo
     if (email) {
-      const val = await store.get(email, { type: 'json' });
+      const val = await store.get(email); // <-- nessun {type:'json'}
       return {
         statusCode: 200,
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(
-          {
-            key: email,
-            value: val ?? null,
-          },
-          null,
-          2
-        ),
+        headers: { 'Content-Type': 'text/plain' },
+        body: String(val),
       };
     }
 
-    // altrimenti lista delle chiavi
+    // altrimenti lista le chiavi
     const list = await store.list();
     const keys = list.blobs.map((b) => b.key);
 
@@ -52,8 +37,8 @@ exports.handler = async (event) => {
   } catch (err) {
     return {
       statusCode: 500,
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ error: err.message }),
+      headers: { 'Content-Type': 'text/plain' },
+      body: err.message,
     };
   }
 };
