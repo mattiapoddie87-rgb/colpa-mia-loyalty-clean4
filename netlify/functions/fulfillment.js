@@ -5,7 +5,6 @@ const { creditMinutes, creditFromDuration } = require('./_wallet-lib');
 const PRICE_BY_SKU = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
 const PRICE_RULES = JSON.parse(process.env.PRICE_RULES_JSON || '{}');
 
-// helper per mappare SKU <-> minuti
 function getMinutesForSKU(sku) {
   const rule = PRICE_RULES[sku];
   if (!rule) return 0;
@@ -13,69 +12,74 @@ function getMinutesForSKU(sku) {
 }
 
 exports.handler = async (event) => {
-  try {
-    const body = JSON.parse(event.body);
-    const { sessionId } = body;
+  if (event.httpMethod !== 'POST') {
+    return { statusCode: 405, body: 'method_not_allowed' };
+  }
 
+  try {
+    const body = JSON.parse(event.body || '{}');
+    const sessionId = body.sessionId;
     if (!sessionId) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'sessionId mancante' }) };
+      return { statusCode: 400, body: 'sessionId missing' };
     }
 
-    // recupera sessione stripe
+    // 1) prendo la sessione stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['line_items', 'customer'],
     });
 
     const email = session.customer_details?.email || session.customer_email;
     if (!email) {
-      return { statusCode: 400, body: JSON.stringify({ error: 'email mancante nella sessione' }) };
+      return { statusCode: 400, body: 'email missing' };
     }
 
-    // SKU del prodotto acquistato
     const lineItem = session.line_items?.data?.[0];
     const priceId = lineItem?.price?.id;
-    const sku = Object.keys(PRICE_BY_SKU).find(k => PRICE_BY_SKU[k] === priceId);
+
+    // 2) mappo priceId -> SKU usando PRICE_BY_SKU_JSON
+    const sku = Object.keys(PRICE_BY_SKU).find(
+      (key) => PRICE_BY_SKU[key] === priceId
+    );
 
     const txKey = `stripe:${session.id}`;
     const startTime = session.metadata?.start_time;
     const endTime = session.metadata?.end_time;
 
-    // Se è una scusa base/deluxe/traffico ecc. accredito fisso
-    if (sku && getMinutesForSKU(sku) > 0) {
+    // 3a) caso scusa: minuti fissi dal JSON
+    if (sku) {
       const minutes = getMinutesForSKU(sku);
-      await creditMinutes(
-        email,
-        minutes,
-        `Accredito minuti per ${sku}`,
-        { sku, priceId, sessionId },
-        txKey
-      );
-      console.log(`✅ Accreditati ${minutes} minuti per ${sku} (${email})`);
+      if (minutes > 0) {
+        await creditMinutes(
+          email,
+          minutes,
+          `Accredito minuti per ${sku}`,
+          { sku, priceId, sessionId },
+          txKey
+        );
+      }
     }
 
-    // Se è una mediazione o consulenza con durata effettiva
+    // 3b) caso mediazione: durata effettiva
     if (startTime && endTime) {
       await creditFromDuration(
         email,
         startTime,
         endTime,
-        'Accredito tempo effettivo mediazione',
+        'Accredito tempo mediazione',
         { sku, sessionId },
         txKey
       );
-      console.log(`🕒 Accreditato tempo dinamico per ${email}`);
     }
 
     return {
       statusCode: 200,
-      body: JSON.stringify({ success: true }),
+      body: JSON.stringify({ ok: true }),
     };
-
-  } catch (error) {
-    console.error('Errore fulfillment:', error);
+  } catch (err) {
+    console.error(err);
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: error.message }),
+      body: err.message,
     };
   }
 };
