@@ -22,47 +22,70 @@ exports.handler = async (event) => {
       token: BLOB_TOKEN,
     });
 
-    // 1) prova a leggerlo come JSON (caso nuovo)
-    let data = await store.get(email, { type: 'json' }).catch(() => null);
+    // 1. elenca tutto e verifica che la chiave esista davvero
+    const list = await store.list();
+    const keys = list.blobs.map((b) => b.key);
+    const hasKey = keys.includes(email);
 
-    // 2) se era stato salvato male, arriva stringa tipo "[object Object]"
-    if (!data) {
-      const raw = await store.get(email).catch(() => null);
-      if (raw && typeof raw === 'string') {
-        // non è JSON valido, quindi restituiamo default
-        data = null;
-      }
-    }
-
-    // struttura di default
-    const base = {
-      minutes: 0,
-      points: 0,
-      tier: 'None',
-      history: [],
-    };
-
-    // se non c'è niente, restituisco default senza reset
-    if (!data) {
+    if (!hasKey) {
+      // non esiste proprio
       return {
         statusCode: 200,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(base),
+        body: JSON.stringify({
+          minutes: 0,
+          points: 0,
+          tier: 'None',
+          history: [],
+        }),
       };
     }
 
-    // normalizza quello che c'è
-    const out = {
-      minutes: Number(data.minutes || 0),
-      points: Number(data.points || 0),
-      tier: data.tier || 'None',
-      history: Array.isArray(data.history) ? data.history : [],
-    };
+    // 2. leggi in forma GREZZA
+    const raw = await store.get(email);
+
+    let obj = null;
+
+    // se è già un oggetto (runtime ce lo dà così)
+    if (typeof raw === 'object' && raw !== null) {
+      obj = raw;
+    } else if (typeof raw === 'string') {
+      // prova a fare parse
+      try {
+        obj = JSON.parse(raw);
+      } catch {
+        obj = null;
+      }
+    }
+
+    // se dopo tutto questo è ancora null, restituiamo default
+    if (!obj) {
+      return {
+        statusCode: 200,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          minutes: 0,
+          points: 0,
+          tier: 'None',
+          history: [],
+        }),
+      };
+    }
+
+    // alcuni casi possono essere { ok:true, email:..., data:{...} }
+    if (obj.data && typeof obj.data === 'object') {
+      obj = obj.data;
+    }
+
+    const minutes = Number(obj.minutes || 0);
+    const points  = Number(obj.points  || 0);
+    const tier    = obj.tier || 'None';
+    const history = Array.isArray(obj.history) ? obj.history : [];
 
     return {
       statusCode: 200,
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(out),
+      body: JSON.stringify({ minutes, points, tier, history }),
     };
   } catch (err) {
     return {
