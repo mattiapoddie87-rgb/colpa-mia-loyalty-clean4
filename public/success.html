@@ -1,35 +1,56 @@
 <!doctype html>
 <html lang="it">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Grazie — COLPA MIA</title>
-<style>
-body{margin:0;background:#0b0f16;color:#e9eef5;font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Helvetica,Arial,sans-serif}
-.wrap{max-width:900px;margin:24px auto;padding:0 16px}
-a.btn{padding:10px 14px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6;text-decoration:none}
-textarea{width:100%;min-height:160px;padding:12px;border-radius:12px;border:1px solid #2b3150;background:#0c0f17;color:#e6e6e6}
-.note{color:#9fb0c9;margin-bottom:12px}
-</style>
-</head>
-<body>
-<div class="wrap">
-  <h1>Pagamento riuscito</h1>
-  <p class="note">Stiamo generando la tua scusa...</p>
-  <textarea id="result" readonly>Generazione in corso…</textarea>
-  <div style="margin-top:10px"><a class="btn" href="/#catalogo">↩ Torna al catalogo</a></div>
-</div>
-<script>
-(async function(){
-  const sessionId=new URLSearchParams(location.search).get('session_id');
-  if(!sessionId){document.getElementById('result').value='Sessione non trovata.';return;}
-  try{
-    const r=await fetch('/.netlify/functions/post-checkout?session_id='+encodeURIComponent(sessionId));
-    const d=await r.json();
-    document.getElementById('result').value=d.excuse||d.message||'Errore: nessun testo.';
-  }catch(e){
-    document.getElementById('result').value='Errore: '+e.message;
-  }
-})();
-</script>
-</body>
+  <head>
+    <meta charset="utf-8" />
+    <title>Pagamento completato</title>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <style>
+      body { background:#0f172a; color:#fff; font-family:system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; display:flex; justify-content:center; align-items:center; height:100vh; }
+      .box { background:#111827; padding:2rem; border-radius:1rem; width: min(500px, 90vw); }
+      .ok { color:#22c55e; }
+      .err { color:#f43f5e; }
+    </style>
+  </head>
+  <body>
+    <div class="box">
+      <h1>Pagamento riuscito</h1>
+      <p id="status">Sto registrando il tuo tempo di vita…</p>
+    </div>
+
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      const sessionId = params.get('session_id');
+
+      async function register() {
+        if (!sessionId) {
+          document.getElementById('status').textContent = 'Sessione Stripe mancante.';
+          document.getElementById('status').className = 'err';
+          return;
+        }
+
+        try {
+          const res = await fetch('/.netlify/functions/fulfillment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId })
+          });
+          const data = await res.text();
+          console.log('fulfillment resp:', data);
+          if (res.ok) {
+            document.getElementById('status').textContent = 'Tempo accreditato sul tuo wallet. Puoi chiudere questa pagina.';
+            document.getElementById('status').className = 'ok';
+          } else {
+            document.getElementById('status').textContent = 'Pagamento ok ma non sono riuscito ad accreditare il wallet.';
+            document.getElementById('status').className = 'err';
+          }
+        } catch (err) {
+          document.getElementById('status').textContent = 'Pagamento ok, accredito non riuscito.';
+          document.getElementById('status').className = 'err';
+          console.error(err);
+        }
+      }
+
+      register();
+    </script>
+  </body>
 </html>
