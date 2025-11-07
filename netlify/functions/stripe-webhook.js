@@ -1,71 +1,125 @@
-/**
- * Stripe webhook → invia email con la STESSA scusa di post-checkout.
- * Eventi: checkout.session.completed
- * ENV: STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET, RESEND_API_KEY, MAIL_FROM, (URL|SITE_URL)
- */
+// netlify/functions/stripe-webhook.js
 const stripe = require('stripe')(process.env.STRIPE_SECRET_KEY);
-const { Resend } = require('resend');
+const { getStore } = require('@netlify/blobs');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
-const MAIL_FROM = process.env.MAIL_FROM || 'COLPA MIA <no-reply@colpamia.com>';
+const PRICE_BY_SKU = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
+const PRICE_RULES  = JSON.parse(process.env.PRICE_RULES_JSON  || '{}');
 
-function ok(b){return {statusCode:200,body:JSON.stringify(b||{ok:true})}}
-function bad(s,b){return {statusCode:s,body:JSON.stringify(b)}}
-function clean(s){return (s||'').toString().trim().replace(/\s+/g,' ')}
+const SITE_ID   = process.env.NETLIFY_SITE_ID;
+const BLOB_TOKEN = process.env.NETLIFY_BLOBS_TOKEN;
+const STORE_NAME = 'wallet';
 
-async function fetchFinalExcuse(sessionId){
-  const base = process.env.URL || process.env.SITE_URL || 'https://colpamia.com';
-  const r = await fetch(`${base}/.netlify/functions/post-checkout?session_id=${encodeURIComponent(sessionId)}`);
-  const d = await r.json();
-  if(!r.ok) throw new Error(d.error||'post-checkout error');
-  return { text: d.excuse || d.message || '', meta: d.metadata || {} };
+function minutesFor(sku, metadata = {}) {
+  if (PRICE_RULES[sku] && PRICE_RULES[sku].minutes) {
+    return PRICE_RULES[sku].minutes;
+  }
+  if (metadata.minutes) {
+    const m = parseInt(metadata.minutes, 10);
+    if (!isNaN(m) && m > 0) return m;
+  }
+  return 0;
 }
 
-function emailHtml({title,context,tone,text}){
-  return `
-  <div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Inter,Arial,sans-serif;color:#0b0f16">
-    <h2 style="margin:0 0 8px">La tua scusa è pronta</h2>
-    <p style="margin:0 0 6px"><strong>Prodotto:</strong> ${title}</p>
-    <p style="margin:0 0 6px"><strong>Contesto:</strong> ${context||'-'}</p>
-    <p style="margin:0 0 12px"><strong>Tono:</strong> ${tone||'-'}</p>
-    <hr style="border:none;border-top:1px solid #e5e7eb;margin:12px 0">
-    <p style="white-space:pre-wrap;line-height:1.5">${(text||'').replace(/</g,'&lt;')}</p>
-  </div>`;
+async function loadWallet(store, email) {
+  try {
+    const data = await store.get(email, { type: 'json' });
+    return data || {
+      email,
+      minutes: 0,
+      points: 0,
+      tier: 'None',
+      history: [],
+      lastUpdated: new Date().toISOString(),
+    };
+  } catch {
+    return {
+      email,
+      minutes: 0,
+      points: 0,
+      tier: 'None',
+      history: [],
+      lastUpdated: new Date().toISOString(),
+    };
+  }
 }
 
 exports.handler = async (event) => {
-  try{
-    if(event.httpMethod!=='POST') return bad(405,{error:'Method not allowed'});
-    const sig = event.headers['stripe-signature'];
-    if(!sig) return bad(400,{error:'Missing signature'});
-    let evt;
-    try{
-      evt = stripe.webhooks.constructEvent(event.body, sig, process.env.STRIPE_WEBHOOK_SECRET);
-    }catch(e){ return bad(400,{error:'Invalid signature'}) }
+  const sig = event.headers['stripe-signature'];
+  const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
-    if(evt.type !== 'checkout.session.completed') return ok({skipped:true});
-
-    const sess = evt.data.object;
-    const sessionId = sess.id;
-    const toEmail = sess.customer_details?.email || sess.customer_email;
-    const title   = clean(sess.metadata?.title || sess.metadata?.sku || 'COLPA MIA');
-    const context = clean(sess.metadata?.context);
-    const tone    = clean(sess.metadata?.tone || 'empatica');
-
-    if(!toEmail) return ok({noEmail:true});
-
-    const { text } = await fetchFinalExcuse(sessionId);
-
-    if(!process.env.RESEND_API_KEY) return bad(500,{error:'RESEND_API_KEY missing'});
-    await resend.emails.send({
-      from: MAIL_FROM,
-      to: toEmail,
-      subject: `La tua scusa ${title}`,
-      html: emailHtml({title,context,tone,text})
-    });
-
-    return ok({sent:true,to:toEmail});
-  }catch(e){
-    return bad(500,{error:e.message});
+  if (!endpointSecret) {
+    console.error('STRIPE_WEBHOOK_SECRET missing');
+    return { statusCode: 500, body: 'webhook secret missing' };
   }
+
+  let stripeEvent;
+  try {
+    stripeEvent = stripe.webhooks.constructEvent(
+      event.body,
+      sig,
+      endpointSecret
+    );
+  } catch (err) {
+    console.error('Webhook signature verification failed.', err.message);
+    return { statusCode: 400, body: `Webhook Error: ${err.message}` };
+  }
+
+  // gestiamo solo la chiusura del checkout
+  if (stripeEvent.type === 'checkout.session.completed') {
+    const session = stripeEvent.data.object;
+
+    const email =
+      session.customer_details?.email ||
+      session.customer_email;
+    if (!email) {
+      return { statusCode: 200, body: 'no email, skipping' };
+    }
+
+    const metadata = session.metadata || {};
+
+    // 1) SKU dai metadata (tu lo mandi già da create-checkout-session.js)
+    let sku = metadata.sku;
+
+    // 2) altrimenti provo da line_items (serve una fetch extra)
+    if (!sku) {
+      const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
+        expand: ['line_items'],
+      });
+      const li = fullSession.line_items?.data?.[0];
+      const priceId = li?.price?.id;
+      if (priceId) {
+        sku = Object.keys(PRICE_BY_SKU).find(
+          (k) => PRICE_BY_SKU[k] === priceId
+        );
+      }
+    }
+
+    const minutes = sku ? minutesFor(sku, metadata) : 0;
+
+    if (minutes > 0) {
+      const store = getStore({
+        name: STORE_NAME,
+        siteID: SITE_ID,
+        token: BLOB_TOKEN,
+      });
+
+      const wallet = await loadWallet(store, email);
+
+      wallet.minutes = (wallet.minutes || 0) + minutes;
+      wallet.history = wallet.history || [];
+      wallet.history.unshift({
+        id: session.id,
+        created: Math.floor(Date.now() / 1000),
+        amount: session.amount_total || 0,
+        currency: session.currency || 'eur',
+        minutes,
+        sku: sku || null,
+      });
+      wallet.lastUpdated = new Date().toISOString();
+
+      await store.set(email, wallet, { type: 'json' });
+    }
+  }
+
+  return { statusCode: 200, body: 'received' };
 };
