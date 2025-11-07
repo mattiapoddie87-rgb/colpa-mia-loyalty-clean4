@@ -12,6 +12,8 @@ function getMinutesForSKU(sku) {
 }
 
 exports.handler = async (event) => {
+  console.log('fulfillment called with', event.httpMethod, event.body);
+
   if (event.httpMethod !== 'POST') {
     return { statusCode: 405, body: 'method_not_allowed' };
   }
@@ -20,34 +22,38 @@ exports.handler = async (event) => {
     const body = JSON.parse(event.body || '{}');
     const sessionId = body.sessionId;
     if (!sessionId) {
+      console.log('sessionId missing');
       return { statusCode: 400, body: 'sessionId missing' };
     }
 
-    // 1) prendo la sessione stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['line_items', 'customer'],
     });
 
+    console.log('stripe session', session.id);
+
     const email = session.customer_details?.email || session.customer_email;
     if (!email) {
+      console.log('email missing on session');
       return { statusCode: 400, body: 'email missing' };
     }
 
     const lineItem = session.line_items?.data?.[0];
     const priceId = lineItem?.price?.id;
+    console.log('priceId', priceId);
 
-    // 2) mappo priceId -> SKU usando PRICE_BY_SKU_JSON
     const sku = Object.keys(PRICE_BY_SKU).find(
       (key) => PRICE_BY_SKU[key] === priceId
     );
+    console.log('mapped sku', sku);
 
     const txKey = `stripe:${session.id}`;
     const startTime = session.metadata?.start_time;
     const endTime = session.metadata?.end_time;
 
-    // 3a) caso scusa: minuti fissi dal JSON
     if (sku) {
       const minutes = getMinutesForSKU(sku);
+      console.log('minutes for sku', sku, minutes);
       if (minutes > 0) {
         await creditMinutes(
           email,
@@ -56,10 +62,14 @@ exports.handler = async (event) => {
           { sku, priceId, sessionId },
           txKey
         );
+        console.log('✅ credited', minutes, 'to', email);
+      } else {
+        console.log('no minutes configured for', sku);
       }
+    } else {
+      console.log('no sku found for priceId', priceId);
     }
 
-    // 3b) caso mediazione: durata effettiva
     if (startTime && endTime) {
       await creditFromDuration(
         email,
@@ -69,6 +79,7 @@ exports.handler = async (event) => {
         { sku, sessionId },
         txKey
       );
+      console.log('🕒 credited from duration');
     }
 
     return {
@@ -76,7 +87,7 @@ exports.handler = async (event) => {
       body: JSON.stringify({ ok: true }),
     };
   } catch (err) {
-    console.error(err);
+    console.error('fulfillment error', err);
     return {
       statusCode: 500,
       body: err.message,
