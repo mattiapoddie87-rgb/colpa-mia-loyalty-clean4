@@ -5,10 +5,12 @@ const { creditMinutes, creditFromDuration } = require('./_wallet-lib');
 const PRICE_BY_SKU = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
 const PRICE_RULES  = JSON.parse(process.env.PRICE_RULES_JSON  || '{}');
 
-function getMinutesForSKU(sku, metadata = {}) {
-  const rule = PRICE_RULES[sku];
-  if (rule && rule.minutes) return rule.minutes;
-  // fallback: se Stripe ha passato metadata.minutes, usalo
+function minutesFor(sku, metadata = {}) {
+  // 1) prova dalle regole
+  if (PRICE_RULES[sku] && PRICE_RULES[sku].minutes) {
+    return PRICE_RULES[sku].minutes;
+  }
+  // 2) fallback: se Stripe aveva messo metadata.minutes
   if (metadata.minutes) {
     const m = parseInt(metadata.minutes, 10);
     if (!isNaN(m) && m > 0) return m;
@@ -28,58 +30,71 @@ exports.handler = async (event) => {
       return { statusCode: 400, body: 'sessionId missing' };
     }
 
+    // prendo la sessione da Stripe
     const session = await stripe.checkout.sessions.retrieve(sessionId, {
       expand: ['line_items', 'customer'],
     });
 
-    const email = session.customer_details?.email || session.customer_email;
+    const email =
+      session.customer_details?.email ||
+      session.customer_email;
     if (!email) {
       return { statusCode: 400, body: 'email missing' };
     }
 
-    const lineItem = session.line_items?.data?.[0];
-    const priceId  = lineItem?.price?.id;
-    const metadata = session.metadata || {};
+    const md = session.metadata || {};
 
-    // mappa priceId -> sku
-    const sku = Object.keys(PRICE_BY_SKU).find(
-      key => PRICE_BY_SKU[key] === priceId
-    );
+    // 1) primo tentativo: SKU dai metadata (questo tu lo hai SEMPRE)
+    let sku = md.sku;
+
+    // 2) se proprio non c'è, provo a ricavarlo dal priceId
+    if (!sku) {
+      const lineItem = session.line_items?.data?.[0];
+      const priceId  = lineItem?.price?.id;
+      if (priceId) {
+        sku = Object.keys(PRICE_BY_SKU).find(
+          key => PRICE_BY_SKU[key] === priceId
+        );
+      }
+    }
 
     const txKey = `stripe:${session.id}`;
 
-    // accredito “a forfait” da regole o metadata
+    // accredito minuti a forfait
     if (sku) {
-      const minutes = getMinutesForSKU(sku, metadata);
-      if (minutes > 0) {
+      const mins = minutesFor(sku, md);
+      if (mins > 0) {
         await creditMinutes(
           email,
-          minutes,
+          mins,
           `Accredito minuti per ${sku}`,
-          { sku, priceId, sessionId },
+          { sku, sessionId },
           txKey
         );
       }
     }
 
-    // accredito “a durata” se ci sono start/end
-    const startTime = metadata.start_time;
-    const endTime   = metadata.end_time;
-    if (startTime && endTime) {
+    // accredito da durata se presente
+    if (md.start_time && md.end_time) {
       await creditFromDuration(
         email,
-        startTime,
-        endTime,
+        md.start_time,
+        md.end_time,
         'Accredito tempo mediazione',
         { sku, sessionId },
         txKey
       );
     }
 
-    return { statusCode: 200, body: JSON.stringify({ ok: true }) };
-
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ ok: true }),
+    };
   } catch (err) {
-    console.error(err);
-    return { statusCode: 500, body: err.message };
+    console.error('fulfillment error', err);
+    return {
+      statusCode: 500,
+      body: err.message,
+    };
   }
 };
