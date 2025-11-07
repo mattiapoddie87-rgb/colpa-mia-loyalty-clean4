@@ -5,14 +5,12 @@ const { getStore } = require('@netlify/blobs');
 const PRICE_BY_SKU = JSON.parse(process.env.PRICE_BY_SKU_JSON || '{}');
 const PRICE_RULES  = JSON.parse(process.env.PRICE_RULES_JSON  || '{}');
 
-const SITE_ID   = process.env.NETLIFY_SITE_ID;
+const SITE_ID    = process.env.NETLIFY_SITE_ID;
 const BLOB_TOKEN = process.env.NETLIFY_BLOBS_TOKEN;
 const STORE_NAME = 'wallet';
 
 function minutesFor(sku, metadata = {}) {
-  if (PRICE_RULES[sku] && PRICE_RULES[sku].minutes) {
-    return PRICE_RULES[sku].minutes;
-  }
+  if (PRICE_RULES[sku] && PRICE_RULES[sku].minutes) return PRICE_RULES[sku].minutes;
   if (metadata.minutes) {
     const m = parseInt(metadata.minutes, 10);
     if (!isNaN(m) && m > 0) return m;
@@ -44,43 +42,48 @@ async function loadWallet(store, email) {
 }
 
 exports.handler = async (event) => {
-  const sig = event.headers['stripe-signature'];
+  // 1. controlli base
   const endpointSecret = process.env.STRIPE_WEBHOOK_SECRET;
-
   if (!endpointSecret) {
-    console.error('STRIPE_WEBHOOK_SECRET missing');
+    console.error('STRIPE_WEBHOOK_SECRET mancante');
     return { statusCode: 500, body: 'webhook secret missing' };
   }
+  if (!SITE_ID || !BLOB_TOKEN) {
+    console.error('NETLIFY_SITE_ID / NETLIFY_BLOBS_TOKEN mancanti');
+    return { statusCode: 500, body: 'blobs config missing' };
+  }
+
+  const sig = event.headers['stripe-signature'];
+  // Stripe può inviare base64 -> lo normalizziamo
+  const rawBody = event.isBase64Encoded
+    ? Buffer.from(event.body, 'base64').toString('utf8')
+    : event.body;
 
   let stripeEvent;
   try {
-    stripeEvent = stripe.webhooks.constructEvent(
-      event.body,
-      sig,
-      endpointSecret
-    );
+    stripeEvent = stripe.webhooks.constructEvent(rawBody, sig, endpointSecret);
   } catch (err) {
-    console.error('Webhook signature verification failed.', err.message);
+    console.error('verifica firma webhook fallita:', err.message);
     return { statusCode: 400, body: `Webhook Error: ${err.message}` };
   }
 
-  // gestiamo solo la chiusura del checkout
+  // 2. gestiamo SOLO la chiusura del checkout
   if (stripeEvent.type === 'checkout.session.completed') {
     const session = stripeEvent.data.object;
+    const metadata = session.metadata || {};
 
     const email =
       session.customer_details?.email ||
       session.customer_email;
     if (!email) {
-      return { statusCode: 200, body: 'no email, skipping' };
+      console.log('nessuna email in sessione, stop');
+      return { statusCode: 200, body: 'no email' };
     }
 
-    const metadata = session.metadata || {};
-
-    // 1) SKU dai metadata (tu lo mandi già da create-checkout-session.js)
+    // prendo lo sku che tu metti già nei metadata
     let sku = metadata.sku;
 
-    // 2) altrimenti provo da line_items (serve una fetch extra)
+    // se manca, recupero i line items
     if (!sku) {
       const fullSession = await stripe.checkout.sessions.retrieve(session.id, {
         expand: ['line_items'],
@@ -88,13 +91,12 @@ exports.handler = async (event) => {
       const li = fullSession.line_items?.data?.[0];
       const priceId = li?.price?.id;
       if (priceId) {
-        sku = Object.keys(PRICE_BY_SKU).find(
-          (k) => PRICE_BY_SKU[k] === priceId
-        );
+        sku = Object.keys(PRICE_BY_SKU).find(k => PRICE_BY_SKU[k] === priceId);
       }
     }
 
     const minutes = sku ? minutesFor(sku, metadata) : 0;
+    console.log('webhook -> email:', email, 'sku:', sku, 'minutes:', minutes);
 
     if (minutes > 0) {
       const store = getStore({
@@ -104,7 +106,6 @@ exports.handler = async (event) => {
       });
 
       const wallet = await loadWallet(store, email);
-
       wallet.minutes = (wallet.minutes || 0) + minutes;
       wallet.history = wallet.history || [];
       wallet.history.unshift({
@@ -118,8 +119,11 @@ exports.handler = async (event) => {
       wallet.lastUpdated = new Date().toISOString();
 
       await store.set(email, wallet, { type: 'json' });
+      console.log('wallet aggiornato per', email);
+    } else {
+      console.log('nessun minuto da accreditare per questo SKU');
     }
   }
 
-  return { statusCode: 200, body: 'received' };
+  return { statusCode: 200, body: 'ok' };
 };
