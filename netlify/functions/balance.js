@@ -8,6 +8,7 @@ const CORS = {
 };
 
 exports.handler = async (event) => {
+  // gestisci preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: CORS };
   }
@@ -28,32 +29,28 @@ exports.handler = async (event) => {
     };
   }
 
-  // prendiamo siteId e token dalle env (tu le hai già)
-  const siteId = process.env.NETLIFY_SITE_ID;
-  const token = process.env.NETLIFY_BLOBS_TOKEN;
-
+  const siteId  = process.env.NETLIFY_SITE_ID;
+  const token   = process.env.NETLIFY_BLOBS_TOKEN;
   if (!siteId || !token) {
     return {
       statusCode: 500,
       headers: CORS,
       body: JSON.stringify({
-        error:
-          'Mancano NETLIFY_SITE_ID o NETLIFY_BLOBS_TOKEN nelle variabili di ambiente',
+        error: 'Mancano NETLIFY_SITE_ID o NETLIFY_BLOBS_TOKEN nelle variabili di ambiente',
       }),
     };
   }
 
   try {
-    // qui forziamo la config manuale
+    // crea lo store "wallet" usando siteId e token
     const store = getStore({
       name: 'wallet',
       siteId,
       token,
     });
 
-    const raw = await store.get(email, { type: 'json' });
-
-    const data = raw || {
+    // leggi il blob JSON; se non esiste restituisci un oggetto vuoto
+    const data = await store.get(email, { type: 'json' }) || {
       minutes: 0,
       points: 0,
       tier: 'None',
@@ -62,10 +59,7 @@ exports.handler = async (event) => {
 
     return {
       statusCode: 200,
-      headers: {
-        ...CORS,
-        'Content-Type': 'application/json',
-      },
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({
         minutes: data.minutes || 0,
         points: data.points || 0,
