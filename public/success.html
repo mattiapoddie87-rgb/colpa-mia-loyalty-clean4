@@ -11,10 +11,10 @@
         background:#0b0d12;
         color:#e9eef5;
         margin:0;
+        min-height:100vh;
         display:flex;
         align-items:center;
         justify-content:center;
-        min-height:100vh;
       }
       .card {
         background:#0f1623;
@@ -23,10 +23,9 @@
         padding:32px;
         max-width:480px;
         text-align:center;
-        box-shadow:0 0 20px rgba(0,0,0,0.3);
       }
       h1 { margin-bottom:8px; }
-      .muted { color:#aaa; font-size:14px; margin-bottom:16px; }
+      .muted { color:#aaa; font-size:14px; margin-bottom:14px; }
       .ok { color:#29d07b; font-weight:600; }
       .err { color:#ff6b6b; font-weight:600; }
       .spinner {
@@ -40,7 +39,7 @@
       @keyframes spin { to { transform:rotate(360deg); } }
       a.btn {
         display:inline-block;
-        margin-top:24px;
+        margin-top:22px;
         padding:12px 20px;
         border-radius:10px;
         background:linear-gradient(135deg,#6c7dff,#8a6dff);
@@ -53,62 +52,67 @@
   <body>
     <div class="card">
       <h1>Grazie per l’acquisto</h1>
-      <p class="muted">Stiamo generando la tua scusa personalizzata…</p>
+      <p class="muted">Stiamo inviando la scusa che hai generato.</p>
       <div id="status" class="spinner"></div>
       <div id="msg" class="muted"></div>
-      <a href="/wallet.html" class="btn" id="walletBtn" style="display:none;">Vai al Wallet</a>
+      <a href="/wallet.html" id="walletBtn" class="btn" style="display:none;">Vai al wallet</a>
     </div>
 
     <script>
-      async function sendExcuse(email) {
-        try {
-          const res = await fetch('/.netlify/functions/session-email', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email })
-          });
-          const out = await res.json().catch(() => ({}));
-          if (!res.ok || out.error) throw new Error(out.error || 'Errore invio scusa');
-          return true;
-        } catch (err) {
-          console.error('Errore invio scusa:', err);
-          return false;
+      async function sendFromSession(sessionId) {
+        const res = await fetch('/.netlify/functions/session-email', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ session_id: sessionId })
+        });
+        const out = await res.json().catch(()=> ({}));
+        if (!res.ok || out.error) {
+          throw new Error(out.error || ('HTTP ' + res.status));
         }
+        // se la function ti restituisce l'email, usala per il redirect
+        return out.email || null;
       }
 
-      async function init() {
-        const msg = document.getElementById('msg');
+      (async function init() {
+        const p = new URLSearchParams(location.search);
+        const sessionId = p.get('session_id');  // questo è quello che manda Stripe
         const status = document.getElementById('status');
+        const msg = document.getElementById('msg');
         const btn = document.getElementById('walletBtn');
 
-        const params = new URLSearchParams(window.location.search);
-        const email = params.get('email') || '';
-
-        if (!email) {
+        if (!sessionId) {
           status.className = 'err';
-          msg.textContent = 'Email non trovata. Non possiamo inviare la scusa.';
+          status.textContent = '✖';
+          msg.textContent = 'Sessione non trovata. Non possiamo inviare la scusa.';
+          btn.style.display = 'inline-block';
           return;
         }
 
-        msg.textContent = 'Invio in corso per ' + email + '...';
+        msg.textContent = 'Sessione trovata. Invio in corso…';
 
-        const ok = await sendExcuse(email);
-
-        if (ok) {
+        try {
+          const email = await sendFromSession(sessionId);
           status.className = 'ok';
           status.textContent = '✔';
-          msg.textContent = 'Scusa inviata con successo! Controlla la tua email.';
+          msg.textContent = email
+            ? 'Scusa inviata a ' + email + '.'
+            : 'Scusa inviata.';
+
           btn.style.display = 'inline-block';
-          setTimeout(() => { window.location.href = '/wallet.html?email=' + encodeURIComponent(email); }, 7000);
-        } else {
+
+          // redirect automatico
+          setTimeout(() => {
+            const to = email ? '/wallet.html?email=' + encodeURIComponent(email) : '/wallet.html';
+            location.href = to;
+          }, 6000);
+        } catch (err) {
+          console.error(err);
           status.className = 'err';
           status.textContent = '✖';
-          msg.textContent = 'Errore durante l’invio della scusa. Riprova più tardi.';
+          msg.textContent = 'Non siamo riusciti a inviare la scusa: ' + err.message;
           btn.style.display = 'inline-block';
         }
-      }
-
-      init();
+      })();
     </script>
   </body>
 </html>
