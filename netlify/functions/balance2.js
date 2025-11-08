@@ -9,12 +9,11 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
 };
 
-// *** METTI QUI I TUOI VALORI REALI ***
+// IMPORTANTISSIMO: usa la chiave siteID (D maiuscola)
 const SITE_ID = process.env.NETLIFY_SITE_ID || 'INSERISCI_SITE_ID_NETLIFY';
 const BLOB_TOKEN = process.env.NETLIFY_BLOBS_TOKEN || 'INSERISCI_NETLIFY_BLOBS_TOKEN';
 
 exports.handler = async (event) => {
-  // preflight
   if (event.httpMethod === 'OPTIONS') {
     return { statusCode: 204, headers: CORS };
   }
@@ -29,10 +28,9 @@ exports.handler = async (event) => {
   }
 
   try {
-    // inizializzo lo store in modo ESPLICITO
     const store = getStore({
       name: 'wallet',
-      siteId: SITE_ID,
+      siteID: SITE_ID,          // ← QUI la D maiuscola
       token: BLOB_TOKEN,
     });
 
@@ -53,9 +51,10 @@ exports.handler = async (event) => {
       body: JSON.stringify(payload),
     };
   } catch (err) {
+    // così vedi in risposta ESATTAMENTE cosa non gli piace
     return {
       statusCode: 500,
-      headers: CORS,
+      headers: { ...CORS, 'Content-Type': 'application/json' },
       body: JSON.stringify({ error: err.message }),
     };
   }
