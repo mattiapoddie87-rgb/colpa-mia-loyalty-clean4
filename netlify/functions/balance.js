@@ -1,12 +1,11 @@
 // netlify/functions/balance.js
+const { getStore } = require('@netlify/blobs');
+
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'Content-Type',
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
 };
-
-// prendiamo lo store "wallet" dai blobs
-const { getStore } = require('@netlify/blobs');
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -29,15 +28,37 @@ exports.handler = async (event) => {
     };
   }
 
-  try {
-    // nome dello store: "wallet"
-    const store = getStore('wallet');
+  // prendiamo siteId e token dalle env (tu le hai già)
+  const siteId = process.env.NETLIFY_SITE_ID;
+  const token = process.env.NETLIFY_BLOBS_TOKEN;
 
-    // la key che abbiamo usato nel webhook è proprio l’email
+  if (!siteId || !token) {
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({
+        error:
+          'Mancano NETLIFY_SITE_ID o NETLIFY_BLOBS_TOKEN nelle variabili di ambiente',
+      }),
+    };
+  }
+
+  try {
+    // qui forziamo la config manuale
+    const store = getStore({
+      name: 'wallet',
+      siteId,
+      token,
+    });
+
     const raw = await store.get(email, { type: 'json' });
 
-    // se non esiste ancora, restituiamo 0
-    const data = raw || { minutes: 0, points: 0, tier: 'None', history: [] };
+    const data = raw || {
+      minutes: 0,
+      points: 0,
+      tier: 'None',
+      history: [],
+    };
 
     return {
       statusCode: 200,
