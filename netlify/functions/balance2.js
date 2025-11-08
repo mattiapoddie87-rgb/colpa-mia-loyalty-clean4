@@ -1,5 +1,5 @@
 // netlify/functions/balance2.js
-// RESTITUISCE saldo minuti/punti leggendo dal blob "wallet"
+// legge il saldo minuti dal blob "wallet"
 
 const { getStore } = require('@netlify/blobs');
 
@@ -9,9 +9,8 @@ const CORS = {
   'Access-Control-Allow-Methods': 'GET,OPTIONS',
 };
 
-// IMPORTANTISSIMO: usa la chiave siteID (D maiuscola)
-const SITE_ID = process.env.NETLIFY_SITE_ID || 'INSERISCI_SITE_ID_NETLIFY';
-const BLOB_TOKEN = process.env.NETLIFY_BLOBS_TOKEN || 'INSERISCI_NETLIFY_BLOBS_TOKEN';
+const SITE_ID = process.env.NETLIFY_SITE_ID;
+const BLOB_TOKEN = process.env.NETLIFY_BLOBS_TOKEN;
 
 exports.handler = async (event) => {
   if (event.httpMethod === 'OPTIONS') {
@@ -27,16 +26,28 @@ exports.handler = async (event) => {
     };
   }
 
+  // qui c’era l’errore: se non passi siteID e token, Netlify mostra esattamente
+  // il messaggio che vedi tu.
+  if (!SITE_ID || !BLOB_TOKEN) {
+    return {
+      statusCode: 500,
+      headers: CORS,
+      body: JSON.stringify({
+        error: 'NETLIFY_SITE_ID o NETLIFY_BLOBS_TOKEN mancanti nel deploy',
+      }),
+    };
+  }
+
   try {
     const store = getStore({
       name: 'wallet',
-      siteID: SITE_ID,          // ← QUI la D maiuscola
+      siteID: SITE_ID,   // <- D maiuscola
       token: BLOB_TOKEN,
     });
 
     const data = await store.get(email, { type: 'json' });
 
-    const payload = data
+    const out = data
       ? {
           minutes: Number(data.minutes || 0),
           points: Number(data.points || 0),
@@ -48,10 +59,9 @@ exports.handler = async (event) => {
     return {
       statusCode: 200,
       headers: { ...CORS, 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload),
+      body: JSON.stringify(out),
     };
   } catch (err) {
-    // così vedi in risposta ESATTAMENTE cosa non gli piace
     return {
       statusCode: 500,
       headers: { ...CORS, 'Content-Type': 'application/json' },
