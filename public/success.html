@@ -2,61 +2,113 @@
 <html lang="it">
   <head>
     <meta charset="utf-8" />
-    <title>Pagamento riuscito</title>
-    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Grazie per l’acquisto – COLPA MIA</title>
     <style>
-      body { background:#0f172a; color:#fff; font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; min-height:100vh; display:flex; align-items:center; justify-content:center; }
-      .box { background:#0b1120; padding:2rem 2.5rem; border-radius:1rem; text-align:center; max-width:520px; width:90vw; }
-      .ok { color:#22c55e; margin-top:.75rem; }
-      .err { color:#f43f5e; margin-top:.75rem; }
-      .btn { margin-top:1.5rem; background:#4f46e5; border:none; padding:.6rem 1.4rem; border-radius:.75rem; color:#fff; cursor:pointer; font-weight:600; }
+      :root { color-scheme: dark; }
+      body {
+        font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+        background:#0b0d12;
+        color:#e9eef5;
+        margin:0;
+        display:flex;
+        align-items:center;
+        justify-content:center;
+        min-height:100vh;
+      }
+      .card {
+        background:#0f1623;
+        border:1px solid #1f2636;
+        border-radius:14px;
+        padding:32px;
+        max-width:480px;
+        text-align:center;
+        box-shadow:0 0 20px rgba(0,0,0,0.3);
+      }
+      h1 { margin-bottom:8px; }
+      .muted { color:#aaa; font-size:14px; margin-bottom:16px; }
+      .ok { color:#29d07b; font-weight:600; }
+      .err { color:#ff6b6b; font-weight:600; }
+      .spinner {
+        width:28px; height:28px;
+        border:3px solid #334;
+        border-top-color:#29d07b;
+        border-radius:50%;
+        margin:16px auto;
+        animation:spin 1s linear infinite;
+      }
+      @keyframes spin { to { transform:rotate(360deg); } }
+      a.btn {
+        display:inline-block;
+        margin-top:24px;
+        padding:12px 20px;
+        border-radius:10px;
+        background:linear-gradient(135deg,#6c7dff,#8a6dff);
+        color:white;
+        text-decoration:none;
+        font-weight:600;
+      }
     </style>
   </head>
   <body>
-    <div class="box">
-      <h1>Pagamento riuscito</h1>
-      <p id="status">Registro il tuo acquisto…</p>
-      <button class="btn" onclick="location.href='/'">Torna al catalogo</button>
+    <div class="card">
+      <h1>Grazie per l’acquisto</h1>
+      <p class="muted">Stiamo generando la tua scusa personalizzata…</p>
+      <div id="status" class="spinner"></div>
+      <div id="msg" class="muted"></div>
+      <a href="/wallet.html" class="btn" id="walletBtn" style="display:none;">Vai al Wallet</a>
     </div>
 
     <script>
-      const params = new URLSearchParams(location.search);
-      const sessionId = params.get('session_id');
+      async function sendExcuse(email) {
+        try {
+          const res = await fetch('/.netlify/functions/session-email', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email })
+          });
+          const out = await res.json().catch(() => ({}));
+          if (!res.ok || out.error) throw new Error(out.error || 'Errore invio scusa');
+          return true;
+        } catch (err) {
+          console.error('Errore invio scusa:', err);
+          return false;
+        }
+      }
 
-      async function run() {
-        if (!sessionId) {
-          document.getElementById('status').textContent = 'Sessione non trovata.';
-          document.getElementById('status').className = 'err';
+      async function init() {
+        const msg = document.getElementById('msg');
+        const status = document.getElementById('status');
+        const btn = document.getElementById('walletBtn');
+
+        const params = new URLSearchParams(window.location.search);
+        const email = params.get('email') || '';
+
+        if (!email) {
+          status.className = 'err';
+          msg.textContent = 'Email non trovata. Non possiamo inviare la scusa.';
           return;
         }
 
-        // 1) accredito minuti
-        try {
-          await fetch('/.netlify/functions/fulfillment', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId })
-          });
-        } catch (e) {
-          console.warn('fulfillment error', e);
-        }
+        msg.textContent = 'Invio in corso per ' + email + '...';
 
-        // 2) genera scusa come prima (se la tua function esiste)
-        try {
-          await fetch('/.netlify/functions/post-checkout', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId })
-          });
-        } catch (e) {
-          console.warn('post-checkout error', e);
-        }
+        const ok = await sendExcuse(email);
 
-        document.getElementById('status').textContent = 'Tempo accreditato e scusa generata. Puoi chiudere questa pagina.';
-        document.getElementById('status').className = 'ok';
+        if (ok) {
+          status.className = 'ok';
+          status.textContent = '✔';
+          msg.textContent = 'Scusa inviata con successo! Controlla la tua email.';
+          btn.style.display = 'inline-block';
+          setTimeout(() => { window.location.href = '/wallet.html?email=' + encodeURIComponent(email); }, 7000);
+        } else {
+          status.className = 'err';
+          status.textContent = '✖';
+          msg.textContent = 'Errore durante l’invio della scusa. Riprova più tardi.';
+          btn.style.display = 'inline-block';
+        }
       }
 
-      run();
+      init();
     </script>
   </body>
 </html>
