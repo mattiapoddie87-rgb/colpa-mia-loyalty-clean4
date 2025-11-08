@@ -54,7 +54,7 @@
 
       async function loadBalance(email) {
         $('#msg').textContent = 'Carico…';
-        const r = await fetch('/.netlify/functions/balance?email=' + encodeURIComponent(email));
+        const r = await fetch('/.netlify/functions/balance2?email=' + encodeURIComponent(email));
         const out = await r.json().catch(() => ({}));
 
         if (!r.ok || out.error) {
